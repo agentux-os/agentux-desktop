@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AgentUX Cockpit
+GenericName=Coding Agent Cockpit
+Comment=One interface over every coding-agent CLI
+Exec={{exec}}
+Icon={{icon}}
+Terminal=false
+Categories=Development;
+Keywords=agent;ai;coding;claude;codex;

@@ -1,0 +1,93 @@
+name: release
+
+# Builds the cockpit as an RPM for the AgentUX image (Fedora Kinoite 44).
+# The build runs inside a Fedora 44 container so the binary links against the
+# same webkit2gtk4.1 / gtk3 / glibc the image ships, not Ubuntu's.
+#
+# - push of a `v*` tag: build and attach the .rpm to a GitHub release for that tag
+# - workflow_dispatch: build and upload the .rpm as a workflow artifact only
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rpm:
+    name: rpm (fedora 44)
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    permissions:
+      contents: write # create the GitHub release on tag pushes
+    steps:
+      # Installed before checkout so actions/checkout can use git.
+      - name: Install build dependencies
+        run: |
+          dnf -y install --setopt=install_weak_deps=False \
+            git nodejs npm rust cargo gcc gcc-c++ make pkgconf-pkg-config \
+            webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
+            librsvg2-devel file rpm
+          rustc --version
+          node --version
+
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: cockpit
+        run: |
+          app_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "v${app_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match tauri.conf.json version ${app_version}"
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: cockpit
+        run: npm ci
+
+      - name: Build RPM
+        working-directory: cockpit
+        run: npx tauri build --ci --bundles rpm -- --locked
+
+      - name: Inspect RPM
+        id: rpm
+        run: |
+          rpm_path=$(ls cockpit/src-tauri/target/release/bundle/rpm/*.rpm)
+          echo "path=${rpm_path}" >> "$GITHUB_OUTPUT"
+          ls -l "${rpm_path}"
+          rpm -qip "${rpm_path}"
+          rpm -qlp "${rpm_path}"
+          rpm -qp --requires "${rpm_path}"
+          {
+            echo '### RPM'
+            echo '```'
+            ls -lh "${rpm_path}"
+            rpm -qip "${rpm_path}"
+            echo
+            rpm -qlp "${rpm_path}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentux-cockpit-rpm
+          path: ${{ steps.rpm.outputs.path }}
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.rpm.outputs.path }}
+          fail_on_unmatched_files: true

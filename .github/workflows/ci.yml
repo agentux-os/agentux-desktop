@@ -60,4 +60,4 @@ jobs:
 
       - name: Cargo check (Tauri shell)
         working-directory: cockpit/src-tauri
-        run: cargo check
+        run: cargo check --locked
