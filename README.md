@@ -48,6 +48,21 @@ To plug in the real daemon, implement `DaemonClient` (keeping an immutable `Cock
 
 `B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode, `[`/`]` cycle projects, `?` lists everything.
 
+### Packaging
+
+`.github/workflows/release.yml` builds the cockpit as an RPM (`agentux-cockpit`, binary `/usr/bin/agentux-cockpit`, desktop entry "AgentUX Cockpit" under Development) inside a `fedora:44` container, so it links against the same WebKitGTK the AgentUX image ships. Pushing a `v*` tag matching the version in `tauri.conf.json` attaches the RPM to a GitHub release; running the workflow manually uploads it as an artifact. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
+
+### WebKitGTK caveats
+
+On Linux, Tauri renders with the system WebKitGTK (`webkit2gtk4.1`), not Chromium, so behaviour and GPU quirks are WebKitGTK's. If the window is blank, flickers or crashes on start (seen mostly with the NVIDIA proprietary driver and some virtual GPUs), try:
+
+```sh
+WEBKIT_DISABLE_DMABUF_RENDERER=1 agentux-cockpit      # disable the DMA-BUF renderer (most common fix)
+WEBKIT_DISABLE_COMPOSITING_MODE=1 agentux-cockpit     # last resort: no accelerated compositing
+```
+
+The desktop entry sets neither, since both cost performance on GPUs that work; to make one permanent for a user, put it in `~/.config/environment.d/`.
+
 ### Not there yet
 
 - Terminal mode is a placeholder; the embedded PTY will come from `agentuxd`.
