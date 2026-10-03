@@ -1,0 +1,27 @@
+[package]
+name = "agentux-cockpit"
+version = "0.1.0"
+description = "AgentUX cockpit: one interface over every coding-agent CLI"
+authors = ["AgentUX contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/agentux-os/agentux-desktop"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name (cargo#8519 on Windows).
+name = "cockpit_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

@@ -1,0 +1,21 @@
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.log
+
+# Rust / Tauri
+target/
+cockpit/src-tauri/gen/schemas/
+
+# Editors and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.sw?
+
+# Local tooling output
+.playwright-mcp/
