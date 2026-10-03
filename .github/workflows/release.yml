@@ -10,7 +10,6 @@ name: release
 on:
   push:
     tags: ["v*"]
-    branches: [feat/rpm-release] # TEMP: remove before merge
   workflow_dispatch:
 
 concurrency:
