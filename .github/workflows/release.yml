@@ -35,7 +35,7 @@ jobs:
           dnf -y install --setopt=install_weak_deps=False \
             git nodejs npm rust cargo gcc gcc-c++ make pkgconf-pkg-config \
             webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
-            librsvg2-devel file rpm
+            librsvg2-devel file rpm cpio desktop-file-utils
           rustc --version
           node --version
 
@@ -68,6 +68,10 @@ jobs:
           rpm -qip "${rpm_path}"
           rpm -qlp "${rpm_path}"
           rpm -qp --requires "${rpm_path}"
+          mkdir -p /tmp/rpm-root
+          (cd /tmp/rpm-root && rpm2cpio "${GITHUB_WORKSPACE}/${rpm_path}" | cpio -idm --quiet)
+          cat /tmp/rpm-root/usr/share/applications/agentux-cockpit.desktop
+          desktop-file-validate /tmp/rpm-root/usr/share/applications/agentux-cockpit.desktop
           {
             echo '### RPM'
             echo '```'
