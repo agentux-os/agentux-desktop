@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import type { ApiEvent, ApiRequest, ApiRun, ApiSnapshot, LinkStatus } from "./api";
+import { describe, expect, it, vi } from "vitest";
+import type { ApiEvent, ApiRequest, ApiRun, ApiSnapshot, ApiTerminal, LinkStatus } from "./api";
 import { EVENT_CHANNEL, STATUS_CHANNEL, TauriDaemonClient, type Transport } from "./TauriDaemonClient";
 
 function run(id: string, over: Partial<ApiRun> = {}): ApiRun {
@@ -71,6 +71,17 @@ class FakeTransport implements Transport {
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
+
+type SinkCall = ["output", string] | ["exit", number | null] | ["lost", string];
+
+/** A terminal sink that records what it gets (output decoded as text). */
+function sinkFor(calls: SinkCall[]) {
+  return {
+    output: (data: Uint8Array) => calls.push(["output", new TextDecoder().decode(data)]),
+    exit: (code: number | null) => calls.push(["exit", code]),
+    lost: (reason: string) => calls.push(["lost", reason]),
+  };
+}
 
 describe("TauriDaemonClient", () => {
   it("loads a snapshot on connect and follows events", async () => {
@@ -149,7 +160,10 @@ describe("TauriDaemonClient", () => {
     expect(started.id).toBe("r9");
     expect(client.getState().runs.r9.title).toBe("Fix it");
     await expect(client.sendPrompt("s1", "hi")).rejects.toThrow();
-    expect(await client.openTerminal("s1")).toBeNull();
+    // No terminal mode without the capability.
+    await expect(client.openTerminal({ command: "shell", runId: "r1" }, { cols: 80, rows: 24 }, sinkFor([]))).rejects.toThrow(
+      /terminal mode/,
+    );
   });
 
   it("loads sessions with the snapshot and a run's history on watchRun", async () => {
@@ -224,7 +238,7 @@ describe("TauriDaemonClient", () => {
     const client = new TauriDaemonClient(t);
     await client.connect();
     await tick();
-    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: false });
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: false, terminals: false });
     client.watchBus(["r1"]);
     await tick();
     client.watchBus(["r1"]);
@@ -260,7 +274,7 @@ describe("TauriDaemonClient", () => {
     t.emit(STATUS_CHANNEL, { ...t.status, state: "connected" });
     await tick();
     await tick();
-    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: true });
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: true, terminals: false });
     const posted = await client.postBus({
       runId: "r1",
       to: { kind: "role", role: "reviewer" },
@@ -300,5 +314,110 @@ describe("TauriDaemonClient", () => {
     t.event(3, { kind: "run", run: run("r1") });
     expect(client.getState().runs).toEqual({});
     expect(t.handlers.get(EVENT_CHANNEL)).toEqual([]);
+  });
+});
+
+describe("TauriDaemonClient terminals", () => {
+  const apiTerminal = (over: Partial<ApiTerminal> = {}): ApiTerminal => ({
+    terminalId: "t1", sessionId: "s1", runId: "r1", command: "harness-tui", fallback: null, argv: [], cwd: "/wt",
+    cols: 80, rows: 24, state: "waiting", exitCode: null, createdAt: 5, ...over,
+  });
+
+  async function connected() {
+    const t = new FakeTransport();
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: true, terminals: true };
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await tick();
+    expect(client.getState().capabilities?.terminals).toBe(true);
+    return { t, client };
+  }
+
+  const streamOf = (t: FakeTransport) => [...t.handlers.keys()].find((k) => k.startsWith("terminal://"))!;
+  const terminalCalls = (t: FakeTransport) => t.calls.filter((c) => c.command.startsWith("terminal_"));
+
+  it("listens on its stream before opening, then streams output, input and the exit", async () => {
+    const { t, client } = await connected();
+    t.results.terminal_list = [];
+    t.results.terminal_open = apiTerminal();
+    const calls: SinkCall[] = [];
+    const h = await client.openTerminal({ command: "harness-tui", sessionId: "s1" }, { cols: 80, rows: 24 }, sinkFor(calls));
+
+    const stream = streamOf(t);
+    const open = terminalCalls(t).find((c) => c.command === "terminal_open")!;
+    expect(open.args).toEqual({
+      sessionId: "s1", runId: undefined, command: "harness-tui", cols: 80, rows: 24, stream: stream.slice("terminal://".length),
+    });
+    expect(client.getState().terminals.t1).toMatchObject({ state: "waiting", held: true });
+
+    t.emit(stream, { kind: "output", terminalId: "t1", data: btoa("[agentux] waiting\r\n") });
+    h.input("é");
+    h.resize(100, 30);
+    expect(terminalCalls(t).slice(-2)).toEqual([
+      { command: "terminal_write", args: { terminalId: "t1", data: "w6k=" } },
+      { command: "terminal_resize", args: { terminalId: "t1", cols: 100, rows: 30 } },
+    ]);
+
+    t.emit(stream, { kind: "exit", terminalId: "t1", code: 0 });
+    expect(calls).toEqual([["output", "[agentux] waiting\r\n"], ["exit", 0]]);
+    expect(client.getState().terminals.t1).toMatchObject({ state: "exited", exitCode: 0 });
+    // Nothing more after the exit: the stream is no longer listened to.
+    expect(t.handlers.get(stream)).toEqual([]);
+  });
+
+  it("attaches to the target's running terminal instead of opening another", async () => {
+    const { t, client } = await connected();
+    t.results.terminal_list = [apiTerminal({ state: "running", held: true, cols: 120, rows: 40 })];
+    t.results.terminal_attach = apiTerminal({ state: "running", cols: 120, rows: 40 });
+    const calls: SinkCall[] = [];
+    const h = await client.openTerminal({ command: "harness-tui", sessionId: "s1" }, { cols: 80, rows: 24 }, sinkFor(calls));
+    expect(h.terminalId).toBe("t1");
+    expect(terminalCalls(t).map((c) => c.command)).toEqual(["terminal_list", "terminal_attach", "terminal_resize"]);
+    expect(client.getState().terminals.t1).toMatchObject({ state: "running", held: true });
+
+    // Leaving the view detaches; closing the run's TUIs closes the held one.
+    h.detach();
+    await client.closeTerminals({ runId: "r1", command: "harness-tui" });
+    expect(terminalCalls(t).slice(-2)).toEqual([
+      { command: "terminal_detach", args: { terminalId: "t1" } },
+      { command: "terminal_close", args: { terminalId: "t1" } },
+    ]);
+    expect(client.getState().terminals.t1.state).toBe("exited");
+  });
+
+  it("opens a run's shell and reports a lost connection", async () => {
+    const { t, client } = await connected();
+    t.results.terminal_list = [apiTerminal({ terminalId: "tui", state: "running" })]; // the session's, not a run shell
+    t.results.terminal_open = apiTerminal({ terminalId: "sh1", sessionId: null, command: "shell", state: "running", argv: ["/bin/bash"] });
+    const calls: SinkCall[] = [];
+    await client.openTerminal({ command: "shell", runId: "r1" }, { cols: 80, rows: 24 }, sinkFor(calls));
+    expect(terminalCalls(t).find((c) => c.command === "terminal_open")!.args).toMatchObject({
+      sessionId: undefined, runId: "r1", command: "shell",
+    });
+    t.emit(streamOf(t), { kind: "closed", terminalId: "sh1", reason: "the connection to agentuxd closed" });
+    expect(calls).toEqual([["lost", "the connection to agentuxd closed"]]);
+    expect(client.getState().terminals.sh1.state).toBe("exited");
+  });
+
+  it("looks a waiting terminal up until it runs", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = new FakeTransport();
+      t.results.daemon_capabilities = { sessionsPrompt: true, busPost: true, terminals: true };
+      const client = new TauriDaemonClient(t);
+      await client.connect();
+      await vi.runOnlyPendingTimersAsync();
+      t.results.terminal_list = [];
+      t.results.terminal_open = apiTerminal();
+      await client.openTerminal({ command: "harness-tui", sessionId: "s1" }, { cols: 80, rows: 24 }, sinkFor([]));
+      t.results.terminal_list = [apiTerminal({ state: "running", argv: ["claude", "--resume", "v1"] })];
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(client.getState().terminals.t1).toMatchObject({ state: "running", argv: ["claude", "--resume", "v1"], held: true });
+      const lists = t.calls.filter((c) => c.command === "terminal_list").length;
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(t.calls.filter((c) => c.command === "terminal_list").length).toBe(lists);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

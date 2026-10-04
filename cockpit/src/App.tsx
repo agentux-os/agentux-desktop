@@ -119,6 +119,11 @@ export default function App() {
       ? "This agentuxd does not take prompts into sessions yet"
       : undefined;
 
+  const terminalDisabled =
+    client.mode === "daemon" && !state.capabilities?.terminals
+      ? "This agentuxd has no terminal mode yet (terminals.*)"
+      : undefined;
+
   const sendPrompt = (sid: string, text: string) => {
     client.sendPrompt(sid, text).catch((e: unknown) => showToast(`Could not send: ${errorText(e)}`));
   };
@@ -173,7 +178,9 @@ export default function App() {
 
   const onKey = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest("input, textarea, select, [contenteditable]")) return;
+    // Keys typed into a terminal belong to the program in it (xterm's input is
+    // a textarea, but say it explicitly); Shift+Esc or Ctrl+] leaves it.
+    if (target.closest(".xterm, input, textarea, select, [contenteditable]")) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (newRun) return;
     const key = e.key.toLowerCase();
@@ -243,7 +250,12 @@ export default function App() {
         deny(focused.id);
         break;
       case "t":
-        if (run) setTerminal((t) => !t);
+        if (!run) return;
+        if (terminalDisabled && !terminal) {
+          showToast(terminalDisabled);
+          break;
+        }
+        setTerminal((t) => !t);
         break;
       case "n":
         if (!canStartRuns) return;
@@ -373,6 +385,7 @@ export default function App() {
               onCancel={client.mode === "daemon" ? () => cancelRun(run.id) : undefined}
               mode={client.mode}
               onPost={postBus}
+              terminalDisabled={terminalDisabled}
             />
           )}
         </div>
@@ -453,7 +466,8 @@ const SHORTCUTS: [string, string][] = [
   ["1 … 9", "Answer the focused question with that option"],
   ["J / K", "Move through the inbox"],
   ["Enter", "Open the selected request's run"],
-  ["T", "Toggle terminal mode for the open session"],
+  ["T", "Structured / terminal view of the open session (its harness's own TUI)"],
+  ["Shift+Esc / Ctrl+]", "Leave the terminal: give the keyboard back to the cockpit"],
   ["N", "Start a new run (needs agentuxd)"],
   ["[ / ]", "Previous / next project"],
   ["Esc", "Close the session panel"],

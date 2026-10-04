@@ -6,9 +6,13 @@
 //!   event as the Tauri event `daemon://event`, and connection changes as
 //!   `daemon://status`. It reconnects with backoff while the daemon is down and
 //!   resumes from the last `seq` it forwarded.
+//! - Terminals (`terminal_*`, see `terminal.rs`) each get their own
+//!   connection, since the daemon ties a terminal to the connection that
+//!   opened it; their output is emitted as `terminal://<stream>`.
 
 pub mod client;
 pub mod stream;
+pub mod terminal;
 
 use std::env;
 use std::future::Future;
@@ -22,6 +26,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use client::{method, Client, ClientError, CommandError};
 use stream::{Backoff, LinkState, Sink, Status};
+use terminal::{TerminalEvent, Terminals};
 
 pub const EVENT_CHANNEL: &str = "daemon://event";
 pub const STATUS_CHANNEL: &str = "daemon://status";
@@ -86,12 +91,39 @@ impl DaemonState {
 pub fn init<R: Runtime>(app: &AppHandle<R>) {
     let socket = socket_path();
     app.manage(DaemonState::new(socket.clone()));
+    app.manage(terminals(app, socket.clone()));
     let Some(socket) = socket else { return };
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut sink = TauriSink { app: handle };
         stream::follow(&socket, Backoff::default(), &mut sink, || false).await;
     });
+}
+
+/// The terminal registry, emitting each terminal's events to the UI.
+fn terminals<R: Runtime>(app: &AppHandle<R>, socket: Option<PathBuf>) -> Terminals {
+    let connect = match socket {
+        #[cfg(unix)]
+        Some(path) => terminal::unix_connector(path),
+        #[cfg(not(unix))]
+        Some(_) => terminal::unavailable_connector(
+            "agentuxd is only reachable over a Unix socket on this platform".into(),
+        ),
+        None => terminal::unavailable_connector(NO_SOCKET.into()),
+    };
+    let handle = app.clone();
+    let emit: terminal::Emit = std::sync::Arc::new(move |stream: &str, event: TerminalEvent| {
+        let _ = handle.emit(&terminal::channel(stream), event);
+    });
+    Terminals::new(connect, emit)
+}
+
+/// Drops every terminal connection (the window closed or reloaded: nothing
+/// shows those terminals any more, and the sessions they hold go back to ACP).
+pub fn release_terminals<R: Runtime, M: Manager<R>>(manager: &M) {
+    if let Some(terms) = manager.try_state::<Terminals>() {
+        terms.close_all();
+    }
 }
 
 struct TauriSink<R: Runtime> {
@@ -328,6 +360,8 @@ pub async fn daemon_bus_list(
 pub struct Capabilities {
     pub sessions_prompt: bool,
     pub bus_post: bool,
+    /// `terminals.*` (agentux-core #11): terminal mode.
+    pub terminals: bool,
 }
 
 #[tauri::command]
@@ -340,6 +374,9 @@ pub async fn daemon_capabilities(
         Ok(Capabilities {
             sessions_prompt: c.serves(method::SESSIONS_PROMPT).await?,
             bus_post: c.serves(method::BUS_POST).await?,
+            // `terminals.list` with no filter is valid: any answer but
+            // -32601 means terminal mode is served.
+            terminals: c.serves(method::TERMINALS_LIST).await?,
         })
     })
     .await
@@ -388,4 +425,108 @@ pub async fn daemon_cancel(
     run_id: String,
 ) -> Result<Value, CommandError> {
     call(&state, method::RUNS_CANCEL, json!({ "runId": run_id })).await
+}
+
+// ---- terminal mode ------------------------------------------------------------
+
+fn check_stream(stream: &str) -> Result<(), CommandError> {
+    if terminal::valid_stream(stream) {
+        Ok(())
+    } else {
+        Err(CommandError {
+            code: None,
+            message: format!("invalid terminal stream name {stream:?}"),
+            unavailable: false,
+        })
+    }
+}
+
+/// Opens a terminal (`terminals.open`) on a connection of its own; its output
+/// and exit are emitted on `terminal://<stream>` (the UI listens there before
+/// calling). `command`: `harness-tui` (with `session_id`) or `shell`.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn terminal_open(
+    terms: State<'_, Terminals>,
+    session_id: Option<String>,
+    run_id: Option<String>,
+    command: Option<String>,
+    cols: u16,
+    rows: u16,
+    stream: String,
+) -> Result<Value, CommandError> {
+    check_stream(&stream)?;
+    let params = terminal::open_params(
+        session_id.as_deref(),
+        run_id.as_deref(),
+        command.as_deref(),
+        cols,
+        rows,
+    );
+    timed(CALL_TIMEOUT, terms.open(params, &stream)).await
+}
+
+/// Streams an existing terminal (`terminals.attach`: scrollback, then live
+/// output) to `terminal://<stream>`; used when the view is rebuilt while the
+/// terminal still runs.
+#[tauri::command]
+pub async fn terminal_attach(
+    terms: State<'_, Terminals>,
+    terminal_id: String,
+    stream: String,
+) -> Result<Value, CommandError> {
+    check_stream(&stream)?;
+    timed(CALL_TIMEOUT, terms.attach(&terminal_id, &stream)).await
+}
+
+/// Input for a terminal; `data` is base64 of the bytes.
+#[tauri::command]
+pub async fn terminal_write(
+    terms: State<'_, Terminals>,
+    terminal_id: String,
+    data: String,
+) -> Result<(), CommandError> {
+    timed(CALL_TIMEOUT, terms.write(&terminal_id, &data)).await
+}
+
+#[tauri::command]
+pub async fn terminal_resize(
+    terms: State<'_, Terminals>,
+    terminal_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), CommandError> {
+    timed(CALL_TIMEOUT, terms.resize(&terminal_id, cols, rows)).await
+}
+
+/// Closes a terminal and drops its connection.
+#[tauri::command]
+pub async fn terminal_close(
+    terms: State<'_, Terminals>,
+    terminal_id: String,
+) -> Result<(), CommandError> {
+    timed(CALL_TIMEOUT, terms.close(&terminal_id)).await
+}
+
+/// Stops streaming a terminal without closing it.
+#[tauri::command]
+pub fn terminal_detach(terms: State<'_, Terminals>, terminal_id: String) {
+    terms.detach(&terminal_id);
+}
+
+/// `terminals.list`, each with `held` (this cockpit opened it and owns it).
+#[tauri::command]
+pub async fn terminal_list(
+    terms: State<'_, Terminals>,
+    session_id: Option<String>,
+    run_id: Option<String>,
+) -> Result<Value, CommandError> {
+    let mut params = json!({});
+    if let Some(id) = session_id {
+        params["sessionId"] = id.into();
+    }
+    if let Some(id) = run_id {
+        params["runId"] = id.into();
+    }
+    timed(CALL_TIMEOUT, terms.list(params)).await
 }

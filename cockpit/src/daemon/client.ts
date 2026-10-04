@@ -1,5 +1,8 @@
 import type { BusPostInput, BusPostResult, CockpitState, Run } from "./types";
+import type { TerminalTarget } from "../lib/terminal";
 import { MockDaemonClient } from "./mock/MockDaemonClient";
+
+export type { TerminalTarget } from "../lib/terminal";
 
 /**
  * Everything the cockpit needs from `agentuxd`. The UI only ever talks to this
@@ -62,10 +65,20 @@ export interface DaemonClient {
   postBus(input: BusPostInput): Promise<BusPostResult>;
 
   /**
-   * Attach to the harness's own TUI for this session (embedded PTY managed by
-   * the daemon). Returns null when terminal mode is unavailable.
+   * Terminal mode: shows `target` (a session's harness TUI, or a shell in a
+   * run's worktree) on a PTY the daemon manages, streaming its output to
+   * `sink`. A terminal that still runs for the same target is attached
+   * (scrollback, then live output) rather than opened again. The terminal is
+   * recorded in `state.terminals`. Needs `capabilities.terminals` on the real
+   * daemon; rejects otherwise.
    */
-  openTerminal(sessionId: string): Promise<TerminalHandle | null>;
+  openTerminal(target: TerminalTarget, size: TerminalSize, sink: TerminalSink): Promise<TerminalHandle>;
+
+  /**
+   * Closes the terminals this cockpit opened for a run (optionally only one
+   * kind): a harness TUI hands its session back to ACP when it closes.
+   */
+  closeTerminals(filter: { runId: string; command?: TerminalTarget["command"] }): Promise<void>;
 }
 
 export interface StartRunInput {
@@ -76,11 +89,32 @@ export interface StartRunInput {
   title?: string;
 }
 
+export interface TerminalSize {
+  cols: number;
+  rows: number;
+}
+
+/** Where a terminal's output goes; `exit` or `lost` is the last call. */
+export interface TerminalSink {
+  /** Raw terminal bytes, to feed to the emulator as is. */
+  output(data: Uint8Array): void;
+  /** The process exited; `code` is null when it was killed by a signal. */
+  exit(code: number | null): void;
+  /** The terminal went away without an exit (the daemon stopped). */
+  lost(reason: string): void;
+}
+
 export interface TerminalHandle {
-  write(data: string): void;
-  onData(listener: (data: string) => void): () => void;
+  readonly terminalId: string;
+  /** Text typed or pasted into the emulator (xterm `onData`). */
+  input(data: string): void;
+  /** Binary input (xterm `onBinary`: one character per byte). */
+  inputBinary(data: string): void;
   resize(cols: number, rows: number): void;
-  close(): void;
+  /** Stops streaming to this sink; the terminal keeps running and can be attached again. */
+  detach(): void;
+  /** Closes the terminal (its exit still reaches the sink). */
+  close(): Promise<void>;
 }
 
 /**

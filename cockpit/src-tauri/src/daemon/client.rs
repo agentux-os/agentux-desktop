@@ -42,6 +42,19 @@ pub mod method {
     /// Server-to-client notification, once per subscription, where the replay
     /// of stored events ends (agentux-core #9; older daemons never send it).
     pub const REPLAY_DONE: &str = "replay_done";
+    /// Terminal mode (agentux-core #11): a harness TUI or a shell on a PTY the
+    /// daemon manages. Output streams as notifications on the connection that
+    /// opened or attached the terminal, which also owns what it opened.
+    pub const TERMINALS_OPEN: &str = "terminals.open";
+    pub const TERMINALS_ATTACH: &str = "terminals.attach";
+    pub const TERMINALS_WRITE: &str = "terminals.write";
+    pub const TERMINALS_RESIZE: &str = "terminals.resize";
+    pub const TERMINALS_CLOSE: &str = "terminals.close";
+    pub const TERMINALS_LIST: &str = "terminals.list";
+    /// Server-to-client notification: `{ terminalId, data }`, data base64.
+    pub const TERMINAL_OUTPUT: &str = "terminal_output";
+    /// Server-to-client notification, a terminal's last: `{ terminalId, code }`.
+    pub const TERMINAL_EXIT: &str = "terminal_exit";
 }
 
 #[derive(Debug)]
@@ -171,8 +184,8 @@ impl From<ClientError> for CommandError {
     }
 }
 
-/// Builds one request line (without the trailing newline).
-fn request_line(id: u64, method: &str, params: &Value) -> Result<Vec<u8>, ClientError> {
+/// Builds one request line (with the trailing newline).
+pub(crate) fn request_line(id: u64, method: &str, params: &Value) -> Result<Vec<u8>, ClientError> {
     let mut request = json!({ "jsonrpc": "2.0", "id": id, "method": method });
     if !params.is_null() {
         request["params"] = params.clone();
@@ -182,9 +195,19 @@ fn request_line(id: u64, method: &str, params: &Value) -> Result<Vec<u8>, Client
     Ok(line)
 }
 
+/// Builds one notification line (a request without `id`: no response), with
+/// the trailing newline.
+pub(crate) fn notification_line(method: &str, params: &Value) -> Result<Vec<u8>, ClientError> {
+    let mut line =
+        serde_json::to_vec(&json!({ "jsonrpc": "2.0", "method": method, "params": params }))
+            .map_err(protocol)?;
+    line.push(b'\n');
+    Ok(line)
+}
+
 /// Interprets one line read while waiting for the response to request `id`.
 /// `None` means "not ours, keep reading" (a notification or another id).
-fn parse_response(line: &str, id: u64) -> Option<Result<Value, ClientError>> {
+pub(crate) fn parse_response(line: &str, id: u64) -> Option<Result<Value, ClientError>> {
     let value: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(e) => return Some(Err(protocol(e))),

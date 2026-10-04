@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import type { BusMessage, BusPostInput, CockpitState, Run, Session } from "../daemon/types";
 import { STEPS } from "../daemon/types";
 import { harnessInfo } from "../daemon/vendors";
@@ -10,6 +10,18 @@ import { BusGroupView } from "./BusFeed";
 import { Icon } from "./Icon";
 import { SessionEvents } from "./SessionEvents";
 import { VendorBadge, vendorStyle } from "./VendorBadge";
+import { useDaemon } from "../state/daemon";
+
+// xterm.js is loaded with the first terminal, not with the cockpit.
+const LazyTerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
+
+function TerminalView(props: ComponentProps<typeof LazyTerminalView>) {
+  return (
+    <Suspense fallback={<div className="term term-loading muted">Loading the terminal…</div>}>
+      <LazyTerminalView {...props} />
+    </Suspense>
+  );
+}
 
 const ROLE_ORDER: readonly string[] = ["planner", "implementer", "reviewer"];
 
@@ -43,18 +55,54 @@ interface Props {
   mode: "mock" | "daemon";
   /** Posts the human's message on the run's bus; resolves true once taken. */
   onPost: (input: BusPostInput) => Promise<boolean>;
+  /** Why terminal mode is unavailable (the daemon has no `terminals.*`); absent when it is. */
+  terminalDisabled?: string;
+}
+
+type PanelView = "session" | "bus" | "shell";
+
+/** The run is still going: its worktree can host a shell (the daemon closes terminals when a run ends). */
+function runActive(run: Run): boolean {
+  return run.status === "running" || run.status === "waiting";
 }
 
 export function SessionPanel(props: Props) {
-  const { run, state, now, terminal, onTerminal, onClose, onCancel } = props;
+  const { run, state, now, terminal, onTerminal, onClose, onCancel, terminalDisabled } = props;
+  const client = useDaemon();
   const sessions = runSessions(run, state);
   const session = sessions.find((s) => s.id === props.sessionId) ?? defaultSession(run, sessions);
   const project = state.projects.find((p) => p.id === run.projectId);
-  const [busTab, setBusTab] = useState(false);
+  const [view, setView] = useState<PanelView>("session");
+  const [shellOpen, setShellOpen] = useState(false);
+  const busTab = view === "bus";
   const busCount = useMemo(() => state.bus.filter((m) => m.runId === run.id).length, [state.bus, run.id]);
+  const panelRef = useRef<HTMLElement>(null);
+
+  // Terminals live while they are shown: leaving terminal mode closes the
+  // run's harness TUIs (their sessions go back to ACP), closing the panel
+  // closes every terminal this cockpit opened for the run.
+  const runId = run.id;
+  useEffect(() => {
+    if (terminal) setView("session");
+  }, [terminal]);
+  useEffect(() => {
+    if (!terminal) void client.closeTerminals({ runId, command: "harness-tui" });
+  }, [client, runId, terminal]);
+  useEffect(() => () => void client.closeTerminals({ runId }), [client, runId]);
+
+  /** Keyboard focus leaves a terminal: back to the panel, where the cockpit's shortcuts work. */
+  const leaveTerminal = () => panelRef.current?.focus();
+
+  const closeShell = () => {
+    setShellOpen(false);
+    if (view === "shell") setView("session");
+    void client.closeTerminals({ runId, command: "shell" });
+  };
+
+  const terminalTarget = session && { command: "harness-tui" as const, sessionId: session.id };
 
   return (
-    <aside className="panel" aria-label={`Run ${run.title}`}>
+    <aside className="panel" aria-label={`Run ${run.title}`} ref={panelRef} tabIndex={-1}>
       <header className="panel-head">
         <div className="panel-title-row">
           <h2 className="panel-title">{run.title}</h2>
@@ -88,11 +136,27 @@ export function SessionPanel(props: Props) {
         </div>
         <Pipeline run={run} />
         {run.error && <div className="panel-error">{run.error}</div>}
-        {onCancel && (run.status === "running" || run.status === "waiting") && (
+        {runActive(run) && (
           <div className="panel-actions">
-            <button className="btn btn-quiet" onClick={onCancel}>
-              <Icon name="x" size={14} /> Cancel run
+            <button
+              className="btn btn-quiet"
+              disabled={!!terminalDisabled || (props.mode === "daemon" && !run.worktree)}
+              onClick={() => {
+                setShellOpen(true);
+                setView("shell");
+              }}
+              title={
+                terminalDisabled ??
+                (run.worktree ? `Open a shell in ${run.worktree}` : props.mode === "daemon" ? "The run has no worktree yet" : "Open a shell in the run's worktree")
+              }
+            >
+              <Icon name="terminal" size={14} /> Shell in worktree
             </button>
+            {onCancel && runActive(run) && (
+              <button className="btn btn-quiet" onClick={onCancel}>
+                <Icon name="x" size={14} /> Cancel run
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -102,60 +166,102 @@ export function SessionPanel(props: Props) {
           <button
             key={s.id}
             role="tab"
-            aria-selected={!busTab && s.id === session?.id}
-            className={`tab ${!busTab && s.id === session?.id ? "is-active" : ""}`}
+            aria-selected={view === "session" && s.id === session?.id}
+            className={`tab ${view === "session" && s.id === session?.id ? "is-active" : ""}`}
             style={vendorStyle(s.vendor)}
             onClick={() => {
-              setBusTab(false);
+              setView("session");
               props.onSession(s.id);
             }}
           >
             <span className="vmono">{harnessInfo(s.vendor, s.harness).mono}</span>
             {roleLabel(s.role)}
-            <span className={`state-dot state-${s.state}`} title={s.state} />
+            <span
+              className={`state-dot state-${s.state}`}
+              title={s.state === "attached" ? "attached: open in its TUI" : s.state}
+            />
           </button>
         ))}
         <button
           role="tab"
           aria-selected={busTab}
           className={`tab tab-bus ${busTab ? "is-active" : ""}`}
-          onClick={() => setBusTab(true)}
+          onClick={() => setView("bus")}
           title="The run's agent bus: read it and post to its agents"
         >
           <Icon name="bus" size={13} /> Bus
           {busCount > 0 && <span className="muted">{busCount}</span>}
         </button>
+        {shellOpen && (
+          <span className={`tab tab-shell ${view === "shell" ? "is-active" : ""}`}>
+            <button
+              role="tab"
+              aria-selected={view === "shell"}
+              onClick={() => setView("shell")}
+              title={`A shell in the run's worktree, ${run.worktree ?? ""}`}
+            >
+              <Icon name="terminal" size={13} /> Shell
+            </button>
+            <button className="tab-close" onClick={closeShell} title="Close the shell">
+              <Icon name="x" size={11} />
+            </button>
+          </span>
+        )}
         <span className="tabs-spacer" />
-        {session && !busTab && (
+        {session && view === "session" && (
           <div className="seg" role="group" aria-label="Session view mode">
-            <button className={!terminal ? "is-on" : ""} onClick={() => onTerminal(false)}>
+            <button className={!terminal ? "is-on" : ""} onClick={() => onTerminal(false)} title="Structured view (T)">
               Structured
             </button>
-            <button className={terminal ? "is-on" : ""} onClick={() => onTerminal(true)} title="Open terminal (T)">
+            <button
+              className={terminal ? "is-on" : ""}
+              onClick={() => onTerminal(true)}
+              disabled={!!terminalDisabled && !terminal}
+              title={terminalDisabled ?? "Open the session in its harness's own TUI (T)"}
+            >
               <Icon name="terminal" size={13} /> Terminal
             </button>
           </div>
         )}
       </div>
 
-      {busTab ? (
+      {view === "bus" ? (
         <RunBus run={run} state={state} mode={props.mode} onPost={props.onPost} />
+      ) : view === "shell" && shellOpen ? (
+        <TerminalView
+          key={`shell-${run.id}`}
+          target={{ command: "shell", runId: run.id }}
+          title="Shell"
+          cwd={run.worktree}
+          onLeave={leaveTerminal}
+        />
       ) : session ? (
         <>
           <div className="session-bar">
             <VendorBadge vendor={session.vendor} harness={session.harness} />
+            {session.state === "attached" && (
+              <span className="chip chip-attached" title="Open in its harness's TUI: turns for it wait until the terminal closes">
+                <Icon name="terminal" size={11} /> attached
+              </span>
+            )}
             {session.model && <span className="mono muted">{session.model}</span>}
             <span className="mono muted ellipsis" title={session.cwd}>
               {session.cwd}
             </span>
             <SessionUsageView session={session} />
           </div>
-          {terminal ? (
-            <TerminalPlaceholder session={session} />
+          {terminal && terminalTarget && !terminalDisabled ? (
+            <TerminalView
+              key={session.id}
+              target={terminalTarget}
+              title={`${harnessInfo(session.vendor, session.harness).label} TUI`}
+              cwd={session.cwd}
+              onLeave={leaveTerminal}
+            />
           ) : (
             <EventScroller session={session} {...props} />
           )}
-          <Composer session={session} onSend={props.onSend} disabledReason={props.sendDisabled} />
+          {!terminal && <Composer session={session} onSend={props.onSend} disabledReason={props.sendDisabled} />}
         </>
       ) : (
         <div className="empty">
@@ -293,44 +399,6 @@ function Pipeline({ run }: { run: Run }) {
   );
 }
 
-function TerminalPlaceholder({ session }: { session: Session }) {
-  const info = harnessInfo(session.vendor, session.harness);
-  const bin = session.vendor
-    ? { "claude-code": "claude", codex: "codex", opencode: "opencode", antigravity: "agy" }[session.vendor]
-    : session.harness;
-  return (
-    <div className="term">
-      <div className="term-bar">
-        <span className="term-dots">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="mono">
-          {bin} — {session.cwd}
-        </span>
-      </div>
-      <div className="term-body mono">
-        <div className="muted">$ {bin} --resume {session.id}</div>
-        <div style={vendorStyle(session.vendor)} className="term-accent">
-          ╭─ {info.label} ──────────────────────────────
-        </div>
-        <div className="term-note">
-          <Icon name="terminal" size={18} />
-          <div>
-            <strong>Terminal mode attaches {info.label}&apos;s own TUI to this same session.</strong>
-            <p>
-              The embedded PTY is owned by <code>agentuxd</code>, so switching between structured and terminal views never
-              restarts the agent. It is not available yet.
-            </p>
-          </div>
-        </div>
-        <div className="term-cursor">▍</div>
-      </div>
-    </div>
-  );
-}
-
 function Composer({
   session,
   onSend,
@@ -361,7 +429,11 @@ function Composer({
         value={text}
         disabled={ended}
         placeholder={
-          ended ? (disabledReason ?? "Session ended") : `Message the ${roleLabel(session.role).toLowerCase()} (${harnessInfo(session.vendor, session.harness).label})…`
+          ended
+            ? (disabledReason ?? "Session ended")
+            : session.state === "attached"
+              ? `The session is open in its TUI: your message waits until the terminal closes…`
+              : `Message the ${roleLabel(session.role).toLowerCase()} (${harnessInfo(session.vendor, session.harness).label})…`
         }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

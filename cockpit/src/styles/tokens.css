@@ -51,6 +51,10 @@
   --vendor-opencode: #b59cff;
   --vendor-antigravity: #6aa2ff;
 
+  /* terminal mode (xterm.js reads these, see lib/terminal.ts) */
+  --term-bg: #07080a;
+  --term-selection: rgba(121, 168, 255, 0.3);
+
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
@@ -91,6 +95,9 @@
   --vendor-codex: #0f8a6c;
   --vendor-opencode: #7454d8;
   --vendor-antigravity: #2a67d6;
+
+  --term-bg: #fbfbfc;
+  --term-selection: rgba(42, 98, 212, 0.22);
 
   --shadow: 0 12px 32px rgba(20, 25, 35, 0.14), 0 2px 6px rgba(20, 25, 35, 0.08);
   color-scheme: light;

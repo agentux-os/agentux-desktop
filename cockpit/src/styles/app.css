@@ -1148,6 +1148,10 @@ kbd {
 .state-idle {
   background: var(--text-muted);
 }
+.state-attached {
+  background: var(--info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--info) 30%, transparent);
+}
 .seg {
   display: inline-flex;
   padding: 2px;
@@ -1498,7 +1502,7 @@ kbd {
   animation-delay: 0.4s;
 }
 
-/* ---- terminal placeholder --------------------------------------------- */
+/* ---- terminal mode ---------------------------------------------------- */
 .term {
   flex: 1;
   display: flex;
@@ -1508,63 +1512,135 @@ kbd {
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  background: #07080a;
-  color: #d5dae1;
+  background: var(--term-bg);
+  color: var(--text);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.term-loading {
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.term.is-focused {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
 }
 .term-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 8px;
+  padding: 6px 10px;
   font-size: 11px;
-  color: #8b93a0;
-  background: #111317;
-  border-bottom: 1px solid #1d2127;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
 }
-.term-dots {
-  display: inline-flex;
-  gap: 5px;
+.term-title {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
 }
-.term-dots i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #2c3138;
+.term-cwd {
+  min-width: 0;
+  color: var(--text-faint);
 }
-.term-body {
+.term-spacer {
   flex: 1;
-  padding: 12px 14px;
-  font-size: 12px;
-  line-height: 1.7;
-  overflow: auto;
 }
-.term-body .muted {
-  color: #6f7783;
+.term-state {
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
 }
-.term-accent {
-  color: var(--vc);
+.term-state-open {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
 }
-.term-note {
+.term-state-waiting {
+  color: var(--attention);
+  border-color: var(--attention-border);
+}
+.term-state-ended {
+  color: var(--text-faint);
+}
+.term-hint {
+  white-space: nowrap;
+}
+.term-banner {
   display: flex;
-  gap: 12px;
-  margin: 18px 0;
-  padding: 12px 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--attention-soft);
+  border-bottom: 1px solid var(--attention-border);
+}
+.term-banner-warn {
+  background: var(--surface-3);
+  border-bottom-color: var(--border-strong);
+}
+.term-banner-warn svg {
+  color: var(--attention);
+}
+.term-banner-err {
+  background: var(--err-soft);
+  border-bottom-color: color-mix(in srgb, var(--err) 40%, transparent);
+}
+.term-host {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 4px 4px 10px;
+  overflow: hidden;
+}
+.term-host .xterm {
+  height: 100%;
+}
+.term-host .xterm-viewport {
+  background: transparent !important;
+}
+.term-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.chip-attached {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tab-shell {
+  --vc: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.tab-shell > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+.tab-shell .tab-close {
+  padding: 2px;
   border-radius: var(--radius-sm);
-  border: 1px dashed #2f353d;
-  font-family: var(--font-ui);
-  color: #aab2bd;
+  color: var(--text-faint);
 }
-.term-note strong {
-  color: #e7eaef;
+.tab-shell .tab-close:hover {
+  color: var(--text);
+  background: var(--hover);
 }
-.term-note p {
-  margin: 4px 0 0;
-}
-.term-note code {
-  background: #1a1e24;
-}
-.term-cursor {
-  animation: pulse 1s steps(1) infinite;
+.panel:focus {
+  outline: none;
 }
 
 /* ---- composer --------------------------------------------------------- */

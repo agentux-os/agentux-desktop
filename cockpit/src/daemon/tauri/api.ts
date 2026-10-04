@@ -107,14 +107,47 @@ export interface ApiSession {
   /** Harness id, e.g. `codex` (the cockpit's vendor). */
   harness: string;
   model: string | null;
-  /** `active | idle | waiting | ended` */
+  /** `active | idle | waiting | attached | ended` (`attached` from agentux-core #11) */
   state: string;
   cwd: string;
   usage: ApiSessionUsage;
   startedAt: number;
   updatedAt: number;
   endedAt: number | null;
+  /** The harness's own session id (agentux-core #11); null until started. */
+  vendorSessionId?: string | null;
 }
+
+/** A process on a daemon-managed pseudo-terminal (`terminals.*`, agentux-core #11). */
+export interface ApiTerminal {
+  terminalId: string;
+  sessionId: string | null;
+  runId: string | null;
+  /** `harness-tui | shell`: what actually runs (a fallback is `shell`). */
+  command: string;
+  /** Why a harness-tui request got a shell. */
+  fallback: string | null;
+  argv: string[];
+  cwd: string;
+  cols: number;
+  rows: number;
+  /** `waiting | running | exited` */
+  state: string;
+  exitCode: number | null;
+  createdAt: number;
+  /** Added by the backend's `terminal_list`: this cockpit opened it and owns it. */
+  held?: boolean;
+}
+
+/**
+ * What the backend emits on `terminal://<stream>` (`terminal.rs`): output
+ * (base64 of raw bytes), the exit (the last event; `code` null when killed
+ * by a signal), or the connection lost without an exit.
+ */
+export type ApiTerminalEvent =
+  | { kind: "output"; terminalId: string; data: string }
+  | { kind: "exit"; terminalId: string; code: number | null }
+  | { kind: "closed"; terminalId: string; reason: string };
 
 /**
  * What happened in a session (`session_event` payload). A tool call's first
@@ -232,6 +265,8 @@ export interface ApiBusPostResult {
 export interface ApiCapabilities {
   sessionsPrompt: boolean;
   busPost: boolean;
+  /** `terminals.*` (absent from backends before 0.4.0). */
+  terminals?: boolean;
 }
 
 /** `daemon://status`, from the backend's event stream (`stream.rs`). */

@@ -1,4 +1,6 @@
-import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
+import type { DaemonClient, StartRunInput, TerminalHandle, TerminalSink, TerminalSize } from "../client";
+import { targetKey, type TerminalTarget } from "../../lib/terminal";
+import { FakeTerminal } from "./fakeTerminal";
 import type {
   BusEndpoint,
   BusMessage,
@@ -12,6 +14,7 @@ import type {
   Session,
   SessionEvent,
   SessionUsage,
+  Terminal,
 } from "../types";
 import { VENDOR_INFO, costOf } from "../vendors";
 import {
@@ -101,6 +104,9 @@ export class MockDaemonClient implements DaemonClient {
   private readonly speed: number;
   private busCounters = new Map<string, BusCounters>();
   private questions = new Map<string, Question>();
+  /** Fake terminals by id, with the target they serve. */
+  private fakeTerms = new Map<string, { key: string; fake: FakeTerminal }>();
+  private termSeq = 0;
 
   /** `fallbackReason`: why the real daemon is not used (shown as a banner). */
   constructor(opts: { speed?: number; fallbackReason?: string } = {}) {
@@ -118,6 +124,7 @@ export class MockDaemonClient implements DaemonClient {
       sessions: {},
       requests: {},
       bus: [],
+      terminals: {},
     };
     for (const s of SCENARIOS) {
       this.nextIssue.set(s.projectId, Math.max(this.nextIssue.get(s.projectId) ?? 0, s.issue + 1));
@@ -310,9 +317,128 @@ export class MockDaemonClient implements DaemonClient {
     };
   }
 
-  async openTerminal(_sessionId: string): Promise<TerminalHandle | null> {
-    // Terminal mode needs a PTY owned by agentuxd; there is none in mock mode.
-    return null;
+  /**
+   * A fake terminal (an echo "shell", see `fakeTerminal.ts`) that behaves like
+   * the daemon's: a session's TUI waits for an active turn, then holds the
+   * session (`attached`) until it exits; Antigravity falls back to a shell
+   * with the reason; a target with a live terminal is attached (scrollback
+   * replayed).
+   */
+  async openTerminal(target: TerminalTarget, size: TerminalSize, sink: TerminalSink): Promise<TerminalHandle> {
+    this.now = Date.now();
+    const key = targetKey(target);
+    let terminalId = [...this.fakeTerms.entries()].find(([, e]) => e.key === key && !e.fake.exited)?.[0];
+    if (!terminalId) terminalId = this.createFakeTerminal(target, size);
+    const { fake } = this.fakeTerms.get(terminalId)!;
+    const id = terminalId;
+
+    const encoder = new TextEncoder();
+    if (fake.screen) sink.output(encoder.encode(fake.screen));
+    let done = false;
+    const offOutput = fake.onOutput((text) => {
+      if (!done) sink.output(encoder.encode(text));
+    });
+    const stop = () => {
+      done = true;
+      offOutput();
+      offExit();
+    };
+    const offExit = fake.onExit((code) => {
+      if (done) return;
+      stop();
+      sink.exit(code);
+    });
+    return {
+      terminalId: id,
+      input: (data) => fake.input(data),
+      inputBinary: (data) => fake.input(data),
+      resize: (cols, rows) => this.patchTerminal(id, { cols, rows }),
+      detach: () => {
+        if (!done) stop();
+      },
+      close: async () => fake.exit(null),
+    };
+  }
+
+  async closeTerminals(filter: { runId: string; command?: TerminalTarget["command"] }): Promise<void> {
+    for (const [id, { fake }] of this.fakeTerms) {
+      const t = this.state.terminals[id];
+      if (!t || fake.exited || t.runId !== filter.runId) continue;
+      if (filter.command && (filter.command === "harness-tui") !== !!t.sessionId) continue;
+      fake.exit(null);
+    }
+  }
+
+  private createFakeTerminal(target: TerminalTarget, size: TerminalSize): string {
+    const session = target.command === "harness-tui" && target.sessionId ? this.state.sessions[target.sessionId] : undefined;
+    const runId = target.runId ?? session?.runId;
+    const run = runId ? this.state.runs[runId] : undefined;
+    const cwd = run?.worktree ?? session?.cwd ?? `~/.worktrees/${runId ?? "run"}`;
+    const vendorId = session?.vendorSessionId ?? (session ? `mock-${session.id}` : "");
+    const tui: Partial<Record<string, string[]>> = {
+      "claude-code": ["claude", "--resume", vendorId],
+      codex: ["codex", "resume", vendorId],
+      opencode: ["opencode", "--session", vendorId],
+    };
+    const argv = session ? tui[session.vendor ?? session.harness] : undefined;
+    const fallback = session && !argv ? `${session.harness} has no TUI that can resume a session` : undefined;
+    const holdsSession = !!session && !!argv && session.state !== "ended";
+    const waiting = holdsSession && (session.state === "active" || session.state === "waiting");
+
+    const terminalId = `mt${(++this.termSeq).toString(16).padStart(6, "0")}`;
+    const banner: string[] = [];
+    if (fallback) banner.push(fallback, `This is a shell in the run's worktree, ${cwd}. Exit it to close the terminal.`);
+    if (waiting) banner.push("Waiting for the session's current turn to end; the TUI starts after it.");
+    const fake = new FakeTerminal({ banner, program: argv?.[0] ?? "sh" });
+    this.fakeTerms.set(terminalId, { key: targetKey(target), fake });
+
+    const info: Terminal = {
+      terminalId,
+      sessionId: session?.id,
+      runId,
+      command: argv ? "harness-tui" : "shell",
+      fallback,
+      argv: waiting ? [] : (argv ?? ["sh"]),
+      cwd,
+      cols: size.cols,
+      rows: size.rows,
+      state: waiting ? "waiting" : "running",
+      createdAt: Date.now(),
+      held: true,
+    };
+    this.update((s) => ({ ...s, terminals: { ...s.terminals, [terminalId]: info } }));
+
+    const start = () => {
+      if (fake.exited) return;
+      if (holdsSession && session) {
+        this.patchSession(session.id, { state: "attached" });
+        this.pushEvent(session.id, { kind: "message", from: "system", text: "Opened in its own TUI; turns for this session wait until it closes." });
+      }
+      this.patchTerminal(terminalId, { state: "running", argv: argv ?? ["sh"] });
+      fake.start();
+      this.emit();
+    };
+    fake.onExit((code) => {
+      this.patchTerminal(terminalId, { state: "exited", exitCode: code ?? undefined });
+      const current = session && this.state.sessions[session.id];
+      if (holdsSession && current?.state === "attached") {
+        this.patchSession(current.id, { state: "idle" });
+        this.pushEvent(current.id, { kind: "message", from: "system", text: "The TUI closed; the session is back in AgentUX." });
+        this.patchSession(current.id, { state: "idle" });
+      }
+      this.emit();
+    });
+    if (waiting) this.timers.push({ at: Date.now() + 1800 / this.speed, fn: start });
+    else start();
+    this.emit();
+    return terminalId;
+  }
+
+  private patchTerminal(terminalId: string, patch: Partial<Terminal>) {
+    this.update((s) => {
+      const t = s.terminals[terminalId];
+      return t ? { ...s, terminals: { ...s.terminals, [terminalId]: { ...t, ...patch } } } : s;
+    });
   }
 
   // ---- simulation -----------------------------------------------------------
@@ -837,7 +963,7 @@ export class MockDaemonClient implements DaemonClient {
     this.update((s) => {
       const x = s.sessions[sessionId];
       if (!x) return s;
-      const state = x.state === "ended" || x.state === "waiting" ? x.state : "active";
+      const state = x.state === "ended" || x.state === "waiting" || x.state === "attached" ? x.state : "active";
       return { ...s, sessions: { ...s.sessions, [sessionId]: { ...x, state, events: [...x.events, full] } } };
     });
     return id;

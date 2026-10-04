@@ -1,5 +1,14 @@
-import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
+import type { DaemonClient, StartRunInput, TerminalHandle, TerminalSink, TerminalSize } from "../client";
 import type { BusPostInput, BusPostResult, CockpitState, Run } from "../types";
+import {
+  base64ToBytes,
+  binaryToBase64,
+  liveTerminalFor,
+  targetKey,
+  terminalMatches,
+  textToBase64,
+  type TerminalTarget,
+} from "../../lib/terminal";
 import type {
   ApiBusMessage,
   ApiBusPostResult,
@@ -8,15 +17,33 @@ import type {
   ApiRun,
   ApiRunHistory,
   ApiSnapshot,
+  ApiTerminal,
+  ApiTerminalEvent,
   CommandError,
   LinkStatus,
   Probe,
 } from "./api";
-import { applyBusList, applyEvent, applyRunHistory, applySnapshot, mapRun } from "./mapping";
+import {
+  applyBusList,
+  applyEvent,
+  applyRunHistory,
+  applySnapshot,
+  applyTerminalExit,
+  applyTerminals,
+  mapRun,
+  mapTerminal,
+} from "./mapping";
 
 /** Tauri event channels emitted by the backend (`src-tauri/src/daemon/mod.rs`). */
 export const EVENT_CHANNEL = "daemon://event";
 export const STATUS_CHANNEL = "daemon://status";
+/** A terminal's events (`terminal.rs`): `terminal://<stream>`, the stream named by the UI. */
+export const terminalChannel = (stream: string) => `terminal://${stream}`;
+
+/** How often a terminal waiting for its session's turn is looked up again. */
+const TERMINAL_POLL_MS = 1000;
+/** JSON-RPC "not found" (agentux-core): e.g. a terminal that exited. */
+const NOT_FOUND = -32001;
 
 /** The two Tauri primitives the client needs; injectable for tests. */
 export interface Transport {
@@ -59,7 +86,14 @@ export function emptyState(daemon: string): CockpitState {
     sessions: {},
     requests: {},
     bus: [],
+    terminals: {},
   };
+}
+
+function rpcCode(e: unknown): number | null {
+  return e && typeof e === "object" && "code" in e && typeof (e as CommandError).code === "number"
+    ? (e as CommandError).code
+    : null;
 }
 
 /**
@@ -86,8 +120,17 @@ export function emptyState(daemon: string): CockpitState {
  * The agent-bus log of a run comes from `bus.list` (`daemon_bus_list`), loaded
  * once per run when the UI shows it (`watchRun`, `watchBus`), and then from
  * live `bus_message` events; entries are merged by id, so overlaps are fine.
- * Optional methods (`sessions.prompt`, `bus.post`) are probed after each load
- * and stay disabled on daemons that do not serve them.
+ * Optional methods (`sessions.prompt`, `bus.post`, `terminals.*`) are probed
+ * after each load and stay disabled on daemons that do not serve them.
+ *
+ * Terminals: the backend gives each terminal its own socket connection (the
+ * daemon ties a terminal to the connection that opened it) and emits its
+ * output on `terminal://<stream>`, a name chosen here and listened to before
+ * the open, so nothing that follows the open is missed. A target (a
+ * session's TUI, a run's shell) with a terminal still running is attached
+ * rather than opened again; concurrent opens of one target share the first.
+ * A terminal waiting for its session's turn is looked up every second until
+ * it runs.
  */
 export class TauriDaemonClient implements DaemonClient {
   readonly mode = "daemon" as const;
@@ -104,6 +147,11 @@ export class TauriDaemonClient implements DaemonClient {
   private histories = new Map<string, ApiEvent[] | "loaded">();
   /** Runs whose bus log is loaded or loading. */
   private busLogs = new Set<string>();
+  /** Opens in flight by target key, so a second view of the target attaches instead. */
+  private opening = new Map<string, Promise<ApiTerminal>>();
+  private streamSeq = 0;
+  /** Timers looking up terminals that wait for their session's turn. */
+  private polls = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(
     private readonly transport: Transport,
@@ -148,6 +196,8 @@ export class TauriDaemonClient implements DaemonClient {
     this.reloadAgain = false;
     this.histories.clear();
     this.busLogs.clear();
+    this.polls.forEach((timer) => clearInterval(timer));
+    this.polls.clear();
   }
 
   getState = (): CockpitState => this.state;
@@ -226,11 +276,178 @@ export class TauriDaemonClient implements DaemonClient {
     };
   }
 
-  async openTerminal(_sessionId: string): Promise<TerminalHandle | null> {
-    return null;
+  async openTerminal(target: TerminalTarget, size: TerminalSize, sink: TerminalSink): Promise<TerminalHandle> {
+    if (!this.state.capabilities?.terminals) {
+      throw new Error("this agentuxd has no terminal mode (no terminals.*)");
+    }
+    const stream = `term-${++this.streamSeq}-${Math.random().toString(36).slice(2, 8)}`;
+    let done = false;
+    let unlisten: (() => void) | undefined;
+    const stop = () => {
+      done = true;
+      unlisten?.();
+      unlisten = undefined;
+    };
+    unlisten = await this.transport.listen<ApiTerminalEvent>(terminalChannel(stream), (e) => {
+      if (done || !e) return;
+      if (e.kind === "output") sink.output(base64ToBytes(e.data));
+      else if (e.kind === "exit") {
+        this.update((s) => applyTerminalExit(s, e.terminalId, e.code ?? null));
+        stop();
+        sink.exit(e.code ?? null);
+      } else if (e.kind === "closed") {
+        this.update((s) => applyTerminalExit(s, e.terminalId, null));
+        stop();
+        sink.lost(e.reason);
+      }
+    });
+
+    let terminal: ApiTerminal;
+    try {
+      terminal = await this.openOrAttach(target, size, stream);
+    } catch (e) {
+      stop();
+      throw e;
+    }
+    const terminalId = terminal.terminalId;
+    if (terminal.cols !== size.cols || terminal.rows !== size.rows) {
+      void this.transport.invoke("terminal_resize", { terminalId, ...size }).catch(() => undefined);
+    }
+    if (mapTerminal(terminal).state === "waiting") this.pollWhileWaiting(terminalId, target);
+
+    const send = (data: string) => {
+      if (done) return;
+      void this.transport.invoke("terminal_write", { terminalId, data }).catch(() => undefined);
+    };
+    return {
+      terminalId,
+      input: (text) => send(textToBase64(text)),
+      inputBinary: (data) => send(binaryToBase64(data)),
+      resize: (cols, rows) => {
+        if (done || cols < 1 || rows < 1) return;
+        void this.transport.invoke("terminal_resize", { terminalId, cols, rows }).catch(() => undefined);
+      },
+      detach: () => {
+        if (done) return;
+        stop();
+        void this.transport.invoke("terminal_detach", { terminalId }).catch(() => undefined);
+      },
+      close: async () => {
+        // The exit also arrives on the stream (while it is listened to).
+        await this.transport.invoke("terminal_close", { terminalId });
+        this.update((s) => applyTerminalExit(s, terminalId, s.terminals[terminalId]?.exitCode ?? null));
+      },
+    };
+  }
+
+  async closeTerminals(filter: { runId: string; command?: TerminalTarget["command"] }): Promise<void> {
+    const targets = Object.values(this.state.terminals).filter(
+      (t) =>
+        t.held &&
+        t.state !== "exited" &&
+        t.runId === filter.runId &&
+        (!filter.command || (filter.command === "harness-tui" ? !!t.sessionId : !t.sessionId)),
+    );
+    await Promise.all(
+      targets.map(async (t) => {
+        try {
+          await this.transport.invoke("terminal_close", { terminalId: t.terminalId });
+        } catch {
+          /* already gone */
+        }
+        this.update((s) => applyTerminalExit(s, t.terminalId, s.terminals[t.terminalId]?.exitCode ?? null));
+      }),
+    );
   }
 
   // ---- internals ------------------------------------------------------------
+
+  /**
+   * Attaches to the target's running terminal if there is one (an open in
+   * flight for it, or one `terminal_list` reports), else opens one.
+   */
+  private async openOrAttach(target: TerminalTarget, size: TerminalSize, stream: string): Promise<ApiTerminal> {
+    const key = targetKey(target);
+    const inFlight = this.opening.get(key);
+    let existing: { terminalId: string; held?: boolean } | undefined;
+    if (inFlight) {
+      existing = await inFlight.then(
+        (t) => ({ terminalId: t.terminalId, held: true }),
+        () => undefined,
+      );
+    } else {
+      existing = await this.findLive(target);
+    }
+    if (existing) {
+      const { terminalId, held } = existing;
+      try {
+        const attached = await this.transport.invoke<ApiTerminal>("terminal_attach", { terminalId, stream });
+        this.update((s) => applyTerminals(s, [attached], held ?? s.terminals[attached.terminalId]?.held));
+        return attached;
+      } catch (e) {
+        if (rpcCode(e) !== NOT_FOUND) throw e;
+        this.update((s) => applyTerminalExit(s, terminalId, null));
+      }
+    }
+    const opening = this.transport.invoke<ApiTerminal>("terminal_open", {
+      sessionId: target.command === "harness-tui" ? target.sessionId : undefined,
+      runId: target.runId,
+      command: target.command,
+      cols: size.cols,
+      rows: size.rows,
+      stream,
+    });
+    this.opening.set(key, opening);
+    try {
+      const opened = await opening;
+      this.update((s) => applyTerminals(s, [opened], true));
+      return opened;
+    } finally {
+      if (this.opening.get(key) === opening) this.opening.delete(key);
+    }
+  }
+
+  private terminalFilter(target: TerminalTarget): Record<string, unknown> {
+    return target.command === "harness-tui" ? { sessionId: target.sessionId } : { runId: target.runId };
+  }
+
+  /** The target's running terminal according to the daemon (recorded in the state), if any. */
+  private async findLive(target: TerminalTarget): Promise<{ terminalId: string; held?: boolean } | undefined> {
+    let list: ApiTerminal[];
+    try {
+      list = await this.transport.invoke<ApiTerminal[]>("terminal_list", this.terminalFilter(target));
+    } catch {
+      return undefined;
+    }
+    if (!Array.isArray(list)) return undefined;
+    const matching = list.filter((t) => t && typeof t.terminalId === "string" && terminalMatches(mapTerminal(t), target));
+    this.update((s) => applyTerminals(s, matching));
+    const live = liveTerminalFor(Object.fromEntries(matching.map((t) => [t.terminalId, mapTerminal(t)])), target);
+    return live && { terminalId: live.terminalId, held: live.held };
+  }
+
+  /** Looks the terminal up every second while it waits for its session's turn. */
+  private pollWhileWaiting(terminalId: string, target: TerminalTarget): void {
+    if (this.polls.has(terminalId)) return;
+    const gen = this.generation;
+    const timer = setInterval(() => {
+      const t = this.state.terminals[terminalId];
+      if (gen !== this.generation || !t || t.state !== "waiting") {
+        clearInterval(timer);
+        this.polls.delete(terminalId);
+        return;
+      }
+      void this.transport
+        .invoke<ApiTerminal[]>("terminal_list", this.terminalFilter(target))
+        .then((list) => {
+          if (gen !== this.generation || !Array.isArray(list)) return;
+          const mine = list.find((x) => x && x.terminalId === terminalId);
+          if (mine) this.update((s) => applyTerminals(s, [mine]));
+        })
+        .catch(() => undefined);
+    }, TERMINAL_POLL_MS);
+    this.polls.set(terminalId, timer);
+  }
 
   private onEvent(event: ApiEvent): void {
     const pending = event.runId ? this.histories.get(event.runId) : undefined;
@@ -331,9 +548,15 @@ export class TauriDaemonClient implements DaemonClient {
     try {
       const caps = await this.transport.invoke<ApiCapabilities>("daemon_capabilities");
       if (gen !== this.generation || !caps) return;
-      const capabilities = { sessionsPrompt: caps.sessionsPrompt === true, busPost: caps.busPost === true };
+      const capabilities = {
+        sessionsPrompt: caps.sessionsPrompt === true,
+        busPost: caps.busPost === true,
+        terminals: caps.terminals === true,
+      };
       this.update((s) =>
-        s.capabilities?.sessionsPrompt === capabilities.sessionsPrompt && s.capabilities?.busPost === capabilities.busPost
+        s.capabilities?.sessionsPrompt === capabilities.sessionsPrompt &&
+        s.capabilities?.busPost === capabilities.busPost &&
+        s.capabilities?.terminals === capabilities.terminals
           ? s
           : { ...s, capabilities },
       );
