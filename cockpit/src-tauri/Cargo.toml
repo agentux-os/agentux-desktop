@@ -6,7 +6,7 @@ authors = ["AgentUX contributors"]
 license = "Apache-2.0"
 repository = "https://github.com/agentux-os/agentux-desktop"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.85"
 
 [lib]
 # The `_lib` suffix keeps the lib name distinct from the bin name (cargo#8519 on Windows).
@@ -18,6 +18,12 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["io-util", "net", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["io-util", "net", "time", "macros", "rt"] }
 
 [profile.release]
 codegen-units = 1

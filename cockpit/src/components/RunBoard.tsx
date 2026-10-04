@@ -1,7 +1,7 @@
 import type { CockpitState, PermissionRequest, Run, StepKind } from "../daemon/types";
 import { STEPS } from "../daemon/types";
 import { formatDuration, formatUsd } from "../lib/format";
-import { REQUEST_LABEL, STEP_LABEL } from "../lib/labels";
+import { REQUEST_LABEL, STEP_LABEL, runRef } from "../lib/labels";
 import { Icon } from "./Icon";
 import { VendorBadge } from "./VendorBadge";
 
@@ -17,9 +17,10 @@ const COLUMNS: { id: ColumnId; label: string }[] = [
 const DONE_LIMIT = 6;
 
 function columnOf(run: Run): ColumnId {
-  if (run.status === "done" || run.status === "failed") return "done";
+  if (run.status === "done" || run.status === "failed" || run.status === "cancelled") return "done";
   if (run.status === "waiting") return "waiting";
-  return run.step;
+  // Custom steps run an agent like `implement`; show them there.
+  return STEPS.includes(run.step) ? run.step : "implement";
 }
 
 interface Props {
@@ -96,7 +97,7 @@ function RunCard({
   return (
     <button className={`card status-${run.status} ${selected ? "is-selected" : ""}`} onClick={onClick}>
       <div className="card-top">
-        <span className="mono muted">#{run.issue}</span>
+        <span className="mono muted">{runRef(run)}</span>
         {showProject && <span className="card-project">{run.projectId}</span>}
         <span className="card-time" title={done ? "Duration" : "Elapsed"}>
           {formatDuration(elapsed)}
@@ -114,6 +115,11 @@ function RunCard({
           <Icon name="pr" size={13} />
           PR #{run.pullRequest.number}
         </div>
+      ) : run.error && (run.status === "failed" || run.status === "cancelled") ? (
+        <div className="card-activity err" title={run.error}>
+          <Icon name="x" size={13} />
+          <span className="ellipsis">{run.error}</span>
+        </div>
       ) : (
         <div className={`card-activity ${failedCheck ? "err" : ""}`}>
           <span className="pulse" />
@@ -121,11 +127,13 @@ function RunCard({
         </div>
       )}
       <div className="card-foot">
-        <span className="card-roles" title="Implementer → reviewer">
-          <VendorBadge vendor={run.roles.implementer} role="implementer" compact />
-          <Icon name="arrowRight" size={11} className="muted" />
-          <VendorBadge vendor={run.roles.reviewer} role="reviewer" compact />
-        </span>
+        {(run.roles.implementer || run.roles.reviewer) && (
+          <span className="card-roles" title="Implementer → reviewer">
+            {run.roles.implementer && <VendorBadge vendor={run.roles.implementer} role="implementer" compact />}
+            {run.roles.implementer && run.roles.reviewer && <Icon name="arrowRight" size={11} className="muted" />}
+            {run.roles.reviewer && <VendorBadge vendor={run.roles.reviewer} role="reviewer" compact />}
+          </span>
+        )}
         {!done && run.gateAttempt > 1 && (
           <span className="chip" title="Gate attempt">
             gate {run.gateAttempt}/{run.gateMaxAttempts}
@@ -136,7 +144,7 @@ function RunCard({
             round {run.reviewRound}/{run.reviewMaxRounds}
           </span>
         )}
-        <span className="card-cost">{formatUsd(run.usage.costUsd)}</span>
+        {run.usage && <span className="card-cost">{formatUsd(run.usage.costUsd)}</span>}
       </div>
     </button>
   );

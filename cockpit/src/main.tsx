@@ -6,12 +6,12 @@ import { DaemonProvider } from "./state/daemon";
 import "./styles/tokens.css";
 import "./styles/app.css";
 
-const client = createDaemonClient();
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <DaemonProvider client={client}>
-      <App />
-    </DaemonProvider>
-  </React.StrictMode>,
-);
+void createDaemonClient().then((client) => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <DaemonProvider client={client}>
+        <App />
+      </DaemonProvider>
+    </React.StrictMode>,
+  );
+});

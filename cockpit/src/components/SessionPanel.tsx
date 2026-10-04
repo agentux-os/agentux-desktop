@@ -3,7 +3,7 @@ import type { CockpitState, Role, Run, Session } from "../daemon/types";
 import { STEPS } from "../daemon/types";
 import { VENDOR_INFO } from "../daemon/vendors";
 import { formatDuration, formatTokens, formatUsd } from "../lib/format";
-import { ROLE_LABEL, STEP_LABEL } from "../lib/labels";
+import { ROLE_LABEL, STEP_LABEL, runRef } from "../lib/labels";
 import { Icon } from "./Icon";
 import { SessionEvents } from "./SessionEvents";
 import { VendorBadge, vendorStyle } from "./VendorBadge";
@@ -22,10 +22,12 @@ interface Props {
   onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
   onSend: (sessionId: string, text: string) => void;
+  /** Cancels the run; absent when the client cannot (mock data). */
+  onCancel?: () => void;
 }
 
 export function SessionPanel(props: Props) {
-  const { run, state, now, terminal, onTerminal, onClose } = props;
+  const { run, state, now, terminal, onTerminal, onClose, onCancel } = props;
   const sessions = ROLE_ORDER.map((r) => run.sessions[r]).filter((id): id is string => !!id).map((id) => state.sessions[id]);
   const session = sessions.find((s) => s.id === props.sessionId) ?? defaultSession(run, sessions);
   const project = state.projects.find((p) => p.id === run.projectId);
@@ -40,17 +42,28 @@ export function SessionPanel(props: Props) {
           </button>
         </div>
         <div className="panel-meta">
-          <span className="mono">#{run.issue}</span>
+          <span className="mono">{runRef(run)}</span>
           <span>
             <Icon name="folder" size={13} /> {project?.name}
           </span>
-          <span className="mono">
-            <Icon name="branch" size={13} /> {run.branch}
-          </span>
+          {run.branch && (
+            <span className="mono">
+              <Icon name="branch" size={13} /> {run.branch}
+            </span>
+          )}
           <span>{formatDuration((run.finishedAt ?? now) - run.startedAt)}</span>
-          <span title={`Budget ${formatUsd(run.budgetUsd)} per run`}>
-            {formatUsd(run.usage.costUsd)} <span className="muted">/ {formatUsd(run.budgetUsd)}</span>
-          </span>
+          {run.usage ? (
+            <span title={run.budgetUsd != null ? `Budget ${formatUsd(run.budgetUsd)} per run` : "Run cost"}>
+              {formatUsd(run.usage.costUsd)}
+              {run.budgetUsd != null && <span className="muted"> / {formatUsd(run.budgetUsd)}</span>}
+            </span>
+          ) : (
+            run.budgetUsd != null && (
+              <span className="muted" title="Budget per run (usage not reported yet)">
+                budget {formatUsd(run.budgetUsd)}
+              </span>
+            )
+          )}
           {run.pullRequest && (
             <a className="pr-link" href={run.pullRequest.url} target="_blank" rel="noreferrer">
               <Icon name="pr" size={13} /> PR #{run.pullRequest.number}
@@ -58,6 +71,14 @@ export function SessionPanel(props: Props) {
           )}
         </div>
         <Pipeline run={run} />
+        {run.error && <div className="panel-error">{run.error}</div>}
+        {onCancel && (run.status === "running" || run.status === "waiting") && (
+          <div className="panel-actions">
+            <button className="btn btn-quiet" onClick={onCancel}>
+              <Icon name="x" size={14} /> Cancel run
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="tabs" role="tablist">
@@ -108,7 +129,16 @@ export function SessionPanel(props: Props) {
           <Composer session={session} onSend={props.onSend} />
         </>
       ) : (
-        <div className="empty">No session yet.</div>
+        <div className="empty">
+          {run.prompt ? (
+            <>
+              No harness sessions reported for this run yet.
+              <pre className="run-prompt">{run.prompt}</pre>
+            </>
+          ) : (
+            "No session yet."
+          )}
+        </div>
       )}
     </aside>
   );
@@ -149,17 +179,18 @@ function EventScroller({ session, state, now, onApprove, onDeny }: Props & { ses
 }
 
 function Pipeline({ run }: { run: Run }) {
-  const current = STEPS.indexOf(run.step);
+  const steps = run.steps?.length ? run.steps : STEPS;
+  const current = run.steps?.length && run.stepIndex != null ? run.stepIndex : steps.indexOf(run.step);
   const done = run.status === "done";
   return (
     <ol className="pipeline">
-      {STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const state = done || i < current ? "done" : i === current ? (run.status === "waiting" ? "waiting" : "current") : "todo";
         let extra = "";
         if (step === "gate" && run.gateAttempt > 0) extra = `${run.gateAttempt}/${run.gateMaxAttempts}`;
         if (step === "review" && run.reviewRound > 0) extra = `${run.reviewRound}/${run.reviewMaxRounds}`;
         return (
-          <li key={step} className={`pipe pipe-${state}`}>
+          <li key={`${i}-${step}`} className={`pipe pipe-${state}`}>
             <span className="pipe-dot">{state === "done" ? <Icon name="check" size={10} /> : null}</span>
             <span className="pipe-label">{STEP_LABEL[step]}</span>
             {extra && <span className="pipe-extra">{extra}</span>}

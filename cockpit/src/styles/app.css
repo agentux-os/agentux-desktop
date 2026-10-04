@@ -1626,6 +1626,124 @@ kbd {
   color: var(--text-muted);
 }
 
+/* ---- daemon connection: mock badge, banner, new-run dialog ----------- */
+.mock-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--attention);
+  background: var(--attention-soft);
+  border: 1px solid var(--attention-border);
+}
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--attention-border);
+  background: var(--attention-soft);
+  font-size: 12.5px;
+}
+.banner > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--attention);
+}
+.banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.banner-detail {
+  margin-top: 3px;
+  font: 11px var(--font-mono);
+  word-break: break-all;
+}
+.card.status-failed,
+.card.status-cancelled {
+  opacity: 0.82;
+}
+.panel-error {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--err);
+  background: var(--err-soft);
+  white-space: pre-wrap;
+}
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.run-prompt {
+  margin: 10px auto 0;
+  max-width: 560px;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: pre-wrap;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+}
+.form-dialog {
+  width: min(600px, calc(100vw - 32px));
+}
+.form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+}
+.field > span {
+  font-weight: 500;
+}
+.field input,
+.field textarea {
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.field input.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+.form-error {
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--err);
+  background: var(--err-soft);
+  white-space: pre-wrap;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
 /* ---- narrow windows --------------------------------------------------- */
 @media (max-width: 1600px) {
   :root {

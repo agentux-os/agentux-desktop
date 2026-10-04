@@ -1,4 +1,4 @@
-import type { DaemonClient, TerminalHandle } from "../client";
+import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
 import type {
   BusEndpoint,
   CockpitState,
@@ -41,6 +41,7 @@ const zeroUsage = (): TokenUsage => ({ input: 0, output: 0, costUsd: 0 });
  * always has something moving.
  */
 export class MockDaemonClient implements DaemonClient {
+  readonly mode = "mock" as const;
   private state: CockpitState;
   private listeners = new Set<() => void>();
   private engines: Engine[] = [];
@@ -54,10 +55,17 @@ export class MockDaemonClient implements DaemonClient {
   private nextPr = new Map<string, number>();
   private readonly speed: number;
 
-  constructor(opts: { speed?: number } = {}) {
+  /** `fallbackReason`: why the real daemon is not used (shown as a banner). */
+  constructor(opts: { speed?: number; fallbackReason?: string } = {}) {
     this.speed = opts.speed ?? readSpeedParam();
     this.state = {
-      connection: { status: "connecting", daemon: "mock", detail: "In-memory mock daemon" },
+      connection: {
+        status: "connecting",
+        daemon: "mock",
+        detail: "In-memory mock daemon",
+        mock: true,
+        fallbackReason: opts.fallbackReason,
+      },
       projects: PROJECTS,
       runs: {},
       sessions: {},
@@ -111,6 +119,14 @@ export class MockDaemonClient implements DaemonClient {
     this.now = Date.now();
     this.resolve(requestId, "deny");
     this.emit();
+  }
+
+  async startRun(_input: StartRunInput): Promise<Run> {
+    throw new Error("Starting runs needs agentuxd; the cockpit is showing mock data");
+  }
+
+  async cancelRun(_runId: string): Promise<void> {
+    throw new Error("Cancelling runs needs agentuxd; the cockpit is showing mock data");
   }
 
   async sendPrompt(sessionId: string, text: string): Promise<void> {
@@ -265,10 +281,10 @@ export class MockDaemonClient implements DaemonClient {
       if (x === "human") return { kind: "human" };
       if (x === "daemon") return { kind: "daemon" };
       const sid = session(x);
-      return { kind: "session", sessionId: sid, role: x, vendor: run().roles[x] };
+      return { kind: "session", sessionId: sid, role: x, vendor: run().roles[x] ?? "claude-code" };
     };
     return {
-      branch: run().branch,
+      branch: run().branch ?? "",
       step: (step, activity) => this.patchRun(runId, { step, activity }),
       activity: (activity) => this.patchRun(runId, { activity }),
       sessionState: (role, state) => {
@@ -394,7 +410,7 @@ export class MockDaemonClient implements DaemonClient {
       const resumed = action === "deny" ? "Continuing after your denial" : req.kind === "question" ? "Continuing with your answer" : "Approved, resuming";
       this.patchRun(req.runId, { status: "running", activity: resumed });
     }
-    this.patchSession(req.sessionId, { state: "active" });
+    if (req.sessionId) this.patchSession(req.sessionId, { state: "active" });
   }
 
   // ---- immutable state helpers ----------------------------------------------
@@ -434,7 +450,8 @@ export class MockDaemonClient implements DaemonClient {
     const run = this.state.runs[runId];
     const existing = run.sessions[role];
     if (existing) return existing;
-    const vendor = run.roles[role];
+    // Mock runs always fill every role.
+    const vendor = run.roles[role] ?? "claude-code";
     const id = this.id("ses");
     const session: Session = {
       id,
@@ -488,7 +505,7 @@ export class MockDaemonClient implements DaemonClient {
       return {
         ...s,
         sessions: { ...s.sessions, [sessionId]: { ...session, usage: add(session.usage) } },
-        runs: r ? { ...s.runs, [runId]: { ...r, usage: add(r.usage) } } : s.runs,
+        runs: r ? { ...s.runs, [runId]: { ...r, usage: add(r.usage ?? zeroUsage()) } } : s.runs,
         spend: { ...s.spend, [session.vendor]: add(s.spend[session.vendor]) },
       };
     });

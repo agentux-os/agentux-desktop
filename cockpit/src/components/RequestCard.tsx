@@ -1,16 +1,25 @@
 import type { PermissionRequest, Run } from "../daemon/types";
-import { REQUEST_LABEL, ROLE_LABEL } from "../lib/labels";
+import { REQUEST_LABEL, ROLE_LABEL, STEP_LABEL, runRef } from "../lib/labels";
 import { formatAgo } from "../lib/format";
 import { Icon, type IconName } from "./Icon";
 import { VendorBadge } from "./VendorBadge";
 
 const KIND_ICON: Record<PermissionRequest["kind"], IconName> = {
   plan: "plan",
+  step: "shield",
   command: "execute",
   edit: "edit",
   network: "globe",
   question: "question",
   budget: "coins",
+};
+
+const OUTCOME: Record<PermissionRequest["status"], (answer?: string) => string> = {
+  pending: () => "Pending",
+  approved: () => "Approved",
+  denied: () => "Denied",
+  answered: (a) => `Answered: ${a ?? ""}`,
+  cancelled: () => "Cancelled with the run",
 };
 
 interface Props {
@@ -39,13 +48,17 @@ export function RequestCard({ request: r, run, now, selected, inline, showShortc
           <Icon name={KIND_ICON[r.kind]} size={14} />
           {REQUEST_LABEL[r.kind]}
         </span>
-        <VendorBadge vendor={r.vendor} compact />
-        <span className="muted">{ROLE_LABEL[r.role]}</span>
+        {r.vendor && <VendorBadge vendor={r.vendor} compact />}
+        {r.role ? (
+          <span className="muted">{ROLE_LABEL[r.role]}</span>
+        ) : (
+          r.step && <span className="muted">{STEP_LABEL[r.step]} step</span>
+        )}
         <span className="req-age">{formatAgo(r.createdAt, now)}</span>
       </header>
       {!inline && run && (
         <button className="req-run" onClick={onOpen} title="Open run">
-          <span className="mono muted">#{run.issue}</span> {run.title}
+          <span className="mono muted">{runRef(run)}</span> {run.title}
           <span className="muted"> · {run.projectId}</span>
         </button>
       )}
@@ -70,8 +83,8 @@ export function RequestCard({ request: r, run, now, selected, inline, showShortc
         </div>
       ) : (
         <div className={`req-outcome is-${r.status}`}>
-          <Icon name={r.status === "denied" ? "x" : "check"} size={14} />
-          {r.status === "answered" ? `Answered: ${r.answer}` : r.status === "approved" ? "Approved" : "Denied"}
+          <Icon name={r.status === "denied" || r.status === "cancelled" ? "x" : "check"} size={14} />
+          {OUTCOME[r.status](r.answer)}
           {r.resolvedAt && <span className="muted"> · {formatAgo(r.resolvedAt, now)}</span>}
         </div>
       )}
