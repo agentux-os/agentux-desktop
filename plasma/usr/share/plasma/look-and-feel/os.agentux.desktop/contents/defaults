@@ -1,0 +1,26 @@
+# Settings this global theme applies. Same keys as Breeze Dark
+# (plasma-workspace lookandfeel/org.kde.breezedark/contents/defaults);
+# only the wallpaper differs. The accent colour is not a global theme key:
+# it is set in /etc/xdg/kdeglobals ([General] AccentColor).
+
+[kdeglobals][KDE]
+widgetStyle=Breeze
+
+[kdeglobals][General]
+ColorScheme=BreezeDark
+
+[kdeglobals][Icons]
+Theme=breeze-dark
+
+[plasmarc][Theme]
+name=default
+
+[Wallpaper]
+Image=AgentUX
+
+[kcminputrc][Mouse]
+cursorTheme=breeze_cursors
+
+[kwinrc][org.kde.kdecoration2]
+library=org.kde.breeze
+theme=Breeze

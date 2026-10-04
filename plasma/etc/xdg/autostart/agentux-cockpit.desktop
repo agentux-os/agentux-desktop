@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AgentUX Cockpit
+Comment=Open the AgentUX cockpit when you log in
+Exec=agentux-cockpit
+TryExec=agentux-cockpit
+Icon=agentux-cockpit
+Terminal=false
+StartupNotify=false
+OnlyShowIn=KDE;

@@ -1,0 +1,7 @@
+# Lock screen wallpaper: the AgentUX wallpaper package.
+[Greeter]
+WallpaperPlugin=org.kde.image
+
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/wallpapers/AgentUX/
+PreviewImage=file:///usr/share/wallpapers/AgentUX/

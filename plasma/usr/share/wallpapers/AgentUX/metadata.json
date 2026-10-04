@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "AgentUX contributors"
+            }
+        ],
+        "Id": "AgentUX",
+        "License": "Apache-2.0",
+        "Name": "AgentUX"
+    }
+}

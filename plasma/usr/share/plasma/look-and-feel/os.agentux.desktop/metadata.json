@@ -1,0 +1,16 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "AgentUX contributors"
+            }
+        ],
+        "Category": "",
+        "Description": "AgentUX: Breeze Dark with the cockpit's accent, wallpaper and panel layout",
+        "Id": "os.agentux.desktop",
+        "License": "Apache-2.0",
+        "Name": "AgentUX",
+        "Website": "https://github.com/agentux-os/agentux-desktop"
+    }
+}

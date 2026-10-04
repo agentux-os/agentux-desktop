@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="2160" viewBox="0 0 3840 2160">
+  <!-- AgentUX wallpaper. Colours follow the cockpit's design tokens in
+       cockpit/src/styles/tokens.css: bg #0b0d10, surface #121519,
+       accent #c6f36b. The mark is the cockpit logo (cockpit/public/favicon.svg).
+       XML comments cannot contain a double hyphen, so token names are written
+       without their leading dashes. -->
+  <defs>
+    <radialGradient id="base" cx="50%" cy="46%" r="75%">
+      <stop offset="0" stop-color="#151a1f"/>
+      <stop offset="0.55" stop-color="#0d1013"/>
+      <stop offset="1" stop-color="#08090b"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#c6f36b" stop-opacity="0.16"/>
+      <stop offset="0.45" stop-color="#c6f36b" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#c6f36b" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="96" height="96" patternUnits="userSpaceOnUse">
+      <circle cx="48" cy="48" r="2.2" fill="#e7eaef" fill-opacity="0.05"/>
+    </pattern>
+    <radialGradient id="fade" cx="50%" cy="48%" r="60%">
+      <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="dotmask">
+      <rect width="3840" height="2160" fill="url(#fade)"/>
+    </mask>
+  </defs>
+
+  <rect width="3840" height="2160" fill="url(#base)"/>
+  <rect width="3840" height="2160" fill="url(#dots)" mask="url(#dotmask)"/>
+  <ellipse cx="1920" cy="1020" rx="1300" ry="900" fill="url(#glow)"/>
+
+  <!-- The agent graph from the logo, drawn large and faint around the mark -->
+  <g stroke="#c6f36b" stroke-opacity="0.10" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M1920 1020 L1240 420 M1920 1020 L2600 420 M1920 1020 L1240 1620 M1920 1020 L2600 1620"/>
+  </g>
+  <g fill="#c6f36b" fill-opacity="0.14">
+    <circle cx="1240" cy="420" r="34"/>
+    <circle cx="2600" cy="420" r="34"/>
+    <circle cx="1240" cy="1620" r="34"/>
+    <circle cx="2600" cy="1620" r="34"/>
+  </g>
+
+  <!-- Logo: favicon.svg (32x32) scaled 11x and centred at (1920, 1020) -->
+  <g transform="translate(1744 844) scale(11)">
+    <rect x="1" y="1" width="30" height="30" rx="8" fill="#c6f36b"/>
+    <g stroke="#0b0d10" stroke-width="2.2" stroke-linecap="round">
+      <path d="M9 9l7 7M23 9l-7 7M9 23l7-7M23 23l-7-7"/>
+    </g>
+    <g fill="#0b0d10">
+      <circle cx="16" cy="16" r="3.6"/>
+      <circle cx="8.5" cy="8.5" r="2.4"/>
+      <circle cx="23.5" cy="8.5" r="2.4"/>
+      <circle cx="8.5" cy="23.5" r="2.4"/>
+      <circle cx="23.5" cy="23.5" r="2.4"/>
+    </g>
+  </g>
+</svg>

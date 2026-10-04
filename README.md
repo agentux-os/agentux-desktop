@@ -71,7 +71,63 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 
 ## Desktop configuration
 
-KDE Plasma (Wayland) defaults for the AgentUX image: layouts for watching several agents at once, global shortcuts (open cockpit, approve, new run), theme and status widgets.
+KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma), laid out as a filesystem overlay: `plasma/usr/...` lands in `/usr`, `plasma/etc/...` in `/etc`. They are system-wide defaults only. Nothing is written to any home directory or `/etc/skel`; each user's own settings override every key, and System Settings can change or reset all of it.
+
+| Overlay path | What it does |
+|---|---|
+| `usr/share/plasma/look-and-feel/os.agentux.desktop/` | **AgentUX global theme.** `contents/defaults` sets Breeze Dark (colour scheme, icons, Plasma style, window decoration, cursors). `contents/layouts/org.kde.plasma.desktop-layout.js` builds the first desktop: the AgentUX wallpaper and a bottom panel with Kickoff, a task manager pinning AgentUX Cockpit, Konsole and the default browser, the system tray, the clock and Show Desktop |
+| `usr/share/wallpapers/AgentUX/` | Wallpaper package: an SVG of the cockpit logo on the cockpit's dark background |
+| `etc/xdg/kdeglobals` | Selects the global theme (`LookAndFeelPackage=os.agentux.desktop`) and the cockpit's accent colour `#c6f36b` (`AccentColor=198,243,107`) |
+| `etc/xdg/kscreenlockerrc` | Uses the AgentUX wallpaper on the lock screen |
+| `usr/share/kglobalaccel/agentux-*-shortcut.desktop` | Global shortcuts: **Meta+A** launches the cockpit, **Meta+Return** opens Konsole (Konsole's own Ctrl+Alt+T stays) |
+| `etc/xdg/autostart/agentux-cockpit.desktop` | Starts the cockpit at login (`TryExec`, so it does nothing if the cockpit isn't installed). Users turn it off in System Settings > Autostart |
+
+How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kdeglobals`, writes that global theme's defaults into `~/.config/kdedefaults` (a defaults layer, not user settings) and applies the colour scheme with the accent colour. plasmashell runs the theme's layout script only when the user has no desktop layout yet, so existing users keep their panels. On Fedora Kinoite `/etc/xdg` comes before Fedora's own defaults in `/usr/share/kde-settings/kde-profile/default/xdg` in `XDG_CONFIG_DIRS`, so these keys win over Fedora's.
+
+**KWin tiling: not included.** Plasma 6 stores custom tile layouts in `kwinrc` under `[Tiling][<virtual desktop id>][<output uuid>]`, and both ids are created per user and per monitor, so a system-wide default layout can't be written ahead of time. The built-in tiling needs no configuration: drag a window with Shift held, or edit tiles with Meta+T.
+
+**Check:** `plasma/check.sh` runs `desktop-file-validate` on every `.desktop` file, a syntax check (`node --check`) on the layout script, a JSON check on package metadata and an XML check on the SVG, makes sure every `file:///usr/...` reference ships in the overlay, and refuses anything under `/home`, `/root`, `/var/home`, `/var/roothome` or `/etc/skel`. CI runs it in a `fedora:44` container (job `plasma overlay`).
+
+### How agentux-os consumes it (proposal)
+
+The overlay has to land in the image at build time, since `/usr` is read-only on the installed system. Copy only `usr/` and `etc/`; `plasma/check.sh` must not end up in `/`. Two options:
+
+1. **Release tarball (recommended).** The release workflow also attaches `agentux-plasma-<version>.tar.gz`, built with `tar -C plasma -czf … usr etc`, and the Containerfile pins it next to the cockpit RPM:
+
+   ```dockerfile
+   ARG AGENTUX_DESKTOP_VERSION=0.1.0
+   RUN curl -fsSL "https://github.com/agentux-os/agentux-desktop/releases/download/v${AGENTUX_DESKTOP_VERSION}/agentux-plasma-${AGENTUX_DESKTOP_VERSION}.tar.gz" \
+         | tar -xz -C / --no-same-owner
+   ```
+
+   One version number covers both the cockpit and its desktop defaults, and the image build doesn't need git.
+
+2. **Git checkout at a pinned ref.** Use a multi-stage build that clones this repo at a tag and copies the two directories:
+
+   ```dockerfile
+   FROM docker.io/alpine/git AS desktop
+   RUN git clone --depth 1 --branch v0.1.0 https://github.com/agentux-os/agentux-desktop /src
+   FROM quay.io/fedora/fedora-kinoite:44
+   COPY --from=desktop /src/plasma/usr/ /usr/
+   COPY --from=desktop /src/plasma/etc/ /etc/
+   ```
+
+The agentux-os change (and adding the tarball to `release.yml`) is a separate task.
+
+### Not verified on a running Plasma session
+
+These files follow the Plasma 6 sources (plasma-workspace `startplasma`, `KLookAndFeelManager`, `shellcorona`, kglobalacceld) and the layout of shipping downstreams such as Aurora, but none of it has been booted yet. To check in a VM with a fresh user:
+
+- the panel, pinned launchers and wallpaper appear on first login, and the accent colour shows up (selection, focus rings);
+- Meta+A and Meta+Return appear in System Settings > Keyboard > Shortcuts and work, with no conflict with other default shortcuts;
+- the cockpit starts at login and appears in System Settings > Autostart;
+- the SVG wallpaper renders: Plasma loads wallpapers through Qt image plugins, and SVG needs the `qt6-qtsvg` image format plugin, which Kinoite ships with KDE.
+
+Known limits:
+
+- **Meta+A starts the cockpit; it doesn't focus a running one.** kglobalacceld only launches the desktop entry, so pressing it twice opens a second window until the cockpit is single-instance (for example with Tauri's `single-instance` plugin bringing the existing window forward).
+- If Fedora's first-boot `plasma-setup` runs and the user picks light or dark, it applies `org.kde.breeze(dark).desktop` over our global theme. Aurora patches `plasma-setup` for this reason. With the Anaconda ISO (where the account is created in the installer) it should not run, but that hasn't been checked.
+- The login screen (Plasma Login / SDDM) is not themed.
 
 ## Relevant ADRs
 
