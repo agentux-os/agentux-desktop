@@ -39,7 +39,8 @@ jobs:
           dnf -y install --setopt=install_weak_deps=False \
             git nodejs npm rust cargo gcc gcc-c++ make pkgconf-pkg-config \
             webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
-            librsvg2-devel file rpm cpio desktop-file-utils \n            libxml2 findutils tar gzip
+            librsvg2-devel file rpm cpio desktop-file-utils \
+            libxml2 findutils tar gzip
           rustc --version
           node --version
 
@@ -69,7 +70,9 @@ jobs:
           commit_time=$(git log -1 --format=%ct)
           mkdir -p dist
           tarball="dist/agentux-plasma-${version}.tar.gz"
-          tar -C plasma --sort=name --owner=0 --group=0 --numeric-owner             --mtime="@${commit_time}" --mode='u+rwX,go+rX,go-w'             -cf - usr etc | gzip -9n > "${tarball}"
+          tar -C plasma --sort=name --owner=0 --group=0 --numeric-owner \
+            --mtime="@${commit_time}" --mode='u+rwX,go+rX,go-w' \
+            -cf - usr etc | gzip -9n > "${tarball}"
           (cd dist && sha256sum "$(basename "${tarball}")" > "$(basename "${tarball}").sha256")
           echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
           echo "sha256=${tarball}.sha256" >> "$GITHUB_OUTPUT"
