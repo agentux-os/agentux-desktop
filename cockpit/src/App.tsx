@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PermissionRequest, Run, Session } from "./daemon/types";
 import { harnessInfo } from "./daemon/vendors";
+import { recentRunIds } from "./lib/bus";
 import { REQUEST_LABEL, runRef } from "./lib/labels";
 import { useNow } from "./lib/useNow";
 import { useCockpit, useDaemon } from "./state/daemon";
@@ -73,17 +74,32 @@ export default function App() {
     if (runId && connected) client.watchRun(runId);
   }, [client, runId, connected]);
 
+  // The bus log of the runs in view (bus page, board rail): loaded once per run.
+  const busRuns = useMemo(
+    () => (view === "inbox" ? [] : recentRunIds(Object.values(state.runs), projectId)).join(","),
+    [view, state.runs, projectId],
+  );
+  useEffect(() => {
+    if (connected && busRuns) client.watchBus(busRuns.split(","));
+  }, [client, busRuns, connected]);
+
   const openRun = useCallback((id: string) => {
     setRunId(id);
     setSessionId(null);
     setTerminal(false);
   }, []);
 
+  /** Approves a request; a question needs `answer` (agentuxd refuses an empty one). */
   const approve = useCallback(
-    (requestId: string) => {
+    (requestId: string, answer?: string) => {
       const r = state.requests[requestId];
-      client.approve(requestId).catch((e: unknown) => showToast(`Could not approve: ${errorText(e)}`));
-      if (r) showToast(`${APPROVED[r.kind]}: ${requestLine(r, state)}`);
+      if (r?.kind === "question" && !answer?.trim()) {
+        showToast("Pick an option (1–9) or type an answer");
+        return false;
+      }
+      client.approve(requestId, answer).catch((e: unknown) => showToast(`Could not ${r?.kind === "question" ? "answer" : "approve"}: ${errorText(e)}`));
+      if (r) showToast(`${APPROVED[r.kind]}: ${requestLine(r, state)}${answer ? ` · “${answer}”` : ""}`);
+      return true;
     },
     [client, state, showToast],
   );
@@ -98,6 +114,14 @@ export default function App() {
   );
 
   const canStartRuns = client.mode === "daemon" && state.connection.status === "connected";
+  const sendDisabled =
+    client.mode === "daemon" && !state.capabilities?.sessionsPrompt
+      ? "This agentuxd does not take prompts into sessions yet"
+      : undefined;
+
+  const sendPrompt = (sid: string, text: string) => {
+    client.sendPrompt(sid, text).catch((e: unknown) => showToast(`Could not send: ${errorText(e)}`));
+  };
 
   const startRun = async (input: StartRunInput) => {
     const started = await client.startRun(input);
@@ -179,9 +203,29 @@ export default function App() {
           showToast(pending.length ? "Open the inbox (I) or a waiting run to approve" : "Nothing waiting for you");
           break;
         }
+        if (focused.kind === "question") {
+          // A question needs an answer: go to its answer field.
+          focusAnswerField();
+          break;
+        }
         selectAfterResolve(focused);
         approve(focused.id);
         break;
+      case "1":
+      case "2":
+      case "3":
+      case "4":
+      case "5":
+      case "6":
+      case "7":
+      case "8":
+      case "9": {
+        const option = focused?.kind === "question" ? focused.options[Number(key) - 1] : undefined;
+        if (!focused || option === undefined) return;
+        selectAfterResolve(focused);
+        approve(focused.id, option);
+        break;
+      }
       case "d":
         if (!focused) return;
         selectAfterResolve(focused);
@@ -284,10 +328,9 @@ export default function App() {
                 pending={pending}
                 selectedId={inboxSelected?.id ?? null}
                 onSelect={setInboxSel}
-                onApprove={(id) => {
+                onApprove={(id, answer) => {
                   const r = state.requests[id];
-                  if (r) selectAfterResolve(r);
-                  approve(id);
+                  if (approve(id, answer) && r) selectAfterResolve(r);
                 }}
                 onDeny={(id) => {
                   const r = state.requests[id];
@@ -312,7 +355,8 @@ export default function App() {
               onClose={() => setRunId(null)}
               onApprove={approve}
               onDeny={deny}
-              onSend={(sid, text) => void client.sendPrompt(sid, text)}
+              onSend={sendPrompt}
+              sendDisabled={sendDisabled}
               onCancel={client.mode === "daemon" ? () => cancelRun(run.id) : undefined}
             />
           )}
@@ -337,6 +381,14 @@ export default function App() {
   );
 }
 
+/** Focuses the answer field of the selected question card (inbox), else the first one shown. */
+function focusAnswerField() {
+  const input =
+    document.querySelector<HTMLInputElement>(".req.is-selected .req-answer-input") ??
+    document.querySelector<HTMLInputElement>(".req-answer-input");
+  input?.focus();
+}
+
 function errorText(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
@@ -349,12 +401,14 @@ const APPROVED: Record<PermissionRequest["kind"], string> = {
   step: "Approved",
   permission: "Allowed",
   budget: "Budget extended",
+  question: "Answered",
 };
 const DENIED: Record<PermissionRequest["kind"], string> = {
   plan: "Rejected",
   step: "Rejected",
   permission: "Denied",
   budget: "Stopped",
+  question: "Declined",
 };
 
 /** "Permission · Codex on 3f9a0c12" (the asking session's harness and the run, when known). */
@@ -370,7 +424,8 @@ function requestLine(r: PermissionRequest, state: { runs: Record<string, Run>; s
 const SHORTCUTS: [string, string][] = [
   ["B / I / M", "Run board / approvals inbox / agent bus"],
   ["A", "Approve the focused request (inbox selection or open run)"],
-  ["D", "Deny or reject it"],
+  ["D", "Deny or reject it (decline a question)"],
+  ["1 … 9", "Answer the focused question with that option"],
   ["J / K", "Move through the inbox"],
   ["Enter", "Open the selected request's run"],
   ["T", "Toggle terminal mode for the open session"],

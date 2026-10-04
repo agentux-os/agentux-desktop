@@ -28,6 +28,9 @@ const PATHS = {
   folder: "M3 6h6l2 2h10v11H3z",
   send: "M4 12l16-8-6 16-2.5-6.5z",
   coins: "M9 10a6 3 0 1 0 0-.01M3 10v4c0 1.7 2.7 3 6 3s6-1.3 6-3v-4M15 7.2c3.3.1 6 1.4 6 2.8v4c0 1.7-2.7 3-6 3",
+  bell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4",
+  alert: "M12 3.5L21.5 20h-19zM12 10v4.5M12 17.5v.01",
+  minus: "M5 12h14",
 } as const;
 
 export type IconName = keyof typeof PATHS;

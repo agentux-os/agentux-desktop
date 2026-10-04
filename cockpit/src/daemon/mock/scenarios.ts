@@ -183,7 +183,9 @@ export const SCENARIOS: ScenarioSpec[] = [
       at: "review",
       text: "When an exchange hits the turn cap, should the daemon escalate to your inbox, or just drop further messages and log it?",
       options: ["Escalate to the inbox", "Drop and log"],
+      context: "Escalating adds an inbox item per capped exchange; dropping keeps the inbox quiet but hides stuck agents.",
     },
+    busRefusal: "turn_limit",
     review: {
       stat: " Cargo.toml          |  3 +++\n src/bus/router.rs   | 31 +++++++++++++++++++++++++++----\n tests/bus_limits.rs | 44 ++++++++++++++++++++++++++++++++++++++++++++\n 3 files changed, 74 insertions(+), 4 deletions(-)",
       focus: "The cap check is in the right place (before waking the target). The property test covers interleaved exchanges too.",
@@ -193,6 +195,7 @@ export const SCENARIOS: ScenarioSpec[] = [
   },
   {
     key: "ledger-idempotency",
+    busRefusal: "tool_denied",
     projectId: "ledger-api",
     issue: 212,
     title: "Idempotency keys for POST /transfers",
@@ -467,6 +470,7 @@ export const SCENARIOS: ScenarioSpec[] = [
       at: "implement",
       text: "With no saved preference, should Atlas follow the system theme or default to light as it does today?",
       options: ["Follow the system theme", "Default to light"],
+      context: "Following the system theme changes what existing users without a saved preference see.",
     },
     review: {
       stat: " index.html                   |  8 ++++++++\n src/theme/ThemeProvider.tsx  |  6 +++---\n 2 files changed, 11 insertions(+), 3 deletions(-)",

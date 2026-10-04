@@ -140,7 +140,7 @@ describe("TauriDaemonClient", () => {
     await client.cancelRun("r1");
     const started = await client.startRun({ projectPath: "/src/a", prompt: "Fix it" });
 
-    expect(t.calls.filter((c) => !["daemon_status", "daemon_snapshot"].includes(c.command))).toEqual([
+    expect(t.calls.filter((c) => !["daemon_status", "daemon_snapshot", "daemon_capabilities"].includes(c.command))).toEqual([
       { command: "daemon_approve", args: { requestId: "q1", answer: "ok" } },
       { command: "daemon_deny", args: { requestId: "q2" } },
       { command: "daemon_cancel", args: { runId: "r1" } },
@@ -186,6 +186,73 @@ describe("TauriDaemonClient", () => {
     live(10, "more");
     const texts = client.getState().sessions.s1.events.map((e) => (e.kind === "message" ? e.text : e.kind));
     expect(texts).toEqual(["go", "live more"]);
+  });
+
+  it("loads a run's bus log once, then follows bus_message events", async () => {
+    const t = new FakeTransport();
+    t.snapshots.push({ projects: [], runs: [run("r1"), run("r2")], requests: [] });
+    const entry = (id: string, at: number) => ({
+      id, runId: "r1", projectId: "p1", kind: "message", tool: "post_message",
+      from: { kind: "session", sessionId: "s1", role: "implementer", vendor: "codex" }, to: { kind: "human" },
+      subject: id, body: id, at, turn: 1, maxTurns: 6, messageId: at, exchange: at, inReplyTo: null,
+      questionId: null, requestId: null, deliveredTo: [], queuedForRole: null,
+    });
+    const list = deferred<unknown>();
+    t.results.daemon_bus_list = list.promise;
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+
+    client.watchRun("r1");
+    client.watchBus(["r1", "r2"]);
+    client.watchBus(["r1"]);
+    expect(t.calls.filter((c) => c.command === "daemon_bus_list")).toEqual([
+      { command: "daemon_bus_list", args: { runId: "r1" } },
+      { command: "daemon_bus_list", args: { runId: "r2" } },
+    ]);
+    // A live entry before the listing arrives; the listing overlaps it.
+    t.event(5, { runId: "r1", kind: "bus_message", message: entry("b2", 20) });
+    list.resolve([entry("b1", 10), entry("b2", 20)]);
+    await tick();
+    expect(client.getState().bus.map((m) => m.id)).toEqual(["b1", "b2"]);
+  });
+
+  it("retries a failed bus load and probes optional methods", async () => {
+    const t = new FakeTransport();
+    // A thenable, so the rejection only happens when the client awaits it.
+    t.results.daemon_bus_list = { then: (_: unknown, reject: (e: Error) => void) => reject(new Error("timeout")) };
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: false };
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await tick();
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: false });
+    client.watchBus(["r1"]);
+    await tick();
+    client.watchBus(["r1"]);
+    expect(t.calls.filter((c) => c.command === "daemon_bus_list")).toHaveLength(2);
+    await client.sendPrompt("s1", "hi");
+    expect(t.calls[t.calls.length - 1]).toEqual({ command: "daemon_send_prompt", args: { sessionId: "s1", text: "hi" } });
+  });
+
+  it("keeps prompting disabled on daemons without sessions.prompt", async () => {
+    const t = new FakeTransport();
+    t.results.daemon_capabilities = { sessionsPrompt: false, busPost: false };
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await tick();
+    await expect(client.sendPrompt("s1", "hi")).rejects.toThrow(/sessions.prompt/);
+    expect(t.calls.some((c) => c.command === "daemon_send_prompt")).toBe(false);
+  });
+
+  it("answers a question with approve and declines it with deny", async () => {
+    const t = new FakeTransport();
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await client.approve("q1", "sqlite");
+    await client.deny("q2");
+    expect(t.calls.filter((c) => c.command === "daemon_approve" || c.command === "daemon_deny")).toEqual([
+      { command: "daemon_approve", args: { requestId: "q1", answer: "sqlite" } },
+      { command: "daemon_deny", args: { requestId: "q2" } },
+    ]);
   });
 
   it("stops listening on disconnect", async () => {

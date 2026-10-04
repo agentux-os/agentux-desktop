@@ -26,6 +26,14 @@ pub mod method {
     pub const REQUESTS_APPROVE: &str = "requests.approve";
     pub const REQUESTS_DENY: &str = "requests.deny";
     pub const EVENTS_SUBSCRIBE: &str = "events.subscribe";
+    /// A run's agent bus log (agentux-core 0.2.0).
+    pub const BUS_LIST: &str = "bus.list";
+    /// The human prompts a session. Not served yet (a pending agentux-core
+    /// change); probed with `Client::serves` before use.
+    pub const SESSIONS_PROMPT: &str = "sessions.prompt";
+    /// The human posts on a run's bus. Not served yet; probed like
+    /// `sessions.prompt`.
+    pub const BUS_POST: &str = "bus.post";
     /// Server-to-client notification carrying one event.
     pub const EVENT: &str = "event";
 }
@@ -63,6 +71,22 @@ impl From<io::Error> for ClientError {
 
 /// JSON-RPC "method not found": the daemon predates that method.
 pub const METHOD_NOT_FOUND: i64 = -32601;
+
+/// `bus.list` params.
+fn bus_list_params(run_id: &str) -> Value {
+    json!({ "runId": run_id })
+}
+
+/// What a probe call says about a method: anything but "method not found"
+/// (typically -32602, invalid params, since the probe sends none) means the
+/// daemon serves it. `None`: the call failed for another reason.
+fn served(result: &Result<Value, ClientError>) -> Option<bool> {
+    match result {
+        Ok(_) => Some(true),
+        Err(ClientError::Rpc { code, .. }) => Some(*code != METHOD_NOT_FOUND),
+        Err(_) => None,
+    }
+}
 
 /// `events.subscribe` params: replay from `since` (else only new events),
 /// limited to `run_id` when given.
@@ -199,6 +223,26 @@ mod imp {
             }
         }
 
+        /// A run's agent bus log, oldest first (`bus.list`). Daemons before
+        /// agentux-core 0.2.0 do not serve it: their runs have an empty log.
+        pub async fn list_bus(&mut self, run_id: &str) -> Result<Value, ClientError> {
+            match self.call(method::BUS_LIST, bus_list_params(run_id)).await {
+                Err(ClientError::Rpc { code, .. }) if code == METHOD_NOT_FOUND => Ok(json!([])),
+                other => other,
+            }
+        }
+
+        /// Whether the daemon serves `method`, by calling it with empty
+        /// params. Only for methods that refuse those (-32602) without side
+        /// effects.
+        pub async fn serves(&mut self, method: &str) -> Result<bool, ClientError> {
+            let result = self.call(method, json!({})).await;
+            match served(&result) {
+                Some(yes) => Ok(yes),
+                None => result.map(|_| true),
+            }
+        }
+
         /// Turns this connection into an event stream. `since` replays stored
         /// events with a greater `seq` first; `None` streams only new events.
         /// `run_id` limits the stream to one run. Returns the daemon's newest
@@ -255,6 +299,14 @@ mod imp {
             Err(ClientError::Unavailable(UNSUPPORTED.into()))
         }
 
+        pub async fn list_bus(&mut self, _run_id: &str) -> Result<Value, ClientError> {
+            Err(ClientError::Unavailable(UNSUPPORTED.into()))
+        }
+
+        pub async fn serves(&mut self, _method: &str) -> Result<bool, ClientError> {
+            Err(ClientError::Unavailable(UNSUPPORTED.into()))
+        }
+
         pub async fn subscribe(
             self,
             _since: Option<i64>,
@@ -291,6 +343,25 @@ mod tests {
         let line = request_line(4, "runs.cancel", &json!({"runId": "ab"})).unwrap();
         let value: Value = serde_json::from_slice(&line).unwrap();
         assert_eq!(value["params"]["runId"], "ab");
+    }
+
+    #[test]
+    fn bus_list_names_the_run() {
+        assert_eq!(bus_list_params("r1"), json!({"runId": "r1"}));
+    }
+
+    #[test]
+    fn a_method_is_served_unless_the_daemon_does_not_know_it() {
+        let rpc = |code| {
+            Err(ClientError::Rpc {
+                code,
+                message: "x".into(),
+            })
+        };
+        assert_eq!(served(&rpc(METHOD_NOT_FOUND)), Some(false));
+        assert_eq!(served(&rpc(-32602)), Some(true));
+        assert_eq!(served(&Ok(json!(null))), Some(true));
+        assert_eq!(served(&Err(ClientError::Protocol("closed".into()))), None);
     }
 
     #[test]

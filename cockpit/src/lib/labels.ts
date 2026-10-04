@@ -1,4 +1,4 @@
-import type { BusTool, RequestKind, Role, Run, StepKind } from "../daemon/types";
+import type { BusMessageKind, RequestKind, Role, Run, StepKind } from "../daemon/types";
 
 export const STEP_LABEL: Record<StepKind, string> = {
   plan: "Plan",
@@ -20,6 +20,7 @@ export const REQUEST_LABEL: Record<RequestKind, string> = {
   step: "Step approval",
   permission: "Permission",
   budget: "Budget exceeded",
+  question: "Question",
 };
 
 /** Label of a pipeline role; custom role names are shown capitalised. */
@@ -27,11 +28,18 @@ export function roleLabel(role: string): string {
   return (ROLE_LABEL as Record<string, string>)[role] ?? (role ? role[0].toUpperCase() + role.slice(1) : "Agent");
 }
 
-export const BUS_TOOL_LABEL: Record<BusTool, string> = {
-  post_message: "message",
-  request_review: "review request",
+export const BUS_KIND_LABEL: Record<BusMessageKind, string> = {
+  message: "message",
+  review_request: "review request",
   handoff: "handoff",
-  ask_human: "ask human",
+  human_answer: "late answer",
+  question: "question",
+  answer: "answer",
+  wake: "wake",
+  turn_limit: "turn limit",
+  tool_denied: "tool denied",
+  joined: "joined",
+  left: "left",
 };
 
 /** How a run is referred to: its issue number, or its id for prompt-only runs. */

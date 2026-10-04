@@ -1,7 +1,17 @@
 import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
 import type { CockpitState, Run } from "../types";
-import type { ApiEvent, ApiRun, ApiRunHistory, ApiSnapshot, CommandError, LinkStatus, Probe } from "./api";
-import { applyEvent, applyRunHistory, applySnapshot, mapRun } from "./mapping";
+import type {
+  ApiBusMessage,
+  ApiCapabilities,
+  ApiEvent,
+  ApiRun,
+  ApiRunHistory,
+  ApiSnapshot,
+  CommandError,
+  LinkStatus,
+  Probe,
+} from "./api";
+import { applyBusList, applyEvent, applyRunHistory, applySnapshot, mapRun } from "./mapping";
 
 /** Tauri event channels emitted by the backend (`src-tauri/src/daemon/mod.rs`). */
 export const EVENT_CHANNEL = "daemon://event";
@@ -67,6 +77,12 @@ export function emptyState(daemon: string): CockpitState {
  * loaded once per run when the UI opens it (`watchRun`). Live session events
  * for that run keep being applied meanwhile and are applied again on top of
  * the history; sessions skip events they already folded (by seq).
+ *
+ * The agent-bus log of a run comes from `bus.list` (`daemon_bus_list`), loaded
+ * once per run when the UI shows it (`watchRun`, `watchBus`), and then from
+ * live `bus_message` events; entries are merged by id, so overlaps are fine.
+ * Optional methods (`sessions.prompt`, `bus.post`) are probed after each load
+ * and stay disabled on daemons that do not serve them.
  */
 export class TauriDaemonClient implements DaemonClient {
   readonly mode = "daemon" as const;
@@ -81,6 +97,8 @@ export class TauriDaemonClient implements DaemonClient {
   private reloadAgain = false;
   /** Runs whose history is loaded or loading; live session events of loading ones, to re-apply. */
   private histories = new Map<string, ApiEvent[] | "loaded">();
+  /** Runs whose bus log is loaded or loading. */
+  private busLogs = new Set<string>();
 
   constructor(
     private readonly transport: Transport,
@@ -124,6 +142,7 @@ export class TauriDaemonClient implements DaemonClient {
     this.loading = null;
     this.reloadAgain = false;
     this.histories.clear();
+    this.busLogs.clear();
   }
 
   getState = (): CockpitState => this.state;
@@ -139,6 +158,13 @@ export class TauriDaemonClient implements DaemonClient {
 
   async deny(requestId: string): Promise<void> {
     await this.transport.invoke("daemon_deny", { requestId });
+  }
+
+  watchBus(runIds: string[]): void {
+    if (!this.active) return;
+    for (const runId of runIds) {
+      if (!this.busLogs.has(runId)) void this.loadBus(runId);
+    }
   }
 
   async startRun(input: StartRunInput): Promise<Run> {
@@ -158,12 +184,17 @@ export class TauriDaemonClient implements DaemonClient {
   }
 
   watchRun(runId: string): void {
-    if (!this.active || this.histories.has(runId)) return;
+    if (!this.active) return;
+    this.watchBus([runId]);
+    if (this.histories.has(runId)) return;
     void this.loadHistory(runId);
   }
 
-  async sendPrompt(_sessionId: string, _text: string): Promise<void> {
-    throw new Error("agentuxd does not accept prompts into sessions yet");
+  async sendPrompt(sessionId: string, text: string): Promise<void> {
+    if (!this.state.capabilities?.sessionsPrompt) {
+      throw new Error("this agentuxd does not accept prompts into sessions (no sessions.prompt)");
+    }
+    await this.transport.invoke("daemon_send_prompt", { sessionId, text });
   }
 
   async openTerminal(_sessionId: string): Promise<TerminalHandle | null> {
@@ -174,7 +205,7 @@ export class TauriDaemonClient implements DaemonClient {
 
   private onEvent(event: ApiEvent): void {
     const pending = event.runId ? this.histories.get(event.runId) : undefined;
-    if (Array.isArray(pending) && event.kind === "session_event") pending.push(event);
+    if (Array.isArray(pending) && (event.kind === "session_event" || event.kind === "bus_message")) pending.push(event);
     if (this.buffer) {
       this.buffer.push(event);
       return;
@@ -222,6 +253,7 @@ export class TauriDaemonClient implements DaemonClient {
       const buffered = this.buffer ?? [];
       this.buffer = null;
       this.update((s) => buffered.reduce(applyEvent, applySnapshot(s, snap)));
+      void this.probeCapabilities(gen);
     } catch (e) {
       if (gen !== this.generation) return;
       const buffered = this.buffer ?? [];
@@ -249,6 +281,35 @@ export class TauriDaemonClient implements DaemonClient {
     } catch {
       // Live events still show; opening the run again retries.
       if (gen === this.generation) this.histories.delete(runId);
+    }
+  }
+
+  private async loadBus(runId: string): Promise<void> {
+    const gen = this.generation;
+    this.busLogs.add(runId);
+    try {
+      const list = await this.transport.invoke<ApiBusMessage[]>("daemon_bus_list", { runId });
+      if (gen !== this.generation) return;
+      if (Array.isArray(list)) this.update((s) => applyBusList(s, list));
+    } catch {
+      // Live entries still show; showing the run again retries.
+      if (gen === this.generation) this.busLogs.delete(runId);
+    }
+  }
+
+  /** Which optional methods this daemon serves; absent ones stay disabled. */
+  private async probeCapabilities(gen: number): Promise<void> {
+    try {
+      const caps = await this.transport.invoke<ApiCapabilities>("daemon_capabilities");
+      if (gen !== this.generation || !caps) return;
+      const capabilities = { sessionsPrompt: caps.sessionsPrompt === true, busPost: caps.busPost === true };
+      this.update((s) =>
+        s.capabilities?.sessionsPrompt === capabilities.sessionsPrompt && s.capabilities?.busPost === capabilities.busPost
+          ? s
+          : { ...s, capabilities },
+      );
+    } catch {
+      /* an older backend: keep everything optional disabled */
     }
   }
 

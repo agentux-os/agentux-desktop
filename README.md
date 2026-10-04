@@ -2,7 +2,7 @@
 
 The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the cockpit app and the desktop configuration shipped with the distribution.
 
-> **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Sessions, agent bus and spend are still mock-only. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
+> **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included) and the agent bus come from the daemon; prompting a session from the cockpit waits for daemon support. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
 
 ## Cockpit
 
@@ -11,7 +11,7 @@ One interface on top of every coding agent CLI (Tauri app, talks only to `agentu
 - **Session view.** Messages, tool calls, diffs, plans and permission requests rendered the same way whatever the vendor. The harness's own TUI opens in an embedded terminal on the same session, without restarting it.
 - **Run board.** Per project: planned, implementing, testing, in review, waiting for you, done.
 - **Approvals inbox.** Every permission request and escalation from every agent in one queue, with one shortcut to approve.
-- **Agent bus feed.** Messages, review requests and handoffs between agents, visible and auditable.
+- **Agent bus feed.** Messages, review requests and handoffs between agents, grouped by exchange with their turn count; questions to you and your answers; turn limits and denied tools as warnings; wakes and sessions joining or leaving as quiet system lines.
 - **Spend.** Tokens and cost per run, project and vendor.
 
 ## Developing the cockpit
@@ -53,7 +53,8 @@ How the connection behaves:
 
 - At startup the frontend probes the daemon. If it answers, the cockpit uses `TauriDaemonClient`; if not, it shows mock data with a **Mock data** badge and a "agentuxd is not running" banner, and reloads by itself once the daemon is up.
 - The backend keeps one `events.subscribe` stream open and forwards each event to the UI (`daemon://event`). When the daemon stops it reports the disconnect, retries with exponential backoff (0.5 s up to 15 s) and resubscribes from the last `seq` it saw, so nothing is lost while the daemon restarts; the UI reloads the project/run/request lists on every reconnect.
-- The daemon does not report harness sessions, agent-bus messages or token usage yet, so in daemon mode the session view, bus feed and spend stay empty; see the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
+- Opening a run loads its stored events (session timelines) and its agent-bus log (`bus.list`); the bus page and the board's rail load the log of the most recent runs the same way. Live `bus_message` events keep them current, merged by id. Questions agents ask through `ask_human` land in the approvals inbox: pick a suggested answer (buttons, or `1`–`9`), type one, or decline. See the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
+- Optional daemon methods (`sessions.prompt`, `bus.post`) are probed after each load; the session composer stays disabled on daemons that do not serve `sessions.prompt`.
 
 ### Layout of the code
 
@@ -98,7 +99,7 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 ### Not there yet
 
 - Terminal mode is a placeholder; the embedded PTY will come from `agentuxd`.
-- Sessions, session events, agent bus, sending prompts and spend are not in the daemon API yet; they only exist in mock mode.
+- Sending prompts into a session and posting on the bus as the human need daemon methods that are not released yet; the cockpit enables prompting only when the daemon serves `sessions.prompt`, and has no UI for posting on the bus yet.
 - The daemon is reached over a Unix socket only, so on Windows the Tauri build always shows mock data.
 - Prices in the mock are illustrative.
 

@@ -23,8 +23,9 @@
  *
  * PermissionRequest
  *   id, runId, projectId, title, detail, stepIndex, createdAt -> same
- *   kind                      -> `plan | step | permission | budget`; unknown
- *                                kinds become `step` (a plain approval)
+ *   kind                      -> `plan | step | permission | budget | question`;
+ *                                unknown kinds become `step` (a plain approval)
+ *   options                   -> same (absent from old daemons: [])
  *   status                    -> same; unknown become `cancelled` (resolved)
  *   step                      -> unknown kinds become `custom`
  *   sessionId, answer, resolvedAt -> null becomes undefined
@@ -55,13 +56,29 @@
  *   Entries carry the event's seq; events with a seq at or below the last one
  *   folded into the session are ignored, so replays cannot duplicate entries.
  *
+ * BusMessage (`bus.list`, `bus_message` events)
+ *   id, runId, projectId, subject, body, at, turn, maxTurns -> same
+ *   kind                      -> same; unknown kinds become `message`
+ *   tool, messageId, exchange, inReplyTo, questionId, requestId,
+ *   queuedForRole             -> null becomes undefined
+ *   deliveredTo               -> same (missing: [])
+ *   from, to                  -> session endpoints keep sessionId and role;
+ *                                their `vendor` (the harness) becomes `harness`
+ *                                plus the cockpit vendor; role/run/human/daemon
+ *                                same; unknown endpoint kinds become `daemon`
+ *   Entries are kept in `state.bus` by id (a replay or a later `bus.list`
+ *   replaces, never duplicates), ordered by `at`. Routed entries (all but
+ *   wake/joined/left and the refusals) from `bus_message` events are also added
+ *   to the timeline of each session that sent or received them (`bus` entry).
+ *
  * Other events: `project`, `run`, `request`, `session` replace the entry with
  * the same id. `attempt`, `log` and unknown kinds are ignored.
- *
- * Not provided by the daemon (left empty): agent-bus messages.
  */
 
 import type {
+  BusEndpoint,
+  BusMessage,
+  BusMessageKind,
   CheckStatus,
   CockpitState,
   PermissionRequest,
@@ -81,8 +98,10 @@ import type {
   ToolStatus,
   Vendor,
 } from "../types";
-import { VENDORS } from "../types";
+import { BUS_KINDS, BUS_SYSTEM_KINDS, BUS_WARNING_KINDS, VENDORS } from "../types";
 import type {
+  ApiBusEndpoint,
+  ApiBusMessage,
   ApiEvent,
   ApiProject,
   ApiRequest,
@@ -98,7 +117,7 @@ const STEP_KINDS: readonly StepKind[] = ["plan", "implement", "gate", "review", 
 const RUN_STATUSES: readonly RunStatus[] = ["running", "waiting", "done", "failed", "cancelled"];
 const CHECK_STATUSES: readonly CheckStatus[] = ["pending", "running", "passed", "failed"];
 const ROLES: readonly Role[] = ["planner", "implementer", "reviewer"];
-const REQUEST_KINDS: readonly RequestKind[] = ["plan", "step", "permission", "budget"];
+const REQUEST_KINDS: readonly RequestKind[] = ["plan", "step", "permission", "budget", "question"];
 const REQUEST_STATUSES: readonly RequestStatus[] = ["pending", "approved", "denied", "cancelled"];
 const SESSION_STATES: readonly SessionState[] = ["active", "idle", "waiting", "ended"];
 const TOOL_KINDS: readonly ToolKind[] = ["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "other"];
@@ -191,11 +210,120 @@ export function mapRequest(q: ApiRequest): PermissionRequest {
     stepIndex: q.stepIndex,
     title: q.title,
     detail: q.detail,
+    options: Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === "string") : [],
     status: oneOf(REQUEST_STATUSES, q.status) ?? "cancelled",
     answer: opt(q.answer),
     createdAt: q.createdAt,
     resolvedAt: opt(q.resolvedAt),
   };
+}
+
+export function mapBusEndpoint(ep: ApiBusEndpoint | null | undefined): BusEndpoint {
+  const e = (ep ?? {}) as { kind?: unknown; sessionId?: unknown; role?: unknown; vendor?: unknown };
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  switch (e.kind) {
+    case "session": {
+      const harness = str(e.vendor);
+      return {
+        kind: "session",
+        sessionId: str(e.sessionId) ?? "",
+        role: str(e.role) ?? "agent",
+        harness,
+        vendor: harnessToVendor(harness),
+      };
+    }
+    case "role":
+      return { kind: "role", role: str(e.role) ?? "agent" };
+    case "run":
+      return { kind: "run" };
+    case "human":
+      return { kind: "human" };
+    default:
+      return { kind: "daemon" };
+  }
+}
+
+export function mapBusMessage(m: ApiBusMessage): BusMessage {
+  return {
+    id: m.id,
+    runId: m.runId,
+    projectId: m.projectId,
+    kind: oneOf(BUS_KINDS, m.kind) ?? "message",
+    tool: opt(m.tool),
+    from: mapBusEndpoint(m.from),
+    to: mapBusEndpoint(m.to),
+    subject: m.subject ?? "",
+    body: m.body ?? "",
+    at: m.at,
+    turn: m.turn ?? 0,
+    maxTurns: m.maxTurns ?? 0,
+    messageId: opt(m.messageId),
+    exchange: opt(m.exchange),
+    inReplyTo: opt(m.inReplyTo),
+    questionId: opt(m.questionId),
+    requestId: opt(m.requestId),
+    deliveredTo: Array.isArray(m.deliveredTo) ? m.deliveredTo : [],
+    queuedForRole: opt(m.queuedForRole),
+  };
+}
+
+function sameBus(a: BusMessage, b: BusMessage): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Adds or replaces bus entries by id, keeping the log ordered by time (stable). */
+export function mergeBus(current: BusMessage[], incoming: BusMessage[]): BusMessage[] {
+  const byId = new Map(current.map((m) => [m.id, m] as const));
+  let changed = false;
+  for (const m of incoming) {
+    const old = byId.get(m.id);
+    if (old && sameBus(old, m)) continue;
+    byId.set(m.id, m);
+    changed = true;
+  }
+  if (!changed) return current;
+  // Existing entries keep their order, new ones follow; the sort is stable.
+  return [...byId.values()].sort((a, b) => a.at - b.at);
+}
+
+/** Whether a bus entry is shown in the timelines of the sessions it involves. */
+export function isRoutedBusKind(kind: BusMessageKind): boolean {
+  return !BUS_SYSTEM_KINDS.includes(kind) && !BUS_WARNING_KINDS.includes(kind);
+}
+
+/** The sessions whose timeline shows `m`: its sender, a session recipient, the mailboxes it reached. */
+function busSessions(m: BusMessage): string[] {
+  const ids = new Set<string>(m.deliveredTo);
+  if (m.from.kind === "session" && m.from.sessionId) ids.add(m.from.sessionId);
+  if (m.to.kind === "session" && m.to.sessionId) ids.add(m.to.sessionId);
+  return [...ids];
+}
+
+/** Applies bus entries: the run's log, plus a `bus` entry in each involved session's timeline. */
+export function applyBusMessages(state: CockpitState, messages: BusMessage[], seq?: number): CockpitState {
+  const bus = mergeBus(state.bus, messages);
+  let sessions = state.sessions;
+  for (const m of messages) {
+    if (!isRoutedBusKind(m.kind)) continue;
+    for (const sid of busSessions(m)) {
+      const current = sessions[sid] ?? placeholderSession(sid, m.runId, state);
+      if (current.events.some((e) => e.kind === "bus" && e.messageId === m.id)) continue;
+      const entry: SessionEvent = { id: `b${m.id}`, at: m.at, seq, kind: "bus", messageId: m.id };
+      if (sessions === state.sessions) sessions = { ...sessions };
+      sessions[sid] = { ...current, events: [...current.events, entry] };
+    }
+  }
+  if (bus === state.bus && sessions === state.sessions) return state;
+  return { ...state, bus, sessions };
+}
+
+/**
+ * A run's log from `bus.list`. Only the log is updated: session timelines get
+ * their bus entries from the run's events, in order with everything else.
+ */
+export function applyBusList(state: CockpitState, list: ApiBusMessage[]): CockpitState {
+  const bus = mergeBus(state.bus, list.filter((m) => m && typeof m.id === "string").map(mapBusMessage));
+  return bus === state.bus ? state : { ...state, bus };
 }
 
 export function mapSessionUsage(u: ApiSessionUsage | null | undefined): SessionUsage {
@@ -361,6 +489,11 @@ export function applyEvent(state: CockpitState, event: ApiEvent): CockpitState {
       if (session === current && state.sessions[sessionId]) return state;
       return { ...state, sessions: { ...state.sessions, [sessionId]: session } };
     }
+    case "bus_message": {
+      const message = (event as { message?: ApiBusMessage }).message;
+      if (!message || typeof message.id !== "string") return state;
+      return applyBusMessages(state, [mapBusMessage(message)], event.seq);
+    }
     default:
       return state;
   }
@@ -368,8 +501,8 @@ export function applyEvent(state: CockpitState, event: ApiEvent): CockpitState {
 
 /**
  * Rebuilds the entries of every session of `runId` from its stored events.
- * Only `session_event`s are used: snapshots in the history are older than
- * what the state already holds. Live events with a seq above `history.head`
+ * Only `session_event`s and `bus_message`s are used: snapshots in the
+ * history are older than what the state already holds. Live events with a seq above `history.head`
  * must be applied again afterwards (the client does).
  */
 export function applyRunHistory(state: CockpitState, runId: string, history: ApiRunHistory): CockpitState {
@@ -379,7 +512,9 @@ export function applyRunHistory(state: CockpitState, runId: string, history: Api
   }
   let next: CockpitState = { ...state, sessions };
   for (const event of history.events) {
-    if (event.kind === "session_event" && event.seq <= history.head) next = applyEvent(next, event);
+    if ((event.kind === "session_event" || event.kind === "bus_message") && event.seq <= history.head) {
+      next = applyEvent(next, event);
+    }
   }
   // Usage comes from the session snapshots, which are newer than the history.
   for (const [id, s] of Object.entries(state.sessions)) {

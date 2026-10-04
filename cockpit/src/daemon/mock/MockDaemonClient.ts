@@ -1,6 +1,8 @@
 import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
 import type {
   BusEndpoint,
+  BusMessage,
+  BusMessageKind,
   CockpitState,
   PermissionRequest,
   Role,
@@ -10,12 +12,57 @@ import type {
   SessionUsage,
 } from "../types";
 import { VENDOR_INFO, costOf } from "../vendors";
-import { buildScript, scriptMarkIndex, type Beat, type DiffSpec, type Endpoint, type RunCtx, type ScenarioSpec } from "./script";
+import {
+  buildScript,
+  scriptMarkIndex,
+  type Beat,
+  type BusExtra,
+  type DiffSpec,
+  type Endpoint,
+  type RunCtx,
+  type ScenarioSpec,
+} from "./script";
 import { PROJECTS, SCENARIOS, SEED } from "./scenarios";
 
 const TICK_MS = 400;
 const MAX_ACTIVE_RUNS = 8;
 const BUS_MAX_TURNS = 6;
+
+/** Kinds routed to a mailbox: they use a turn of their exchange and wake a session target. */
+const ROUTED: readonly BusMessageKind[] = ["message", "review_request", "handoff", "human_answer"];
+/** The bus tool behind each entry kind, as agentuxd records it. */
+const TOOL_OF: Partial<Record<BusMessageKind, string>> = {
+  message: "post_message",
+  review_request: "request_review",
+  handoff: "handoff",
+  question: "ask_human",
+  answer: "ask_human",
+  turn_limit: "post_message",
+};
+const WAKE_REASON: Partial<Record<BusMessageKind, string>> = {
+  message: "message",
+  review_request: "review request",
+  handoff: "handoff",
+  human_answer: "answer from the human",
+};
+
+/** Per-run bus counters, like agentuxd's (message, exchange and question ids). */
+interface BusCounters {
+  messages: number;
+  exchanges: number;
+  questions: number;
+  named: Map<string, number>;
+}
+
+/** An `ask_human` waiting for the human. */
+interface Question {
+  runId: string;
+  role: Role;
+  questionId: number;
+  text: string;
+  /** The agent stopped waiting: the answer also arrives as mail. */
+  timedOut: boolean;
+}
 
 interface Engine {
   runId: string;
@@ -50,6 +97,8 @@ export class MockDaemonClient implements DaemonClient {
   private nextIssue = new Map<string, number>();
   private nextPr = new Map<string, number>();
   private readonly speed: number;
+  private busCounters = new Map<string, BusCounters>();
+  private questions = new Map<string, Question>();
 
   /** `fallbackReason`: why the real daemon is not used (shown as a banner). */
   constructor(opts: { speed?: number; fallbackReason?: string } = {}) {
@@ -126,6 +175,10 @@ export class MockDaemonClient implements DaemonClient {
 
   watchRun(_runId: string): void {
     // Mock sessions carry their whole history already.
+  }
+
+  watchBus(_runIds: string[]): void {
+    // The mock bus log is complete already.
   }
 
   async sendPrompt(sessionId: string, text: string): Promise<void> {
@@ -285,10 +338,8 @@ export class MockDaemonClient implements DaemonClient {
     const run = () => this.state.runs[runId];
     const session = (role: Role) => this.ensureSession(runId, role);
     const endpoint = (x: Endpoint): BusEndpoint => {
-      if (x === "human") return { kind: "human" };
-      if (x === "daemon") return { kind: "daemon" };
-      const sid = session(x);
-      return { kind: "session", sessionId: sid, role: x, vendor: run().roles[x] };
+      if (x === "human" || x === "daemon" || x === "run") return { kind: x };
+      return this.sessionEndpoint(session(x));
     };
     return {
       branch: run().branch ?? "",
@@ -354,26 +405,27 @@ export class MockDaemonClient implements DaemonClient {
         const r = this.state.requests[requestId];
         return { status: r?.status ?? "approved", answer: r?.answer };
       },
-      bus: (tool, from, to, subject, body, turn = 1) => {
-        const id = this.id("msg");
-        const r = run();
-        const msg = {
-          id,
-          runId,
-          projectId: r.projectId,
-          tool,
-          from: endpoint(from),
-          to: endpoint(to),
-          subject,
-          body,
-          at: this.now,
-          turn,
-          maxTurns: BUS_MAX_TURNS,
-        };
-        this.update((s) => ({ ...s, bus: [...s.bus, msg] }));
-        for (const ep of [msg.from, msg.to]) {
-          if (ep.kind === "session") this.pushEvent(ep.sessionId, { kind: "bus", messageId: id });
-        }
+      bus: (kind, from, to, subject, body, extra) => {
+        this.postBus(runId, kind, endpoint(from), endpoint(to), subject, body, extra);
+      },
+      question: (role, text, options, context) => {
+        const sid = session(role);
+        const vendor = run().roles[role] ?? "agent";
+        const counters = this.counters(runId);
+        const questionId = ++counters.questions;
+        const detail = [text, context ? `Context: ${context}` : "", options.length ? `Options: ${options.join(" / ")}` : ""]
+          .filter(Boolean)
+          .join("\n\n");
+        const requestId = this.addRequest(runId, sid, "question", `${role} (${vendor}) asks: ${text}`, detail, options);
+        this.questions.set(requestId, { runId, role, questionId, text, timedOut: false });
+        this.postBus(runId, "question", endpoint(role), { kind: "human" }, text, detail, { questionId, requestId });
+        return requestId;
+      },
+      questionTimeout: (requestId) => {
+        const q = this.questions.get(requestId);
+        if (!q || this.state.requests[requestId]?.status !== "pending") return false;
+        q.timedOut = true;
+        return true;
       },
       checks: (status, only) =>
         this.patchRun(runId, {
@@ -384,6 +436,7 @@ export class MockDaemonClient implements DaemonClient {
       finish: (prNumber) => {
         const r = run();
         const repo = this.state.projects.find((p) => p.id === r.projectId)?.repo ?? "";
+        this.closeBus(runId);
         for (const sid of Object.values(r.sessions)) this.patchSession(sid, { state: "ended", endedAt: this.now });
         this.patchRun(runId, {
           status: "done",
@@ -395,13 +448,14 @@ export class MockDaemonClient implements DaemonClient {
     };
   }
 
-  /** Same shape as agentuxd: pipeline approvals have no session; permissions name the asking session. */
+  /** Same shape as agentuxd: pipeline approvals have no session; permissions and questions name the asking session. */
   private addRequest(
     runId: string,
     sessionId: string | undefined,
     kind: PermissionRequest["kind"],
     title: string,
     detail: string,
+    options: string[] = [],
   ): string {
     const id = this.id("req");
     const r = this.state.runs[runId];
@@ -410,15 +464,18 @@ export class MockDaemonClient implements DaemonClient {
       kind,
       runId,
       projectId: r.projectId,
-      sessionId: kind === "permission" ? sessionId : undefined,
+      sessionId: kind === "permission" || kind === "question" ? sessionId : undefined,
       step: r.step,
       stepIndex: r.stepIndex ?? 0,
       title,
       detail,
+      options,
       status: "pending",
       createdAt: this.now,
     };
     this.update((s) => ({ ...s, requests: { ...s.requests, [id]: req } }));
+    // A question does not pause the run: the agent's tool call waits.
+    if (kind === "question") return id;
     if (req.sessionId) {
       this.pushEvent(req.sessionId, { kind: "permission", requestId: id });
       this.patchSession(req.sessionId, { state: "waiting" });
@@ -429,12 +486,26 @@ export class MockDaemonClient implements DaemonClient {
 
   /**
    * Like agentuxd: denying a permission tells the agent no and the run goes
-   * on; denying any other request fails the run. Approving a budget request
-   * raises the budget to the current cost plus the configured amount.
+   * on; denying a question tells the agent the human declined; denying any
+   * other request fails the run. Approving a budget request raises the budget
+   * to the current cost plus the configured amount. A question needs an answer.
    */
   private resolve(requestId: string, action: "approve" | "deny", answer?: string) {
     const req = this.state.requests[requestId];
     if (!req || req.status !== "pending") return;
+    if (req.kind === "question") {
+      const text = answer?.trim();
+      if (action === "approve" && !text) throw new Error("A question needs an answer");
+      this.update((s) => ({
+        ...s,
+        requests: {
+          ...s.requests,
+          [requestId]: { ...req, status: action === "deny" ? "denied" : "approved", answer: action === "deny" ? undefined : text, resolvedAt: this.now },
+        },
+      }));
+      this.answerQuestion(requestId, action === "deny" ? "(the human declined to answer)" : text!);
+      return;
+    }
     const next: PermissionRequest = {
       ...req,
       status: action === "deny" ? "denied" : "approved",
@@ -459,6 +530,130 @@ export class MockDaemonClient implements DaemonClient {
       this.patchRun(req.runId, { status: "running", activity: req.kind === "permission" ? "the agent is working" : "approved, continuing" });
     }
     if (req.sessionId) this.patchSession(req.sessionId, { state: "active" });
+  }
+
+  // ---- agent bus ------------------------------------------------------------
+
+  private counters(runId: string): BusCounters {
+    let c = this.busCounters.get(runId);
+    if (!c) {
+      c = { messages: 0, exchanges: 0, questions: 0, named: new Map() };
+      this.busCounters.set(runId, c);
+    }
+    return c;
+  }
+
+  private sessionEndpoint(sessionId: string): BusEndpoint {
+    const x = this.state.sessions[sessionId];
+    return { kind: "session", sessionId, role: x?.role ?? "agent", harness: x?.harness, vendor: x?.vendor };
+  }
+
+  /** Appends a bus entry the way agentuxd logs it; routed messages to a session also log its wake. */
+  private postBus(
+    runId: string,
+    kind: BusMessageKind,
+    from: BusEndpoint,
+    to: BusEndpoint,
+    subject: string,
+    body: string,
+    extra: BusExtra & { questionId?: number; requestId?: string; wakeFor?: number } = {},
+  ): BusMessage {
+    const run = this.state.runs[runId];
+    const counters = this.counters(runId);
+    const routed = ROUTED.includes(kind);
+    let exchange: number | undefined;
+    if (extra.exchange) {
+      exchange = counters.named.get(extra.exchange);
+      if (exchange === undefined && kind !== "turn_limit") {
+        exchange = ++counters.exchanges;
+        counters.named.set(extra.exchange, exchange);
+      }
+    } else if (routed) {
+      exchange = ++counters.exchanges;
+    }
+    const messageId = routed ? ++counters.messages : extra.wakeFor;
+    const msg: BusMessage = {
+      id: this.id("bus"),
+      runId,
+      projectId: run.projectId,
+      kind,
+      tool: extra.tool ?? TOOL_OF[kind],
+      from,
+      to,
+      subject:
+        subject ||
+        (kind === "turn_limit" ? `exchange ${exchange ?? "?"} reached its limit of ${BUS_MAX_TURNS} turns; post refused` : body),
+      body: body || subject,
+      at: this.now,
+      turn: routed ? (extra.turn ?? 1) : 0,
+      maxTurns: BUS_MAX_TURNS,
+      messageId,
+      exchange,
+      questionId: extra.questionId,
+      requestId: extra.requestId,
+      deliveredTo: routed && to.kind === "session" ? [to.sessionId] : [],
+    };
+    if (!msg.body) msg.body = msg.subject;
+    this.update((s) => ({ ...s, bus: [...s.bus, msg] }));
+    if (routed || kind === "question" || kind === "answer") {
+      const sessions = new Set<string>();
+      if (from.kind === "session") sessions.add(from.sessionId);
+      if (to.kind === "session") sessions.add(to.sessionId);
+      for (const sid of sessions) this.pushEvent(sid, { kind: "bus", messageId: msg.id });
+    }
+    if (routed && to.kind === "session") {
+      const who = from.kind === "session" ? `${from.role} (${from.harness ?? from.vendor ?? "agent"})` : from.kind;
+      this.postBus(
+        runId,
+        "wake",
+        { kind: "daemon" },
+        to,
+        `wake the ${to.role} (session ${to.sessionId}) for a ${WAKE_REASON[kind] ?? "message"}`,
+        `[agentux bus] New message from ${who}: ${msg.subject}. Call read_messages to read it.`,
+        { wakeFor: messageId },
+      );
+    }
+    return msg;
+  }
+
+  /** The human's answer (or decline): an `answer` entry, plus mail and a wake if the agent stopped waiting. */
+  private answerQuestion(requestId: string, answer: string) {
+    const q = this.questions.get(requestId);
+    if (!q) return;
+    this.questions.delete(requestId);
+    const sid = this.state.runs[q.runId]?.sessions[q.role];
+    if (!sid) return;
+    const asker = this.sessionEndpoint(sid);
+    const oneLine = answer.split("\n")[0];
+    this.postBus(q.runId, "answer", { kind: "human" }, asker, oneLine, answer, { questionId: q.questionId, requestId });
+    if (q.timedOut && this.state.sessions[sid]?.state !== "ended") {
+      this.postBus(
+        q.runId,
+        "human_answer",
+        { kind: "human" },
+        asker,
+        `Answer to your question ${q.questionId} ("${q.text}"): ${oneLine}`,
+        `Answer to your question ${q.questionId} ("${q.text}"): ${answer}`,
+      );
+    }
+  }
+
+  /** The run ended: pending questions are cancelled and every session leaves the bus. */
+  private closeBus(runId: string) {
+    for (const [requestId, q] of this.questions) {
+      if (q.runId !== runId) continue;
+      this.questions.delete(requestId);
+      const req = this.state.requests[requestId];
+      if (req?.status === "pending") {
+        this.update((s) => ({ ...s, requests: { ...s.requests, [requestId]: { ...req, status: "cancelled", resolvedAt: this.now } } }));
+      }
+    }
+    for (const sid of Object.values(this.state.runs[runId]?.sessions ?? {})) {
+      const ep = this.sessionEndpoint(sid);
+      if (ep.kind !== "session") continue;
+      const subject = `the ${ep.role} (session ${sid}) left the bus`;
+      this.postBus(runId, "left", ep, { kind: "run" }, subject, subject);
+    }
   }
 
   // ---- immutable state helpers ----------------------------------------------
@@ -521,6 +716,8 @@ export class MockDaemonClient implements DaemonClient {
       sessions: { ...s.sessions, [id]: session },
       runs: { ...s.runs, [runId]: { ...run, sessions: { ...run.sessions, [role]: id } } },
     }));
+    const joined = `${role} (${vendor}) joined the bus`;
+    this.postBus(runId, "joined", this.sessionEndpoint(id), { kind: "run" }, joined, joined);
     return id;
   }
 

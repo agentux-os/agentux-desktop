@@ -62,16 +62,18 @@ export interface ApiRun {
 
 export interface ApiRequest {
   id: string;
-  /** `plan | step | permission | budget` */
+  /** `plan | step | permission | budget | question` */
   kind: string;
   runId: string;
   projectId: string;
-  /** The session that asked, for `permission` requests (absent before agentux-core #6). */
+  /** The session that asked, for `permission` and `question` requests (absent before agentux-core #6). */
   sessionId?: string | null;
   stepIndex: number;
   step: string;
   title: string;
   detail: string;
+  /** Suggested answers of a `question`; [] otherwise (absent before agentux-core 0.2.0). */
+  options?: string[];
   /** `pending | approved | denied | cancelled` */
   status: string;
   answer: string | null;
@@ -126,6 +128,39 @@ export type ApiSessionEvent =
   | { kind: "permission"; requestId: string }
   | { kind: "usage"; usage: ApiSessionUsage };
 
+/** `{ kind: "session" | "role" | "run" | "human" | "daemon", ... }`; `vendor` is the harness. */
+export type ApiBusEndpoint =
+  | { kind: "session"; sessionId: string; role: string; vendor: string }
+  | { kind: "role"; role: string }
+  | { kind: "run" }
+  | { kind: "human" }
+  | { kind: "daemon" }
+  | { kind: string; [key: string]: unknown };
+
+/** One entry of a run's agent bus log (`bus.list`, `bus_message` events). */
+export interface ApiBusMessage {
+  id: string;
+  runId: string;
+  projectId: string;
+  /** `message | review_request | handoff | human_answer | question | answer | wake | turn_limit | tool_denied | joined | left` */
+  kind: string;
+  tool: string | null;
+  from: ApiBusEndpoint;
+  to: ApiBusEndpoint;
+  subject: string;
+  body: string;
+  at: number;
+  turn: number;
+  maxTurns: number;
+  messageId: number | null;
+  exchange: number | null;
+  inReplyTo: number | null;
+  questionId: number | null;
+  requestId: string | null;
+  deliveredTo: string[];
+  queuedForRole: string | null;
+}
+
 interface ApiEventBase {
   seq: number;
   at: number;
@@ -140,6 +175,7 @@ export type ApiEvent =
   | (ApiEventBase & { kind: "log"; text: string })
   | (ApiEventBase & { kind: "session"; session: ApiSession })
   | (ApiEventBase & { kind: "session_event"; sessionId: string; event: ApiSessionEvent })
+  | (ApiEventBase & { kind: "bus_message"; message: ApiBusMessage })
   /** Event kinds added by newer daemons are passed through and ignored. */
   | (ApiEventBase & { kind: string; [key: string]: unknown });
 
@@ -159,6 +195,15 @@ export interface ApiSnapshot {
 export interface ApiRunHistory {
   head: number;
   events: ApiEvent[];
+}
+
+/**
+ * Result of `daemon_capabilities`: which optional methods the daemon serves
+ * (probed; a daemon without them answers -32601).
+ */
+export interface ApiCapabilities {
+  sessionsPrompt: boolean;
+  busPost: boolean;
 }
 
 /** `daemon://status`, from the backend's event stream (`stream.rs`). */

@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import type { BusMessage, CockpitState, PermissionRequest, Session, SessionEvent, ToolKind } from "../daemon/types";
 import { harnessInfo } from "../daemon/vendors";
 import { diffTexts } from "../lib/diff";
-import { BUS_TOOL_LABEL, roleLabel } from "../lib/labels";
+import { BUS_KIND_LABEL, roleLabel } from "../lib/labels";
 import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon, type IconName } from "./Icon";
@@ -26,7 +26,7 @@ interface Props {
   session: Session;
   state: CockpitState;
   now: number;
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
 }
 
@@ -37,19 +37,23 @@ interface Props {
 export function SessionEvents({ session, state, now, onApprove, onDeny }: Props) {
   return (
     <ol className="events">
-      {session.events.map((ev) => (
-        <li key={ev.id} className={`ev ev--${ev.kind}`}>
-          <EventView
-            ev={ev}
-            session={session}
-            request={ev.kind === "permission" ? state.requests[ev.requestId] : undefined}
-            bus={ev.kind === "bus" ? state.bus.find((m) => m.id === ev.messageId) : undefined}
-            now={now}
-            onApprove={onApprove}
-            onDeny={onDeny}
-          />
-        </li>
-      ))}
+      {session.events.map((ev) => {
+        const bus = ev.kind === "bus" ? state.bus.find((m) => m.id === ev.messageId) : undefined;
+        const requestId = ev.kind === "permission" ? ev.requestId : bus?.kind === "question" ? bus.requestId : undefined;
+        return (
+          <li key={ev.id} className={`ev ev--${ev.kind}`}>
+            <EventView
+              ev={ev}
+              session={session}
+              request={requestId ? state.requests[requestId] : undefined}
+              bus={bus}
+              now={now}
+              onApprove={onApprove}
+              onDeny={onDeny}
+            />
+          </li>
+        );
+      })}
       {session.state === "active" && (
         <li className="ev ev--typing" aria-label="Agent is working">
           <span className="typing" style={vendorStyle(session.vendor)}>
@@ -69,7 +73,7 @@ interface EventProps {
   request?: PermissionRequest;
   bus?: BusMessage;
   now: number;
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
 }
 
@@ -146,7 +150,7 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
           now={now}
           inline
           showShortcuts
-          onApprove={() => onApprove(request.id)}
+          onApprove={(answer) => onApprove(request.id, answer)}
           onDeny={() => onDeny(request.id)}
         />
       ) : null;
@@ -156,10 +160,14 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
       const other = outgoing ? bus.to : bus.from;
       const otherLabel =
         other.kind === "session"
-          ? `${harnessInfo(other.vendor).label} ${roleLabel(other.role).toLowerCase()}`
-          : other.kind === "human"
-            ? "you"
-            : "agentuxd";
+          ? `${harnessInfo(other.vendor, other.harness).label} ${roleLabel(other.role).toLowerCase()}`
+          : other.kind === "role"
+            ? `the ${roleLabel(other.role).toLowerCase()} role`
+            : other.kind === "run"
+              ? "the run channel"
+              : other.kind === "human"
+                ? "you"
+                : "agentuxd";
       return (
         <div className="ev-bus" style={other.kind === "session" ? vendorStyle(other.vendor) : undefined}>
           <div className="ev-bus-head">
@@ -167,15 +175,28 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
             <span>
               {outgoing ? "Sent to" : "From"} <strong>{otherLabel}</strong>
             </span>
-            <span className={`bus-tool tool-${bus.tool}`}>{BUS_TOOL_LABEL[bus.tool]}</span>
-            <span className="muted">
-              turn {bus.turn}/{bus.maxTurns}
-            </span>
+            <span className={`bus-tool kind-${bus.kind}`}>{BUS_KIND_LABEL[bus.kind]}</span>
+            {bus.turn > 0 && (
+              <span className="muted">
+                turn {bus.turn}/{bus.maxTurns}
+              </span>
+            )}
           </div>
           <div className="ev-bus-body">
             <strong>{bus.subject}</strong>
-            <p>{renderInline(bus.body)}</p>
+            {bus.body !== bus.subject && <p>{renderInline(bus.body)}</p>}
           </div>
+          {request?.status === "pending" && (
+            <RequestCard
+              request={request}
+              session={session}
+              now={now}
+              inline
+              showShortcuts
+              onApprove={(answer) => onApprove(request.id, answer)}
+              onDeny={() => onDeny(request.id)}
+            />
+          )}
         </div>
       );
     }

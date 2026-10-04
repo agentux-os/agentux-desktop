@@ -52,6 +52,9 @@ pub fn run() {
             daemon::daemon_approve,
             daemon::daemon_deny,
             daemon::daemon_cancel,
+            daemon::daemon_bus_list,
+            daemon::daemon_capabilities,
+            daemon::daemon_send_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the AgentUX cockpit");

@@ -174,9 +174,10 @@ export type SessionEvent =
 /**
  * `plan`: approve the plan; `step`: any other `approve: true` step;
  * `permission`: an agent asks before a tool call; `budget`: the run is over
- * its budget (approving extends it).
+ * its budget (approving extends it); `question`: an agent asks the human
+ * through the bus (`ask_human`): approving answers it, denying declines.
  */
-export type RequestKind = "plan" | "step" | "permission" | "budget";
+export type RequestKind = "plan" | "step" | "permission" | "budget" | "question";
 
 /** `cancelled`: no longer answerable (run cancelled, agent turn over, daemon restart). */
 export type RequestStatus = "pending" | "approved" | "denied" | "cancelled";
@@ -186,24 +187,75 @@ export interface PermissionRequest {
   kind: RequestKind;
   runId: string;
   projectId: string;
-  /** The session that asked, for `permission` requests. */
+  /** The session that asked, for `permission` and `question` requests. */
   sessionId?: string;
   /** Pipeline step the request belongs to. */
   step: StepKind;
   stepIndex: number;
   title: string;
-  /** The plan text, the tool call description, or the budget overrun. */
+  /** The plan text, the tool call description, the budget overrun, or the question's context. */
   detail: string;
+  /** Suggested answers of a `question` (free text is fine too); empty otherwise. */
+  options: string[];
   status: RequestStatus;
   answer?: string;
   createdAt: number;
   resolvedAt?: number;
 }
 
-export type BusTool = "post_message" | "request_review" | "handoff" | "ask_human";
+/** The bus tools agents call (`tool` of a bus entry; other names may appear). */
+export type BusTool = "post_message" | "read_messages" | "request_review" | "handoff" | "get_run_state" | "ask_human";
+
+/**
+ * What a bus log entry records (agentux-core `docs/api.md`, "Agent bus"):
+ * - `message`, `review_request`, `handoff`: routed messages between agents
+ *   (or to the run's channel, or to the human);
+ * - `question` / `answer`: an agent's `ask_human` and the human's answer
+ *   (or decline); `human_answer`: an answer that came after the agent stopped
+ *   waiting, delivered as mail;
+ * - `turn_limit`, `tool_denied`: refusals (warnings);
+ * - `wake`, `joined`, `left`: system lines (the daemon prompting a session,
+ *   sessions entering and leaving the bus).
+ */
+export type BusMessageKind =
+  | "message"
+  | "review_request"
+  | "handoff"
+  | "human_answer"
+  | "question"
+  | "answer"
+  | "wake"
+  | "turn_limit"
+  | "tool_denied"
+  | "joined"
+  | "left";
+
+export const BUS_KINDS: readonly BusMessageKind[] = [
+  "message",
+  "review_request",
+  "handoff",
+  "human_answer",
+  "question",
+  "answer",
+  "wake",
+  "turn_limit",
+  "tool_denied",
+  "joined",
+  "left",
+];
+
+/** Entries shown as quiet one-line system notes (and hidden by the "system" filter). */
+export const BUS_SYSTEM_KINDS: readonly BusMessageKind[] = ["wake", "joined", "left"];
+/** Refusals, shown as warnings. */
+export const BUS_WARNING_KINDS: readonly BusMessageKind[] = ["turn_limit", "tool_denied"];
 
 export type BusEndpoint =
-  | { kind: "session"; sessionId: string; role: string; vendor?: Vendor }
+  /** One session; `harness` as configured, `vendor` when the cockpit knows it. */
+  | { kind: "session"; sessionId: string; role: string; harness?: string; vendor?: Vendor }
+  /** Every session playing the role. */
+  | { kind: "role"; role: string }
+  /** The run's channel (read by every session, wakes nobody). */
+  | { kind: "run" }
   | { kind: "human" }
   | { kind: "daemon" };
 
@@ -211,15 +263,32 @@ export interface BusMessage {
   id: string;
   runId: string;
   projectId: string;
-  tool: BusTool;
+  kind: BusMessageKind;
+  /** The bus tool whose call caused the entry, if any (`post_message`, `ask_human`, ...). */
+  tool?: string;
   from: BusEndpoint;
   to: BusEndpoint;
+  /** One line. */
   subject: string;
+  /** The message text; for a wake, the prompt sent. */
   body: string;
   at: number;
-  /** Turn number within this exchange, and the configured limit. */
+  /** Turn within the exchange (routed messages; 0 otherwise), and the run's limit. */
   turn: number;
   maxTurns: number;
+  /** The bus's message id (agents reply with it); also on the wake it caused. */
+  messageId?: number;
+  /** Exchange: a message and its replies, which share the turn budget. */
+  exchange?: number;
+  inReplyTo?: number;
+  /** `question` and `answer` entries of the same `ask_human`. */
+  questionId?: number;
+  /** The `question` request holding a question. */
+  requestId?: string;
+  /** Session ids whose mailbox received the message. */
+  deliveredTo: string[];
+  /** No session played the target role: the message waits for one. */
+  queuedForRole?: string;
 }
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -241,6 +310,12 @@ export interface CockpitState {
   runs: Record<string, Run>;
   sessions: Record<string, Session>;
   requests: Record<string, PermissionRequest>;
-  /** Oldest first. Agent-bus messages are not served by agentuxd yet (mock only). */
+  /** Agent-bus log of the runs loaded so far, oldest first. */
   bus: BusMessage[];
+  /**
+   * Optional daemon methods found by probing (absent or false: not served).
+   * `sessionsPrompt`: the human can prompt a session; `busPost`: the human
+   * can post on a run's bus.
+   */
+  capabilities?: { sessionsPrompt?: boolean; busPost?: boolean };
 }
