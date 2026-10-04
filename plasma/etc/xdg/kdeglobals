@@ -1,0 +1,19 @@
+# AgentUX system-wide KDE defaults. Users' own ~/.config/kdeglobals overrides
+# every key here. On Fedora Kinoite this sits ahead of Fedora's defaults in
+# /usr/share/kde-settings/kde-profile/default/xdg (XDG_CONFIG_DIRS order).
+
+[KDE]
+# Global theme applied at login by startplasma (writes its defaults to
+# ~/.config/kdedefaults) and used by plasmashell for the first desktop layout.
+LookAndFeelPackage=os.agentux.desktop
+
+[General]
+# Same values the global theme sets; kept here so the dark scheme also wins
+# over Fedora's BreezeLight default if the theme cannot be loaded.
+ColorScheme=BreezeDark
+# The cockpit's accent (--accent: #c6f36b in cockpit/src/styles/tokens.css).
+# startplasma applies the colour scheme with this accent on first login.
+AccentColor=198,243,107
+
+[Icons]
+Theme=breeze-dark

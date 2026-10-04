@@ -1,0 +1,12 @@
+# Global shortcut Meta+A: launch the AgentUX cockpit.
+# kglobalacceld (Plasma 6) loads every *.desktop in /usr/share/kglobalaccel and
+# registers X-KDE-Shortcuts as the default for its "_launch" action. Users can
+# rebind it in System Settings > Keyboard > Shortcuts.
+[Desktop Entry]
+Type=Application
+Name=AgentUX Cockpit
+Comment=Open the AgentUX cockpit
+Exec=agentux-cockpit
+Icon=agentux-cockpit
+Terminal=false
+X-KDE-Shortcuts=Meta+A

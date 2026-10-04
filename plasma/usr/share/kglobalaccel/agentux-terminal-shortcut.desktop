@@ -1,0 +1,12 @@
+# Global shortcut Meta+Return: open a Konsole window.
+# Konsole keeps its own Ctrl+Alt+T; this adds a second launcher shortcut
+# without overriding org.kde.konsole.desktop. See
+# agentux-cockpit-shortcut.desktop for how kglobalacceld loads this file.
+[Desktop Entry]
+Type=Application
+Name=Terminal (Konsole)
+Comment=Open a new Konsole window
+Exec=konsole
+Icon=utilities-terminal
+Terminal=false
+X-KDE-Shortcuts=Meta+Return

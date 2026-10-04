@@ -61,3 +61,19 @@ jobs:
       - name: Cargo check (Tauri shell)
         working-directory: cockpit/src-tauri
         run: cargo check --locked
+
+  plasma:
+    name: plasma overlay
+    runs-on: ubuntu-latest
+    # Same distribution as the image, so desktop-file-validate matches the
+    # version that ships with Kinoite.
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install check tools
+        run: dnf -y install --setopt=install_weak_deps=False desktop-file-utils nodejs libxml2 findutils grep sed
+
+      - name: Check plasma overlay
+        run: plasma/check.sh
