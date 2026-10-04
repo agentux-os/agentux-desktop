@@ -1,0 +1,24 @@
+#!/bin/sh
+# Login autostart for the AgentUX cockpit (Exec= of
+# /etc/xdg/autostart/agentux-cockpit.desktop).
+#
+# XDG autostart runs for every graphical session, including those of system
+# accounts: Fedora's first-boot wizard runs a full Plasma session as the
+# `plasma-setup` system user (UID 968), and the cockpit would open over the
+# wizard. Skip system accounts here, the same rule as systemd's
+# ConditionUser=!@system (UID below UID_MIN in /etc/login.defs, 1000 by
+# default). This covers both autostart paths: systemd's
+# app-agentux\x2dcockpit@autostart.service (Plasma's systemd boot, the default)
+# and Plasma's own autostart when systemd boot is turned off.
+uid_min=$(sed -n 's/^[[:space:]]*UID_MIN[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' /etc/login.defs 2>/dev/null | head -n 1)
+case $uid_min in
+    '' | *[!0-9]*) uid_min=1000 ;;
+esac
+
+uid=$(id -u)
+if [ "$uid" -lt "$uid_min" ]; then
+    echo "agentux-cockpit: not starting for system user $(id -un) (uid $uid < UID_MIN $uid_min)" >&2
+    exit 0
+fi
+
+exec agentux-cockpit "$@"

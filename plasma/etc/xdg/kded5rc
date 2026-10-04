@@ -1,0 +1,10 @@
+# AgentUX system-wide kded defaults (KF6's kded still reads kded5rc). Users
+# can turn modules back on in System Settings > Background Services.
+
+# Fedora's Welcome Center ("Welcome to Fedora!") is opened at first login, and
+# after Plasma feature upgrades, by this kded module (kded_plasma_welcome.so
+# from plasma-welcome; it has no XDG autostart entry to hide). It opened over
+# the cockpit on first login; AgentUX's own first-run belongs in the cockpit.
+# The app itself stays installed and can be opened from the launcher.
+[Module-kded_plasma_welcome]
+autoload=false

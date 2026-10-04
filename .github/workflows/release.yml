@@ -90,6 +90,11 @@ jobs:
             echo "::error::unexpected paths in ${tarball}"
             exit 1
           fi
+          # The cockpit autostart wrapper must stay executable.
+          if ! tar -tvzf "${tarball}" | grep -qE '^-rwxr-xr-x .* usr/libexec/agentux-cockpit-autostart$'; then
+            echo "::error::usr/libexec/agentux-cockpit-autostart is not executable in ${tarball}"
+            exit 1
+          fi
 
       - name: Install npm dependencies
         working-directory: cockpit
