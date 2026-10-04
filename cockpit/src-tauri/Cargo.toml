@@ -22,6 +22,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["io-util", "net", "time"] }
 
+# Meta+A and the login autostart both run `agentux-cockpit`; this turns every
+# launch after the first into "bring the existing window forward".
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
+tauri-plugin-single-instance = "2"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["io-util", "net", "time", "macros", "rt"] }
 
