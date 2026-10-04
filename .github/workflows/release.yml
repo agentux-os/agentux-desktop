@@ -4,8 +4,13 @@ name: release
 # The build runs inside a Fedora 44 container so the binary links against the
 # same webkit2gtk4.1 / gtk3 / glibc the image ships, not Ubuntu's.
 #
-# - push of a `v*` tag: build and attach the .rpm to a GitHub release for that tag
-# - workflow_dispatch: build and upload the .rpm as a workflow artifact only
+# The same job packs the Plasma defaults overlay (plasma/usr and plasma/etc)
+# into agentux-plasma-<version>.tar.gz, paths relative to /, so the image build
+# can `tar -xz -C /` it next to the RPM under one version number.
+#
+# - push of a `v*` tag: build and attach the .rpm and the plasma tarball (+ .sha256)
+#   to a GitHub release for that tag
+# - workflow_dispatch: build and upload them as workflow artifacts only
 
 on:
   push:
@@ -34,7 +39,8 @@ jobs:
           dnf -y install --setopt=install_weak_deps=False \
             git nodejs npm rust cargo gcc gcc-c++ make pkgconf-pkg-config \
             webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
-            librsvg2-devel file rpm cpio desktop-file-utils
+            librsvg2-devel file rpm cpio desktop-file-utils \
+            libxml2 findutils tar gzip
           rustc --version
           node --version
 
@@ -47,6 +53,41 @@ jobs:
           app_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
           if [ "v${app_version}" != "${GITHUB_REF_NAME}" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match tauri.conf.json version ${app_version}"
+            exit 1
+          fi
+
+      - name: Check plasma overlay
+        run: plasma/check.sh
+
+      # Deterministic: sorted entries, root ownership, file times from the commit
+      # and a gzip header without name/timestamp, so a rebuild of the same commit
+      # gives the same bytes.
+      - name: Build plasma tarball
+        id: plasma
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          version=$(node -p "require('./cockpit/src-tauri/tauri.conf.json').version")
+          commit_time=$(git log -1 --format=%ct)
+          mkdir -p dist
+          tarball="dist/agentux-plasma-${version}.tar.gz"
+          tar -C plasma --sort=name --owner=0 --group=0 --numeric-owner \
+            --mtime="@${commit_time}" --mode='u+rwX,go+rX,go-w' \
+            -cf - usr etc | gzip -9n > "${tarball}"
+          (cd dist && sha256sum "$(basename "${tarball}")" > "$(basename "${tarball}").sha256")
+          echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${tarball}.sha256" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Plasma overlay tarball'
+            echo '```'
+            ls -l dist
+            cat "${tarball}.sha256"
+            echo
+            tar -tvzf "${tarball}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Only usr/ and etc/ may be in it (no check.sh, nothing under a home).
+          if tar -tzf "${tarball}" | grep -vE '^(usr|etc)(/|$)'; then
+            echo "::error::unexpected paths in ${tarball}"
             exit 1
           fi
 
@@ -89,9 +130,28 @@ jobs:
           path: ${{ steps.rpm.outputs.path }}
           if-no-files-found: error
 
+      - name: Upload plasma tarball artifact
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentux-plasma-tarball
+          path: |
+            ${{ steps.plasma.outputs.tarball }}
+            ${{ steps.plasma.outputs.sha256 }}
+          if-no-files-found: error
+
+      # prerelease: "true" for tags like v0.2.0-rc.1. Otherwise the input is left
+      # empty, which action-gh-release treats as unset: a new release is created
+      # as a normal release, and a release that already exists (e.g. created by
+      # hand as a pre-release) keeps its own prerelease flag instead of being
+      # flipped to false.
       - name: Attach to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.rpm.outputs.path }}
+          files: |
+            ${{ steps.rpm.outputs.path }}
+            ${{ steps.plasma.outputs.tarball }}
+            ${{ steps.plasma.outputs.sha256 }}
+          prerelease: ${{ contains(github.ref_name, '-') && 'true' || '' }}
           fail_on_unmatched_files: true
