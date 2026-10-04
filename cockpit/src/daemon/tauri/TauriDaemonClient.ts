@@ -1,8 +1,7 @@
 import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
-import type { CockpitState, Run, TokenUsage, Vendor } from "../types";
-import { VENDORS } from "../types";
-import type { ApiEvent, ApiRun, ApiSnapshot, CommandError, LinkStatus, Probe } from "./api";
-import { applyEvent, applySnapshot, mapRun } from "./mapping";
+import type { CockpitState, Run } from "../types";
+import type { ApiEvent, ApiRun, ApiRunHistory, ApiSnapshot, CommandError, LinkStatus, Probe } from "./api";
+import { applyEvent, applyRunHistory, applySnapshot, mapRun } from "./mapping";
 
 /** Tauri event channels emitted by the backend (`src-tauri/src/daemon/mod.rs`). */
 export const EVENT_CHANNEL = "daemon://event";
@@ -41,8 +40,6 @@ export function errorMessage(e: unknown): string {
   return String(e);
 }
 
-const zeroUsage = (): TokenUsage => ({ input: 0, output: 0, costUsd: 0 });
-
 export function emptyState(daemon: string): CockpitState {
   return {
     connection: { status: "connecting", daemon, detail: "Connecting to agentuxd", mock: false },
@@ -51,7 +48,6 @@ export function emptyState(daemon: string): CockpitState {
     sessions: {},
     requests: {},
     bus: [],
-    spend: Object.fromEntries(VENDORS.map((v) => [v, zeroUsage()])) as Record<Vendor, TokenUsage>,
   };
 }
 
@@ -65,6 +61,12 @@ export function emptyState(daemon: string): CockpitState {
  * full object, replaying them over a newer snapshot converges to the latest
  * state. The backend resumes its subscription from the last `seq` after a
  * reconnect, so no event is lost while the daemon restarts.
+ *
+ * The stream starts at the daemon's head, so session entries from before the
+ * cockpit started come from a run's stored events (`daemon_run_history`),
+ * loaded once per run when the UI opens it (`watchRun`). Live session events
+ * for that run keep being applied meanwhile and are applied again on top of
+ * the history; sessions skip events they already folded (by seq).
  */
 export class TauriDaemonClient implements DaemonClient {
   readonly mode = "daemon" as const;
@@ -77,6 +79,8 @@ export class TauriDaemonClient implements DaemonClient {
   private buffer: ApiEvent[] | null = null;
   private loading: Promise<void> | null = null;
   private reloadAgain = false;
+  /** Runs whose history is loaded or loading; live session events of loading ones, to re-apply. */
+  private histories = new Map<string, ApiEvent[] | "loaded">();
 
   constructor(
     private readonly transport: Transport,
@@ -119,6 +123,7 @@ export class TauriDaemonClient implements DaemonClient {
     this.buffer = null;
     this.loading = null;
     this.reloadAgain = false;
+    this.histories.clear();
   }
 
   getState = (): CockpitState => this.state;
@@ -152,6 +157,11 @@ export class TauriDaemonClient implements DaemonClient {
     await this.transport.invoke("daemon_cancel", { runId });
   }
 
+  watchRun(runId: string): void {
+    if (!this.active || this.histories.has(runId)) return;
+    void this.loadHistory(runId);
+  }
+
   async sendPrompt(_sessionId: string, _text: string): Promise<void> {
     throw new Error("agentuxd does not accept prompts into sessions yet");
   }
@@ -163,6 +173,8 @@ export class TauriDaemonClient implements DaemonClient {
   // ---- internals ------------------------------------------------------------
 
   private onEvent(event: ApiEvent): void {
+    const pending = event.runId ? this.histories.get(event.runId) : undefined;
+    if (Array.isArray(pending) && event.kind === "session_event") pending.push(event);
     if (this.buffer) {
       this.buffer.push(event);
       return;
@@ -222,6 +234,21 @@ export class TauriDaemonClient implements DaemonClient {
     if (this.reloadAgain && gen === this.generation) {
       this.reloadAgain = false;
       await this.load();
+    }
+  }
+
+  private async loadHistory(runId: string): Promise<void> {
+    const gen = this.generation;
+    const live: ApiEvent[] = [];
+    this.histories.set(runId, live);
+    try {
+      const history = await this.transport.invoke<ApiRunHistory>("daemon_run_history", { runId });
+      if (gen !== this.generation) return;
+      this.histories.set(runId, "loaded");
+      this.update((s) => live.reduce(applyEvent, applyRunHistory(s, runId, history)));
+    } catch {
+      // Live events still show; opening the run again retries.
+      if (gen === this.generation) this.histories.delete(runId);
     }
   }
 

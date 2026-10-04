@@ -41,10 +41,17 @@ export interface CheckResult {
   status: CheckStatus;
 }
 
-export interface TokenUsage {
-  input: number;
-  output: number;
-  costUsd: number;
+/**
+ * What a harness reports about its session over ACP: context-window usage and,
+ * for some harnesses, the cumulative cost. There are no input/output counts.
+ */
+export interface SessionUsage {
+  /** Tokens currently in the context window. */
+  usedTokens: number;
+  /** Size of the context window (0 until reported). */
+  contextTokens: number;
+  /** Cumulative session cost in USD; absent when the harness does not report it. */
+  costUsd?: number;
 }
 
 export interface Run {
@@ -66,8 +73,8 @@ export interface Run {
   status: RunStatus;
   /** Harness per role. Roles whose harness is not a known vendor are left out. */
   roles: Partial<Record<Role, Vendor>>;
-  /** Session id per role, filled as the run reaches each role. */
-  sessions: Partial<Record<Role, string>>;
+  /** Session id per role name (free-form), filled as the run reaches each role. */
+  sessions: Record<string, string>;
   checks: CheckResult[];
   gateAttempt: number;
   gateMaxAttempts: number;
@@ -75,8 +82,8 @@ export interface Run {
   reviewMaxRounds: number;
   /** Per-run budget; absent when none is configured. */
   budgetUsd?: number;
-  /** Absent until the daemon reports usage. */
-  usage?: TokenUsage;
+  /** Sum of the sessions' reported cost (0 if none reports it). */
+  costUsd: number;
   startedAt: number;
   updatedAt: number;
   finishedAt?: number;
@@ -93,15 +100,22 @@ export interface Session {
   id: string;
   runId: string;
   projectId: string;
-  role: Role;
-  vendor: Vendor;
-  model: string;
+  /** Role name from the pipeline; usually one of `Role`, but custom roles exist. */
+  role: string;
+  /** Harness id as configured (e.g. `codex`). */
+  harness: string;
+  /** The cockpit vendor the harness stands for; absent for unknown harnesses. */
+  vendor?: Vendor;
+  model?: string;
   state: SessionState;
   /** Path of the git worktree the harness works in. */
   cwd: string;
   events: SessionEvent[];
-  usage: TokenUsage;
+  usage: SessionUsage;
   startedAt: number;
+  endedAt?: number;
+  /** Daemon only: seq of the last event folded into `events`, to skip replays. */
+  lastSeq?: number;
 }
 
 export interface DiffLine {
@@ -116,14 +130,10 @@ export interface DiffHunk {
   lines: DiffLine[];
 }
 
-export interface FileDiff {
-  path: string;
-  additions: number;
-  deletions: number;
-  hunks: DiffHunk[];
-}
+/** ACP tool kinds as agentuxd reports them, plus the cockpit's own `bus`. */
+export type ToolKind = "read" | "edit" | "delete" | "move" | "search" | "execute" | "think" | "fetch" | "other" | "bus";
 
-export type ToolKind = "read" | "search" | "edit" | "execute" | "fetch" | "bus";
+export type ToolStatus = "running" | "ok" | "error";
 
 export interface PlanItem {
   text: string;
@@ -133,49 +143,57 @@ export interface PlanItem {
 interface EventBase {
   id: string;
   at: number;
+  /** Daemon event `seq` the entry was built from (absent in mock data). */
+  seq?: number;
 }
 
 /**
- * Vendor-neutral session events. These map onto ACP session updates
- * (agent message chunks, tool calls, plans, permission requests).
+ * Vendor-neutral session events, as agentuxd records them from ACP session
+ * updates. Agent message chunks arrive coalesced; a tool call is one entry
+ * whose status and output are updated in place; the plan is one entry that
+ * each new plan replaces; usage updates go to `Session.usage`, not here.
  */
 export type SessionEvent =
   | (EventBase & { kind: "message"; from: "user" | "agent" | "system"; text: string })
   | (EventBase & {
       kind: "tool_call";
+      toolCallId: string;
       tool: ToolKind;
       title: string;
-      status: "running" | "ok" | "error";
+      status: ToolStatus;
+      /** Mock only: what the tool was called with. */
       input?: string;
       output?: string;
     })
-  | (EventBase & { kind: "diff"; diff: FileDiff })
+  /** A file edit: whole texts, not hunks (`oldText` absent for a new file). */
+  | (EventBase & { kind: "diff"; toolCallId?: string; path: string; oldText?: string; newText: string })
   | (EventBase & { kind: "plan"; items: PlanItem[] })
   | (EventBase & { kind: "permission"; requestId: string })
   | (EventBase & { kind: "bus"; messageId: string });
 
-/** `step` is a pipeline approval for a step other than the plan. */
-export type RequestKind = "plan" | "step" | "command" | "edit" | "network" | "question" | "budget";
+/**
+ * `plan`: approve the plan; `step`: any other `approve: true` step;
+ * `permission`: an agent asks before a tool call; `budget`: the run is over
+ * its budget (approving extends it).
+ */
+export type RequestKind = "plan" | "step" | "permission" | "budget";
 
-/** `cancelled`: the run was cancelled while the request was pending. */
-export type RequestStatus = "pending" | "approved" | "denied" | "answered" | "cancelled";
+/** `cancelled`: no longer answerable (run cancelled, agent turn over, daemon restart). */
+export type RequestStatus = "pending" | "approved" | "denied" | "cancelled";
 
 export interface PermissionRequest {
   id: string;
   kind: RequestKind;
   runId: string;
   projectId: string;
-  /** Absent for pipeline approvals, which do not come from a harness session. */
+  /** The session that asked, for `permission` requests. */
   sessionId?: string;
-  vendor?: Vendor;
-  role?: Role;
-  /** Pipeline step the request belongs to, when known. */
-  step?: StepKind;
+  /** Pipeline step the request belongs to. */
+  step: StepKind;
+  stepIndex: number;
   title: string;
-  /** Command line, file path, URL or question body. */
+  /** The plan text, the tool call description, or the budget overrun. */
   detail: string;
-  /** For `question` requests: answers the human can pick (first = suggested). */
-  options?: string[];
   status: RequestStatus;
   answer?: string;
   createdAt: number;
@@ -185,7 +203,7 @@ export interface PermissionRequest {
 export type BusTool = "post_message" | "request_review" | "handoff" | "ask_human";
 
 export type BusEndpoint =
-  | { kind: "session"; sessionId: string; role: Role; vendor: Vendor }
+  | { kind: "session"; sessionId: string; role: string; vendor?: Vendor }
   | { kind: "human" }
   | { kind: "daemon" };
 
@@ -223,7 +241,6 @@ export interface CockpitState {
   runs: Record<string, Run>;
   sessions: Record<string, Session>;
   requests: Record<string, PermissionRequest>;
-  /** Oldest first. */
+  /** Oldest first. Agent-bus messages are not served by agentuxd yet (mock only). */
   bus: BusMessage[];
-  spend: Record<Vendor, TokenUsage>;
 }

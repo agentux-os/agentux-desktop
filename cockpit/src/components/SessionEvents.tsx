@@ -1,7 +1,8 @@
-import { memo } from "react";
-import type { BusMessage, CockpitState, FileDiff, PermissionRequest, Session, SessionEvent, ToolKind } from "../daemon/types";
-import { VENDOR_INFO } from "../daemon/vendors";
-import { BUS_TOOL_LABEL, ROLE_LABEL } from "../lib/labels";
+import { memo, useMemo } from "react";
+import type { BusMessage, CockpitState, PermissionRequest, Session, SessionEvent, ToolKind } from "../daemon/types";
+import { harnessInfo } from "../daemon/vendors";
+import { diffTexts } from "../lib/diff";
+import { BUS_TOOL_LABEL, roleLabel } from "../lib/labels";
 import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon, type IconName } from "./Icon";
@@ -12,8 +13,12 @@ const TOOL_ICON: Record<ToolKind, IconName> = {
   read: "file",
   search: "search",
   edit: "edit",
+  delete: "x",
+  move: "arrowRight",
   execute: "execute",
+  think: "info",
   fetch: "globe",
+  other: "shield",
   bus: "bus",
 };
 
@@ -21,7 +26,7 @@ interface Props {
   session: Session;
   state: CockpitState;
   now: number;
-  onApprove: (requestId: string, answer?: string) => void;
+  onApprove: (requestId: string) => void;
   onDeny: (requestId: string) => void;
 }
 
@@ -64,7 +69,7 @@ interface EventProps {
   request?: PermissionRequest;
   bus?: BusMessage;
   now: number;
-  onApprove: (requestId: string, answer?: string) => void;
+  onApprove: (requestId: string) => void;
   onDeny: (requestId: string) => void;
 }
 
@@ -84,9 +89,9 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
           <div className="msg-head">
             {ev.from === "agent" ? (
               <span className="msg-author" style={vendorStyle(session.vendor)}>
-                <span className="vmono">{VENDOR_INFO[session.vendor].mono}</span>
-                {VENDOR_INFO[session.vendor].label}
-                <span className="muted">{ROLE_LABEL[session.role]}</span>
+                <span className="vmono">{harnessInfo(session.vendor, session.harness).mono}</span>
+                {harnessInfo(session.vendor, session.harness).label}
+                <span className="muted">{roleLabel(session.role)}</span>
               </span>
             ) : (
               <span className="msg-author">
@@ -113,7 +118,7 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
         </details>
       );
     case "diff":
-      return <DiffView diff={ev.diff} />;
+      return <DiffView path={ev.path} oldText={ev.oldText} newText={ev.newText} />;
     case "plan":
       return (
         <div className="plan">
@@ -137,10 +142,11 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
       return request ? (
         <RequestCard
           request={request}
+          session={session}
           now={now}
           inline
           showShortcuts
-          onApprove={(a) => onApprove(request.id, a)}
+          onApprove={() => onApprove(request.id)}
           onDeny={() => onDeny(request.id)}
         />
       ) : null;
@@ -149,7 +155,11 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
       const outgoing = bus.from.kind === "session" && bus.from.sessionId === session.id;
       const other = outgoing ? bus.to : bus.from;
       const otherLabel =
-        other.kind === "session" ? `${VENDOR_INFO[other.vendor].label} ${ROLE_LABEL[other.role].toLowerCase()}` : other.kind === "human" ? "you" : "agentuxd";
+        other.kind === "session"
+          ? `${harnessInfo(other.vendor).label} ${roleLabel(other.role).toLowerCase()}`
+          : other.kind === "human"
+            ? "you"
+            : "agentuxd";
       return (
         <div className="ev-bus" style={other.kind === "session" ? vendorStyle(other.vendor) : undefined}>
           <div className="ev-bus-head">
@@ -172,19 +182,27 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
   }
 });
 
-export function DiffView({ diff }: { diff: FileDiff }) {
+/**
+ * A file edit. agentuxd sends whole texts; the line diff is computed here.
+ * Without an old text (a new file) every line shows as added.
+ */
+export function DiffView({ path, oldText, newText }: { path: string; oldText?: string; newText: string }) {
+  const diff = useMemo(() => diffTexts(oldText, newText), [oldText, newText]);
   return (
     <div className="diff">
       <div className="diff-head">
         <Icon name="file" size={14} />
-        <span className="diff-path">{diff.path}</span>
+        <span className="diff-path">{path}</span>
+        {oldText == null && <span className="muted">new file</span>}
+        {diff.newOnly && <span className="muted">too large to diff; new content</span>}
         <span className="diff-stat">
           <span className="add">+{diff.additions}</span> <span className="del">−{diff.deletions}</span>
         </span>
       </div>
+      {diff.hunks.length === 0 && <div className="diff-hunk-head">No changes</div>}
       {diff.hunks.map((h, i) => (
         <div key={i} className="diff-hunk">
-          {h.header && <div className="diff-hunk-head">{h.header}</div>}
+          {diff.hunks.length > 1 && h.header && <div className="diff-hunk-head">{h.header}</div>}
           <table>
             <tbody>
               {h.lines.map((l, j) => (

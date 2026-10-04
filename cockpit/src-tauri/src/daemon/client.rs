@@ -5,8 +5,8 @@
 //! cockpit only forwards them to the frontend, where the adapter in
 //! `src/daemon/tauri/mapping.ts` turns them into the UI model. Keeping them
 //! untyped here means a daemon that grows new fields, request kinds or event
-//! kinds (sessions, usage, ...) does not break the stream; the typed
-//! `agentux-api` client would reject an unknown enum variant.
+//! kinds does not break the stream; the typed `agentux-api` client would
+//! reject an unknown enum variant.
 
 use std::path::Path;
 use std::{fmt, io};
@@ -21,6 +21,7 @@ pub mod method {
     pub const RUNS_START: &str = "runs.start";
     pub const RUNS_LIST: &str = "runs.list";
     pub const RUNS_CANCEL: &str = "runs.cancel";
+    pub const SESSIONS_LIST: &str = "sessions.list";
     pub const REQUESTS_LIST: &str = "requests.list";
     pub const REQUESTS_APPROVE: &str = "requests.approve";
     pub const REQUESTS_DENY: &str = "requests.deny";
@@ -58,6 +59,22 @@ impl From<io::Error> for ClientError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
+}
+
+/// JSON-RPC "method not found": the daemon predates that method.
+pub const METHOD_NOT_FOUND: i64 = -32601;
+
+/// `events.subscribe` params: replay from `since` (else only new events),
+/// limited to `run_id` when given.
+fn subscribe_params(since: Option<i64>, run_id: Option<&str>) -> Value {
+    let mut params = json!({});
+    if let Some(since) = since {
+        params["since"] = since.into();
+    }
+    if let Some(run_id) = run_id {
+        params["runId"] = run_id.into();
+    }
+    params
 }
 
 fn protocol(e: serde_json::Error) -> ClientError {
@@ -184,15 +201,14 @@ mod imp {
 
         /// Turns this connection into an event stream. `since` replays stored
         /// events with a greater `seq` first; `None` streams only new events.
-        /// Returns the daemon's newest `seq` at subscription time.
+        /// `run_id` limits the stream to one run. Returns the daemon's newest
+        /// `seq` at subscription time.
         pub async fn subscribe(
             mut self,
             since: Option<i64>,
+            run_id: Option<&str>,
         ) -> Result<(i64, Subscription), ClientError> {
-            let params = match since {
-                Some(since) => json!({ "since": since }),
-                None => json!({}),
-            };
+            let params = subscribe_params(since, run_id);
             let result = self.call(method::EVENTS_SUBSCRIBE, params).await?;
             let seq = result
                 .get("seq")
@@ -242,6 +258,7 @@ mod imp {
         pub async fn subscribe(
             self,
             _since: Option<i64>,
+            _run_id: Option<&str>,
         ) -> Result<(i64, Subscription), ClientError> {
             Err(ClientError::Unavailable(UNSUPPORTED.into()))
         }
@@ -274,6 +291,15 @@ mod tests {
         let line = request_line(4, "runs.cancel", &json!({"runId": "ab"})).unwrap();
         let value: Value = serde_json::from_slice(&line).unwrap();
         assert_eq!(value["params"]["runId"], "ab");
+    }
+
+    #[test]
+    fn subscribe_params_name_since_and_run() {
+        assert_eq!(subscribe_params(None, None), json!({}));
+        assert_eq!(
+            subscribe_params(Some(0), Some("r1")),
+            json!({"since": 0, "runId": "r1"})
+        );
     }
 
     #[test]

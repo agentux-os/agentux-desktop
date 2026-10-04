@@ -45,6 +45,7 @@ pub fn run() {
             daemon::daemon_probe,
             daemon::daemon_status,
             daemon::daemon_snapshot,
+            daemon::daemon_run_history,
             daemon::daemon_list_projects,
             daemon::daemon_list_runs,
             daemon::daemon_start_run,

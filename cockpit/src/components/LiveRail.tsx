@@ -19,7 +19,7 @@ export function LiveRail({
   now: number;
   projectId: string | null;
   pending: PermissionRequest[];
-  onApprove: (requestId: string, answer?: string) => void;
+  onApprove: (requestId: string) => void;
   onDeny: (requestId: string) => void;
   onOpenRun: (runId: string) => void;
   onInbox: () => void;
@@ -44,8 +44,9 @@ export function LiveRail({
             key={r.id}
             request={r}
             run={state.runs[r.runId]}
+            session={r.sessionId ? state.sessions[r.sessionId] : undefined}
             now={now}
-            onApprove={(a) => onApprove(r.id, a)}
+            onApprove={() => onApprove(r.id)}
             onDeny={() => onDeny(r.id)}
             onOpen={() => onOpenRun(r.runId)}
           />

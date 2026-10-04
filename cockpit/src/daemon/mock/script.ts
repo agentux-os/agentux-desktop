@@ -33,12 +33,16 @@ export interface ScenarioSpec {
   implement: {
     intro: string;
     diffs: DiffSpec[];
-    command?: { kind: Extract<RequestKind, "command" | "network">; cmd: string; why: string; output: string };
+    /** A tool call the implementer asks permission for (`fetch` for network access). */
+    command?: { tool: Extract<ToolKind, "execute" | "fetch">; cmd: string; why: string; output: string };
     summary: string;
   };
   checks: { name: string; command: string }[];
   gateFailure?: { check: string; output: string; note: string; fix: DiffSpec };
+  /** The agent asks the human over the bus (`ask_human`; not served by agentuxd yet). */
   question?: { at: "implement" | "review"; text: string; options: string[] };
+  /** The run goes over its budget before the review and pauses on a `budget` request. */
+  budgetPause?: boolean;
   review: {
     stat: string;
     focus: string;
@@ -59,12 +63,18 @@ export interface RunCtx {
   user(role: Role, text: string): void;
   say(role: Role, text: string, tokens?: [number, number]): void;
   system(role: Role, text: string): void;
+  /** Starts tool call `key` (its toolCallId within the run). */
   toolStart(role: Role, key: string, tool: ToolKind, title: string, input?: string): void;
   toolEnd(key: string, status: "ok" | "error", output?: string): void;
   diff(role: Role, spec: DiffSpec): void;
   plan(role: Role, items: PlanItem[]): void;
-  /** Creates a pending request and marks the run as waiting for the human. */
-  request(role: Role, kind: RequestKind, title: string, detail: string, options?: string[]): string;
+  /**
+   * Creates a pending request and marks the run as waiting for the human.
+   * `role` is the asking session's role for `permission` requests, else null.
+   */
+  request(role: Role | null, kind: RequestKind, title: string, detail: string): string;
+  /** Sets the run's budget just under its cost and asks to extend it. */
+  budget(): string;
   decision(requestId: string): { status: RequestStatus; answer?: string };
   bus(tool: BusTool, from: Endpoint, to: Endpoint, subject: string, body: string, turn?: number): void;
   checks(status: CheckStatus, only?: string): void;
@@ -125,13 +135,13 @@ export function buildScript(s: ScenarioSpec): Beat[] {
   });
   if (s.planApproval) {
     b(1200, (c) => {
-      reqId = c.request("planner", "plan", `Approve plan for #${s.issue}`, s.plan.map((p, i) => `${i + 1}. ${p}`).join("\n"));
+      reqId = c.request(null, "plan", `Approve the plan for "${s.title}"`, s.plan.map((p, i) => `${i + 1}. ${p}`).join("\n"));
       c.activity("Plan waiting for your approval");
       return { blockOn: reqId };
     }, "plan-approval");
     b(700, (c) => {
       const d = c.decision(reqId);
-      c.system("planner", d.status === "denied" ? "Plan rejected. Planner narrowed the scope and continues with the first item only." : "Plan approved.");
+      if (d.status === "approved") c.system("planner", "Plan approved.");
     });
   }
   b(1000, (c) => {
@@ -162,21 +172,28 @@ export function buildScript(s: ScenarioSpec): Beat[] {
   });
   const cmd = s.implement.command;
   if (cmd) {
+    const verb = cmd.tool === "fetch" ? "fetch" : "run";
     b(1300, (c) => {
-      reqId = c.request("implementer", cmd.kind, cmd.kind === "network" ? "Allow network access" : "Run command", cmd.cmd);
       c.say("implementer", cmd.why, [6_000, 90]);
-      c.activity("Waiting for permission to run a command");
+      c.toolStart("implementer", "cmd", cmd.tool, cmd.cmd, cmd.cmd);
+      reqId = c.request(
+        "implementer",
+        "permission",
+        `implementer (${s.roles.implementer}) wants to ${verb}: ${cmd.cmd}`,
+        `${cmd.cmd}
+
+Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it no, and the run goes on.`,
+      );
+      c.activity(`waiting for permission: implementer (${s.roles.implementer}) wants to ${verb}: ${cmd.cmd}`);
       return { blockOn: reqId };
     }, "command-approval");
-    b(800, (c) => {
-      if (c.decision(reqId).status === "denied") {
-        c.system("implementer", "Permission denied. Continuing without it.");
-      } else {
-        c.toolStart("implementer", "cmd", cmd.kind === "network" ? "fetch" : "execute", cmd.cmd, cmd.cmd);
-      }
-    });
     b(1600, (c) => {
-      if (c.decision(reqId).status !== "denied") c.toolEnd("cmd", "ok", cmd.output);
+      if (c.decision(reqId).status === "denied") {
+        c.toolEnd("cmd", "error", "denied");
+        c.say("implementer", "I was not allowed to do that; continuing without it.", [3_000, 40]);
+      } else {
+        c.toolEnd("cmd", "ok", cmd.output);
+      }
     });
   }
   b(1500, (c) => {
@@ -204,6 +221,13 @@ export function buildScript(s: ScenarioSpec): Beat[] {
   runGate();
 
   // ---- review -----------------------------------------------------------
+  if (s.budgetPause) {
+    b(1000, (c) => {
+      c.step("review", "starting review");
+      reqId = c.budget();
+      return { blockOn: reqId };
+    }, "budget");
+  }
   b(1200, (c) => {
     c.step("review", "Cross-vendor review");
     c.reviewRound(1);
@@ -272,15 +296,12 @@ export function buildScript(s: ScenarioSpec): Beat[] {
   function addQuestion(role: Role) {
     const q = s.question!;
     b(1300, (c) => {
-      reqId = c.request(role, "question", "Question from agent", q.text, q.options);
-      c.bus("ask_human", role, "human", "Decision needed", q.text);
-      c.activity("Asked you a question");
-      return { blockOn: reqId };
+      c.bus("ask_human", role, "human", "Decision needed", `${q.text}
+
+Options: ${q.options.join(" / ")}`);
+      c.activity("Asked you a question over the bus");
     }, "question");
-    b(800, (c) => {
-      const d = c.decision(reqId);
-      c.system(role, d.status === "denied" ? "You dismissed the question; the agent picks the conservative option." : `You answered: ${d.answer}`);
-    });
+    b(2600, (c) => c.system(role, `No answer yet; going with the suggested option: ${q.options[0]}.`));
   }
 }
 

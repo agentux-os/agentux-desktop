@@ -24,7 +24,13 @@ export interface DaemonClient {
   /** Called after every state change; returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
 
-  /** Approve a pending permission request (or pick an answer for a question). */
+  /**
+   * The UI shows this run's sessions: load their history if needed. Cheap to
+   * call repeatedly; a no-op for the mock.
+   */
+  watchRun(runId: string): void;
+
+  /** Approve a pending request (for `budget`: extend the budget and go on). */
   approve(requestId: string, answer?: string): Promise<void>;
   deny(requestId: string): Promise<void>;
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PermissionRequest, Run } from "./daemon/types";
-import { VENDOR_INFO } from "./daemon/vendors";
+import type { PermissionRequest, Run, Session } from "./daemon/types";
+import { harnessInfo } from "./daemon/vendors";
 import { REQUEST_LABEL, runRef } from "./lib/labels";
 import { useNow } from "./lib/useNow";
 import { useCockpit, useDaemon } from "./state/daemon";
@@ -67,6 +67,12 @@ export default function App() {
   const inboxSelected = pending.find((r) => r.id === inboxSel) ?? pending[0];
   const run = runId ? state.runs[runId] : undefined;
 
+  // Session entries from before the cockpit started come from the run's history.
+  const connected = state.connection.status === "connected";
+  useEffect(() => {
+    if (runId && connected) client.watchRun(runId);
+  }, [client, runId, connected]);
+
   const openRun = useCallback((id: string) => {
     setRunId(id);
     setSessionId(null);
@@ -74,10 +80,10 @@ export default function App() {
   }, []);
 
   const approve = useCallback(
-    (requestId: string, answer?: string) => {
+    (requestId: string) => {
       const r = state.requests[requestId];
-      void client.approve(requestId, answer);
-      if (r) showToast(`${r.kind === "question" ? "Answered" : "Approved"}: ${requestLine(r, state.runs[r.runId])}`);
+      client.approve(requestId).catch((e: unknown) => showToast(`Could not approve: ${errorText(e)}`));
+      if (r) showToast(`${APPROVED[r.kind]}: ${requestLine(r, state)}`);
     },
     [client, state, showToast],
   );
@@ -85,8 +91,8 @@ export default function App() {
   const deny = useCallback(
     (requestId: string) => {
       const r = state.requests[requestId];
-      void client.deny(requestId);
-      if (r) showToast(`Denied: ${requestLine(r, state.runs[r.runId])}`);
+      client.deny(requestId).catch((e: unknown) => showToast(`Could not deny: ${errorText(e)}`));
+      if (r) showToast(`${DENIED[r.kind]}: ${requestLine(r, state)}`);
     },
     [client, state, showToast],
   );
@@ -196,13 +202,6 @@ export default function App() {
         break;
       }
       default:
-        if (/^[1-9]$/.test(key) && focused?.options) {
-          const answer = focused.options[Number(key) - 1];
-          if (!answer) return;
-          selectAfterResolve(focused);
-          approve(focused.id, answer);
-          break;
-        }
         return;
     }
     e.preventDefault();
@@ -285,10 +284,10 @@ export default function App() {
                 pending={pending}
                 selectedId={inboxSelected?.id ?? null}
                 onSelect={setInboxSel}
-                onApprove={(id, a) => {
+                onApprove={(id) => {
                   const r = state.requests[id];
                   if (r) selectAfterResolve(r);
-                  approve(id, a);
+                  approve(id);
                 }}
                 onDeny={(id) => {
                   const r = state.requests[id];
@@ -345,10 +344,25 @@ function errorText(e: unknown): string {
   return String(e);
 }
 
-/** "Plan approval · Codex on #142" (vendor and run when known). */
-function requestLine(r: PermissionRequest, run: Run | undefined): string {
+const APPROVED: Record<PermissionRequest["kind"], string> = {
+  plan: "Approved",
+  step: "Approved",
+  permission: "Allowed",
+  budget: "Budget extended",
+};
+const DENIED: Record<PermissionRequest["kind"], string> = {
+  plan: "Rejected",
+  step: "Rejected",
+  permission: "Denied",
+  budget: "Stopped",
+};
+
+/** "Permission · Codex on 3f9a0c12" (the asking session's harness and the run, when known). */
+function requestLine(r: PermissionRequest, state: { runs: Record<string, Run>; sessions: Record<string, Session> }): string {
   let line = REQUEST_LABEL[r.kind];
-  if (r.vendor) line += ` · ${VENDOR_INFO[r.vendor].label}`;
+  const session = r.sessionId ? state.sessions[r.sessionId] : undefined;
+  if (session) line += ` · ${harnessInfo(session.vendor, session.harness).label}`;
+  const run = state.runs[r.runId];
   if (run) line += ` on ${runRef(run)}`;
   return line;
 }
@@ -356,8 +370,7 @@ function requestLine(r: PermissionRequest, run: Run | undefined): string {
 const SHORTCUTS: [string, string][] = [
   ["B / I / M", "Run board / approvals inbox / agent bus"],
   ["A", "Approve the focused request (inbox selection or open run)"],
-  ["D", "Deny or dismiss it"],
-  ["1–9", "Pick an answer to an agent's question"],
+  ["D", "Deny or reject it"],
   ["J / K", "Move through the inbox"],
   ["Enter", "Open the selected request's run"],
   ["T", "Toggle terminal mode for the open session"],

@@ -1,14 +1,25 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { CockpitState, Role, Run, Session } from "../daemon/types";
+import type { CockpitState, Run, Session } from "../daemon/types";
 import { STEPS } from "../daemon/types";
-import { VENDOR_INFO } from "../daemon/vendors";
+import { harnessInfo } from "../daemon/vendors";
 import { formatDuration, formatTokens, formatUsd } from "../lib/format";
-import { ROLE_LABEL, STEP_LABEL, runRef } from "../lib/labels";
+import { STEP_LABEL, roleLabel, runRef } from "../lib/labels";
 import { Icon } from "./Icon";
 import { SessionEvents } from "./SessionEvents";
 import { VendorBadge, vendorStyle } from "./VendorBadge";
 
-const ROLE_ORDER: Role[] = ["planner", "implementer", "reviewer"];
+const ROLE_ORDER: readonly string[] = ["planner", "implementer", "reviewer"];
+
+/** The run's sessions: pipeline roles first, then by start (a restart opens a new session per role). */
+function runSessions(run: Run, state: CockpitState): Session[] {
+  const rank = (s: Session) => {
+    const i = ROLE_ORDER.indexOf(s.role);
+    return i < 0 ? ROLE_ORDER.length : i;
+  };
+  return Object.values(state.sessions)
+    .filter((s) => s.runId === run.id)
+    .sort((a, b) => rank(a) - rank(b) || a.startedAt - b.startedAt);
+}
 
 interface Props {
   run: Run;
@@ -19,7 +30,7 @@ interface Props {
   terminal: boolean;
   onTerminal: (open: boolean) => void;
   onClose: () => void;
-  onApprove: (requestId: string, answer?: string) => void;
+  onApprove: (requestId: string) => void;
   onDeny: (requestId: string) => void;
   onSend: (sessionId: string, text: string) => void;
   /** Cancels the run; absent when the client cannot (mock data). */
@@ -28,7 +39,7 @@ interface Props {
 
 export function SessionPanel(props: Props) {
   const { run, state, now, terminal, onTerminal, onClose, onCancel } = props;
-  const sessions = ROLE_ORDER.map((r) => run.sessions[r]).filter((id): id is string => !!id).map((id) => state.sessions[id]);
+  const sessions = runSessions(run, state);
   const session = sessions.find((s) => s.id === props.sessionId) ?? defaultSession(run, sessions);
   const project = state.projects.find((p) => p.id === run.projectId);
 
@@ -52,18 +63,13 @@ export function SessionPanel(props: Props) {
             </span>
           )}
           <span>{formatDuration((run.finishedAt ?? now) - run.startedAt)}</span>
-          {run.usage ? (
-            <span title={run.budgetUsd != null ? `Budget ${formatUsd(run.budgetUsd)} per run` : "Run cost"}>
-              {formatUsd(run.usage.costUsd)}
-              {run.budgetUsd != null && <span className="muted"> / {formatUsd(run.budgetUsd)}</span>}
-            </span>
-          ) : (
-            run.budgetUsd != null && (
-              <span className="muted" title="Budget per run (usage not reported yet)">
-                budget {formatUsd(run.budgetUsd)}
-              </span>
-            )
-          )}
+          <span
+            className={run.budgetUsd != null && run.costUsd > run.budgetUsd ? "is-over-budget" : undefined}
+            title="Run cost: the sum of what its sessions reported (harnesses that do not report cost count as $0)"
+          >
+            <Icon name="coins" size={13} /> {formatUsd(run.costUsd)}
+            {run.budgetUsd != null && <span className="muted"> / {formatUsd(run.budgetUsd)} budget</span>}
+          </span>
           {run.pullRequest && (
             <a className="pr-link" href={run.pullRequest.url} target="_blank" rel="noreferrer">
               <Icon name="pr" size={13} /> PR #{run.pullRequest.number}
@@ -91,8 +97,8 @@ export function SessionPanel(props: Props) {
             style={vendorStyle(s.vendor)}
             onClick={() => props.onSession(s.id)}
           >
-            <span className="vmono">{VENDOR_INFO[s.vendor].mono}</span>
-            {ROLE_LABEL[s.role]}
+            <span className="vmono">{harnessInfo(s.vendor, s.harness).mono}</span>
+            {roleLabel(s.role)}
             <span className={`state-dot state-${s.state}`} title={s.state} />
           </button>
         ))}
@@ -112,14 +118,12 @@ export function SessionPanel(props: Props) {
       {session ? (
         <>
           <div className="session-bar">
-            <VendorBadge vendor={session.vendor} />
-            <span className="mono muted">{session.model}</span>
+            <VendorBadge vendor={session.vendor} harness={session.harness} />
+            {session.model && <span className="mono muted">{session.model}</span>}
             <span className="mono muted ellipsis" title={session.cwd}>
               {session.cwd}
             </span>
-            <span className="session-usage" title="Session tokens (in / out) and cost">
-              {formatTokens(session.usage.input)} in · {formatTokens(session.usage.output)} out · {formatUsd(session.usage.costUsd)}
-            </span>
+            <SessionUsageView session={session} />
           </div>
           {terminal ? (
             <TerminalPlaceholder session={session} />
@@ -145,9 +149,29 @@ export function SessionPanel(props: Props) {
 }
 
 function defaultSession(run: Run, sessions: Session[]): Session | undefined {
-  const byStep: Record<string, Role> = { plan: "planner", review: "reviewer" };
+  const byStep: Record<string, string> = { plan: "planner", review: "reviewer" };
   const role = byStep[run.step] ?? "implementer";
-  return sessions.find((s) => s.role === role) ?? sessions[sessions.length - 1];
+  const id = run.sessions[role];
+  return sessions.find((s) => s.id === id) ?? [...sessions].reverse().find((s) => s.role === role) ?? sessions[sessions.length - 1];
+}
+
+/** Context-window fill and cost, as ACP reports them (no input/output token counts). */
+function SessionUsageView({ session }: { session: Session }) {
+  const { usedTokens, contextTokens, costUsd } = session.usage;
+  const pct = contextTokens > 0 ? Math.round((usedTokens / contextTokens) * 100) : undefined;
+  return (
+    <span className="session-usage" title="Tokens in the context window / its size, and the session's cost as reported by the harness">
+      {contextTokens > 0 ? (
+        <>
+          {formatTokens(usedTokens)} / {formatTokens(contextTokens)} ctx <span className="muted">({pct}%)</span>
+        </>
+      ) : (
+        <span className="muted">no usage yet</span>
+      )}
+      {" · "}
+      {costUsd != null ? formatUsd(costUsd) : <span className="muted">cost not reported</span>}
+    </span>
+  );
 }
 
 function EventScroller({ session, state, now, onApprove, onDeny }: Props & { session: Session }) {
@@ -211,8 +235,10 @@ function Pipeline({ run }: { run: Run }) {
 }
 
 function TerminalPlaceholder({ session }: { session: Session }) {
-  const info = VENDOR_INFO[session.vendor];
-  const bin = { "claude-code": "claude", codex: "codex", opencode: "opencode", antigravity: "agy" }[session.vendor];
+  const info = harnessInfo(session.vendor, session.harness);
+  const bin = session.vendor
+    ? { "claude-code": "claude", codex: "codex", opencode: "opencode", antigravity: "agy" }[session.vendor]
+    : session.harness;
   return (
     <div className="term">
       <div className="term-bar">
@@ -236,7 +262,7 @@ function TerminalPlaceholder({ session }: { session: Session }) {
             <strong>Terminal mode attaches {info.label}&apos;s own TUI to this same session.</strong>
             <p>
               The embedded PTY is owned by <code>agentuxd</code>, so switching between structured and terminal views never
-              restarts the agent. It is not available with the mock daemon.
+              restarts the agent. It is not available yet.
             </p>
           </div>
         </div>
@@ -267,7 +293,9 @@ function Composer({ session, onSend }: { session: Session; onSend: (sessionId: s
         rows={1}
         value={text}
         disabled={ended}
-        placeholder={ended ? "Session ended" : `Message the ${ROLE_LABEL[session.role].toLowerCase()} (${VENDOR_INFO[session.vendor].label})…`}
+        placeholder={
+          ended ? "Session ended" : `Message the ${roleLabel(session.role).toLowerCase()} (${harnessInfo(session.vendor, session.harness).label})…`
+        }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {

@@ -2,18 +2,13 @@ import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
 import type {
   BusEndpoint,
   CockpitState,
-  DiffHunk,
-  DiffLine,
-  FileDiff,
   PermissionRequest,
   Role,
   Run,
   Session,
   SessionEvent,
-  TokenUsage,
-  Vendor,
+  SessionUsage,
 } from "../types";
-import { VENDORS } from "../types";
 import { VENDOR_INFO, costOf } from "../vendors";
 import { buildScript, scriptMarkIndex, type Beat, type DiffSpec, type Endpoint, type RunCtx, type ScenarioSpec } from "./script";
 import { PROJECTS, SCENARIOS, SEED } from "./scenarios";
@@ -32,7 +27,8 @@ interface Engine {
   tools: Map<string, { sessionId: string; eventId: string }>;
 }
 
-const zeroUsage = (): TokenUsage => ({ input: 0, output: 0, costUsd: 0 });
+/** Budget per run in mock runs (`budget.max_usd_per_run`). */
+const MOCK_BUDGET_USD = 10;
 
 /**
  * In-memory stand-in for `agentuxd`. Plays scripted runs (see scenarios.ts)
@@ -71,7 +67,6 @@ export class MockDaemonClient implements DaemonClient {
       sessions: {},
       requests: {},
       bus: [],
-      spend: Object.fromEntries(VENDORS.map((v) => [v, zeroUsage()])) as Record<Vendor, TokenUsage>,
     };
     for (const s of SCENARIOS) {
       this.nextIssue.set(s.projectId, Math.max(this.nextIssue.get(s.projectId) ?? 0, s.issue + 1));
@@ -129,6 +124,10 @@ export class MockDaemonClient implements DaemonClient {
     throw new Error("Cancelling runs needs agentuxd; the cockpit is showing mock data");
   }
 
+  watchRun(_runId: string): void {
+    // Mock sessions carry their whole history already.
+  }
+
   async sendPrompt(sessionId: string, text: string): Promise<void> {
     this.now = Date.now();
     const session = this.state.sessions[sessionId];
@@ -163,6 +162,12 @@ export class MockDaemonClient implements DaemonClient {
     due.forEach((t) => t.fn());
 
     for (const e of [...this.engines]) {
+      // A denied approval failed the run: its script stops there.
+      if (this.state.runs[e.runId]?.status === "failed") {
+        this.engines = this.engines.filter((x) => x !== e);
+        this.timers.push({ at: wall + (12_000 + Math.random() * 15_000) / this.speed, fn: () => this.spawnRun() });
+        continue;
+      }
       if (e.blockedOn) {
         if (this.state.requests[e.blockedOn]?.status === "pending") continue;
         e.blockedOn = undefined;
@@ -250,6 +255,8 @@ export class MockDaemonClient implements DaemonClient {
       title: spec.title,
       issue: spec.issue,
       branch: `aux/${spec.issue}-${spec.slug}`,
+      steps: ["plan", "implement", "gate", "review", "pull_request"],
+      stepIndex: 0,
       step: "plan",
       status: "running",
       roles: spec.roles,
@@ -259,8 +266,8 @@ export class MockDaemonClient implements DaemonClient {
       gateMaxAttempts: 3,
       reviewRound: 0,
       reviewMaxRounds: 2,
-      budgetUsd: 10,
-      usage: zeroUsage(),
+      budgetUsd: MOCK_BUDGET_USD,
+      costUsd: 0,
       startedAt,
       updatedAt: startedAt,
       activity: "Queued",
@@ -281,11 +288,12 @@ export class MockDaemonClient implements DaemonClient {
       if (x === "human") return { kind: "human" };
       if (x === "daemon") return { kind: "daemon" };
       const sid = session(x);
-      return { kind: "session", sessionId: sid, role: x, vendor: run().roles[x] ?? "claude-code" };
+      return { kind: "session", sessionId: sid, role: x, vendor: run().roles[x] };
     };
     return {
       branch: run().branch ?? "",
-      step: (step, activity) => this.patchRun(runId, { step, activity }),
+      step: (step, activity) =>
+        this.patchRun(runId, { step, stepIndex: Math.max(0, (run().steps ?? []).indexOf(step)), activity }),
       activity: (activity) => this.patchRun(runId, { activity }),
       sessionState: (role, state) => {
         const sid = run().sessions[role];
@@ -305,7 +313,7 @@ export class MockDaemonClient implements DaemonClient {
       },
       toolStart: (role, key, tool, title, input) => {
         const sid = session(role);
-        const eventId = this.pushEvent(sid, { kind: "tool_call", tool, title, status: "running", input });
+        const eventId = this.pushEvent(sid, { kind: "tool_call", toolCallId: key, tool, title, status: "running", input });
         e.tools.set(key, { sessionId: sid, eventId });
         this.patchRun(runId, {});
       },
@@ -317,7 +325,7 @@ export class MockDaemonClient implements DaemonClient {
       },
       diff: (role, spec) => {
         const sid = session(role);
-        this.pushEvent(sid, { kind: "diff", diff: parseDiff(spec) });
+        this.pushEvent(sid, { kind: "diff", ...specToTexts(spec) });
         this.addUsage(runId, sid, 14_000, 700);
       },
       plan: (role, items) => {
@@ -326,28 +334,20 @@ export class MockDaemonClient implements DaemonClient {
         if (existing) this.patchEvent(sid, existing.id, { items });
         else this.pushEvent(sid, { kind: "plan", items });
       },
-      request: (role, kind, title, detail, options) => {
-        const sid = session(role);
-        const id = this.id("req");
+      request: (role, kind, title, detail) => this.addRequest(runId, role ? session(role) : undefined, kind, title, detail),
+      budget: () => {
         const r = run();
-        const req: PermissionRequest = {
-          id,
-          kind,
+        const budget = Math.max(0.01, Math.floor(r.costUsd * 90) / 100);
+        this.patchRun(runId, { budgetUsd: budget });
+        const id = this.addRequest(
           runId,
-          projectId: r.projectId,
-          sessionId: sid,
-          vendor: r.roles[role],
-          role,
-          title,
-          detail,
-          options,
-          status: "pending",
-          createdAt: this.now,
-        };
-        this.update((s) => ({ ...s, requests: { ...s.requests, [id]: req } }));
-        this.pushEvent(sid, { kind: "permission", requestId: id });
-        this.patchSession(sid, { state: "waiting" });
-        this.patchRun(runId, { status: "waiting" });
+          undefined,
+          "budget",
+          `"${r.title}" is over its budget`,
+          `The run has cost $${r.costUsd.toFixed(2)}, more than its budget of $${budget.toFixed(2)}. ` +
+            `Approve to continue with another $${MOCK_BUDGET_USD.toFixed(2)}; deny to stop the run.`,
+        );
+        this.patchRun(runId, { activity: `waiting for approval (${id})` });
         return id;
       },
       decision: (requestId) => {
@@ -384,7 +384,7 @@ export class MockDaemonClient implements DaemonClient {
       finish: (prNumber) => {
         const r = run();
         const repo = this.state.projects.find((p) => p.id === r.projectId)?.repo ?? "";
-        for (const sid of Object.values(r.sessions)) if (sid) this.patchSession(sid, { state: "ended" });
+        for (const sid of Object.values(r.sessions)) this.patchSession(sid, { state: "ended", endedAt: this.now });
         this.patchRun(runId, {
           status: "done",
           finishedAt: this.now,
@@ -395,20 +395,68 @@ export class MockDaemonClient implements DaemonClient {
     };
   }
 
+  /** Same shape as agentuxd: pipeline approvals have no session; permissions name the asking session. */
+  private addRequest(
+    runId: string,
+    sessionId: string | undefined,
+    kind: PermissionRequest["kind"],
+    title: string,
+    detail: string,
+  ): string {
+    const id = this.id("req");
+    const r = this.state.runs[runId];
+    const req: PermissionRequest = {
+      id,
+      kind,
+      runId,
+      projectId: r.projectId,
+      sessionId: kind === "permission" ? sessionId : undefined,
+      step: r.step,
+      stepIndex: r.stepIndex ?? 0,
+      title,
+      detail,
+      status: "pending",
+      createdAt: this.now,
+    };
+    this.update((s) => ({ ...s, requests: { ...s.requests, [id]: req } }));
+    if (req.sessionId) {
+      this.pushEvent(req.sessionId, { kind: "permission", requestId: id });
+      this.patchSession(req.sessionId, { state: "waiting" });
+    }
+    this.patchRun(runId, { status: "waiting" });
+    return id;
+  }
+
+  /**
+   * Like agentuxd: denying a permission tells the agent no and the run goes
+   * on; denying any other request fails the run. Approving a budget request
+   * raises the budget to the current cost plus the configured amount.
+   */
   private resolve(requestId: string, action: "approve" | "deny", answer?: string) {
     const req = this.state.requests[requestId];
     if (!req || req.status !== "pending") return;
-    const next: PermissionRequest =
-      action === "deny"
-        ? { ...req, status: "denied", resolvedAt: this.now }
-        : req.kind === "question"
-          ? { ...req, status: "answered", answer: answer ?? req.options?.[0], resolvedAt: this.now }
-          : { ...req, status: "approved", resolvedAt: this.now };
+    const next: PermissionRequest = {
+      ...req,
+      status: action === "deny" ? "denied" : "approved",
+      answer,
+      resolvedAt: this.now,
+    };
     this.update((s) => ({ ...s, requests: { ...s.requests, [requestId]: next } }));
+    if (action === "deny" && req.kind !== "permission") {
+      for (const sid of Object.values(this.state.runs[req.runId]?.sessions ?? {})) {
+        this.patchSession(sid, { state: "ended", endedAt: this.now });
+      }
+      this.patchRun(req.runId, { status: "failed", finishedAt: this.now, activity: "failed", error: `${req.title}: denied` });
+      return;
+    }
+    const run = this.state.runs[req.runId];
+    if (req.kind === "budget" && run) {
+      const budgetUsd = run.costUsd + MOCK_BUDGET_USD;
+      this.patchRun(req.runId, { budgetUsd, activity: `budget raised to $${budgetUsd.toFixed(2)}; continuing` });
+    }
     const stillWaiting = Object.values(this.state.requests).some((r) => r.runId === req.runId && r.status === "pending");
     if (!stillWaiting) {
-      const resumed = action === "deny" ? "Continuing after your denial" : req.kind === "question" ? "Continuing with your answer" : "Approved, resuming";
-      this.patchRun(req.runId, { status: "running", activity: resumed });
+      this.patchRun(req.runId, { status: "running", activity: req.kind === "permission" ? "the agent is working" : "approved, continuing" });
     }
     if (req.sessionId) this.patchSession(req.sessionId, { state: "active" });
   }
@@ -433,7 +481,8 @@ export class MockDaemonClient implements DaemonClient {
       const r = s.runs[runId];
       if (!r) return s;
       // Runs that finished stay finished, even if a late beat tries to touch them.
-      const status = r.status === "done" && patch.status !== "done" ? r.status : (patch.status ?? r.status);
+      const final = r.status === "done" || r.status === "failed";
+      const status = final ? r.status : (patch.status ?? r.status);
       return { ...s, runs: { ...s.runs, [runId]: { ...r, ...patch, status, updatedAt: this.now } } };
     });
   }
@@ -458,12 +507,13 @@ export class MockDaemonClient implements DaemonClient {
       runId,
       projectId: run.projectId,
       role,
+      harness: vendor,
       vendor,
       model: VENDOR_INFO[vendor].defaultModel,
       state: "active",
       cwd: `~/.local/share/agentux/worktrees/${run.id}`,
       events: [],
-      usage: zeroUsage(),
+      usage: { usedTokens: 0, contextTokens: VENDOR_INFO[vendor].contextWindow, costUsd: 0 },
       startedAt: this.now,
     };
     this.update((s) => ({
@@ -495,18 +545,26 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
+  /**
+   * Like an ACP usage update: the context window fills up and the session's
+   * cumulative cost grows; the run's cost is the sum over its sessions.
+   */
   private addUsage(runId: string, sessionId: string, input: number, output: number) {
     const session = this.state.sessions[sessionId];
-    if (!session) return;
+    if (!session?.vendor) return;
+    const window = VENDOR_INFO[session.vendor].contextWindow;
     const cost = costOf(session.vendor, input, output);
-    const add = (u: TokenUsage): TokenUsage => ({ input: u.input + input, output: u.output + output, costUsd: u.costUsd + cost });
+    const usage: SessionUsage = {
+      contextTokens: window,
+      usedTokens: Math.min(window, session.usage.usedTokens + Math.round(input / 3) + output),
+      costUsd: (session.usage.costUsd ?? 0) + cost,
+    };
     this.update((s) => {
       const r = s.runs[runId];
       return {
         ...s,
-        sessions: { ...s.sessions, [sessionId]: { ...session, usage: add(session.usage) } },
-        runs: r ? { ...s.runs, [runId]: { ...r, usage: add(r.usage ?? zeroUsage()) } } : s.runs,
-        spend: { ...s.spend, [session.vendor]: add(s.spend[session.vendor]) },
+        sessions: { ...s.sessions, [sessionId]: { ...session, usage } },
+        runs: r ? { ...s.runs, [runId]: { ...r, costUsd: r.costUsd + cost } } : s.runs,
       };
     });
   }
@@ -521,27 +579,15 @@ function readSpeedParam(): number {
   return Number.isFinite(v) && v > 0 ? v : 0.7;
 }
 
-/** Turns a hand-written hunk into numbered diff lines. */
-export function parseDiff(spec: DiffSpec): FileDiff {
-  const m = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$/.exec(spec.header);
-  let oldNo = m ? Number(m[1]) : 1;
-  let newNo = m ? Number(m[2]) : 1;
-  const lines: DiffLine[] = [];
-  let additions = 0;
-  let deletions = 0;
+/** Old and new text of the region a hand-written hunk covers (agentuxd sends whole texts, not hunks). */
+export function specToTexts(spec: DiffSpec): { path: string; oldText: string; newText: string } {
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
   for (const raw of spec.body.split("\n")) {
     const prefix = raw[0] ?? " ";
     const text = raw.slice(1);
-    if (prefix === "+") {
-      lines.push({ kind: "add", text, newNo: newNo++ });
-      additions++;
-    } else if (prefix === "-") {
-      lines.push({ kind: "del", text, oldNo: oldNo++ });
-      deletions++;
-    } else {
-      lines.push({ kind: "ctx", text, oldNo: oldNo++, newNo: newNo++ });
-    }
+    if (prefix !== "+") oldLines.push(text);
+    if (prefix !== "-") newLines.push(text);
   }
-  const hunk: DiffHunk = { header: m?.[3] ?? "", lines };
-  return { path: spec.path, additions, deletions, hunks: [hunk] };
+  return { path: spec.path, oldText: `${oldLines.join("\n")}\n`, newText: `${newLines.join("\n")}\n` };
 }
