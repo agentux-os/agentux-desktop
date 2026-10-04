@@ -1,6 +1,6 @@
 [package]
 name = "agentux-cockpit"
-version = "0.3.0"
+version = "0.4.0"
 description = "AgentUX cockpit: one interface over every coding-agent CLI"
 authors = ["AgentUX contributors"]
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["io-util", "net", "time"] }
+tokio = { version = "1", features = ["io-util", "net", "time", "rt", "sync"] }
 
 # Meta+A and the login autostart both run `agentux-cockpit`; this turns every
 # launch after the first into "bring the existing window forward".
@@ -29,7 +29,7 @@ tokio = { version = "1", features = ["io-util", "net", "time"] }
 tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["io-util", "net", "time", "macros", "rt"] }
+tokio = { version = "1", features = ["io-util", "net", "time", "macros", "rt", "sync"] }
 
 [profile.release]
 codegen-units = 1

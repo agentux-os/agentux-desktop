@@ -34,7 +34,10 @@
  *   id, runId, projectId, role, harness, cwd, startedAt -> same
  *   vendor                    -> `harnessToVendor(harness)`, may be undefined
  *   model, endedAt            -> null becomes undefined
- *   state                     -> unknown values become `idle`
+ *   state                     -> active/idle/waiting/attached/ended; unknown
+ *                                values become `idle`. `attached`: open in
+ *                                its harness's TUI (terminal mode)
+ *   vendorSessionId           -> null or absent becomes undefined
  *   usage                     -> usedTokens/contextTokens same, costUsd null
  *                                becomes undefined
  *   events                    -> built from `session_event` events (below);
@@ -78,6 +81,17 @@
  *   wake/joined/left and the refusals) from `bus_message` events are also added
  *   to the timeline of each session that sent or received them (`bus` entry).
  *
+ * Terminal (`terminals.open` / `attach` / `list`, agentux-core #11)
+ *   terminalId, argv, cwd, cols, rows, createdAt -> same
+ *   sessionId, runId, fallback, exitCode -> null becomes undefined
+ *   command                   -> `harness-tui | shell` ("harness_tui" too);
+ *                                unknown values become `shell`
+ *   state                     -> `waiting | running | exited`; unknown values
+ *                                become `running`
+ *   held                      -> same (added by the backend's terminal_list)
+ *   Kept in `state.terminals` by id; a terminal's exit (`terminal_exit`)
+ *   marks it `exited` with its code.
+ *
  * Other events: `project`, `run`, `request`, `session` replace the entry with
  * the same id. `attempt`, `log` and unknown kinds are ignored.
  */
@@ -101,6 +115,9 @@ import type {
   SessionState,
   SessionUsage,
   StepKind,
+  Terminal,
+  TerminalCommand,
+  TerminalState,
   ToolKind,
   ToolStatus,
   Vendor,
@@ -118,6 +135,7 @@ import type {
   ApiSessionEvent,
   ApiSessionUsage,
   ApiSnapshot,
+  ApiTerminal,
 } from "./api";
 
 const STEP_KINDS: readonly StepKind[] = ["plan", "implement", "gate", "review", "pull_request", "custom"];
@@ -126,7 +144,8 @@ const CHECK_STATUSES: readonly CheckStatus[] = ["pending", "running", "passed", 
 const ROLES: readonly Role[] = ["planner", "implementer", "reviewer"];
 const REQUEST_KINDS: readonly RequestKind[] = ["plan", "step", "permission", "budget", "question"];
 const REQUEST_STATUSES: readonly RequestStatus[] = ["pending", "approved", "denied", "cancelled"];
-const SESSION_STATES: readonly SessionState[] = ["active", "idle", "waiting", "ended"];
+const SESSION_STATES: readonly SessionState[] = ["active", "idle", "waiting", "attached", "ended"];
+const TERMINAL_STATES: readonly TerminalState[] = ["waiting", "running", "exited"];
 const TOOL_KINDS: readonly ToolKind[] = ["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "other"];
 const TOOL_STATUSES: readonly ToolStatus[] = ["running", "ok", "error"];
 const PLAN_STATUSES: readonly PlanItem["status"][] = ["pending", "in_progress", "done"];
@@ -410,6 +429,53 @@ export function mapSession(s: ApiSession, previous?: Session): Session {
     usage: mapSessionUsage(s.usage),
     startedAt: s.startedAt,
     endedAt: opt(s.endedAt),
+    vendorSessionId: opt(s.vendorSessionId),
+  };
+}
+
+function mapTerminalCommand(command: unknown): TerminalCommand {
+  return command === "harness-tui" || command === "harness_tui" ? "harness-tui" : "shell";
+}
+
+/** Maps a daemon `Terminal` (see the table above). */
+export function mapTerminal(t: ApiTerminal): Terminal {
+  return {
+    terminalId: t.terminalId,
+    sessionId: opt(t.sessionId),
+    runId: opt(t.runId),
+    command: mapTerminalCommand(t.command),
+    fallback: opt(t.fallback),
+    argv: Array.isArray(t.argv) ? t.argv : [],
+    cwd: t.cwd ?? "",
+    cols: t.cols,
+    rows: t.rows,
+    state: oneOf(TERMINAL_STATES, t.state) ?? "running",
+    exitCode: opt(t.exitCode),
+    createdAt: t.createdAt,
+    held: t.held,
+  };
+}
+
+/** Records terminals (from an open, an attach or a list), replacing entries by id. */
+export function applyTerminals(state: CockpitState, list: ApiTerminal[], held?: boolean): CockpitState {
+  if (!list.length) return state;
+  const terminals = { ...state.terminals };
+  for (const api of list) {
+    if (!api || typeof api.terminalId !== "string") continue;
+    const t = mapTerminal(api);
+    const previous = terminals[t.terminalId];
+    terminals[t.terminalId] = { ...t, held: held ?? t.held ?? previous?.held };
+  }
+  return { ...state, terminals };
+}
+
+/** A terminal's process exited (`terminal_exit`); `code` null: killed by a signal. */
+export function applyTerminalExit(state: CockpitState, terminalId: string, code: number | null): CockpitState {
+  const t = state.terminals[terminalId];
+  if (!t) return state;
+  return {
+    ...state,
+    terminals: { ...state.terminals, [terminalId]: { ...t, state: "exited", exitCode: code ?? undefined } },
   };
 }
 

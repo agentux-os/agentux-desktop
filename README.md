@@ -2,7 +2,7 @@
 
 The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the cockpit app and the desktop configuration shipped with the distribution.
 
-> **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included) and the agent bus come from the daemon; prompting a session from the cockpit waits for daemon support. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
+> **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included), the agent bus and terminal mode (a session's harness TUI, or a shell in a run's worktree) come from the daemon. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
 
 ## Cockpit
 
@@ -54,7 +54,9 @@ How the connection behaves:
 - At startup the frontend probes the daemon. If it answers, the cockpit uses `TauriDaemonClient`; if not, it shows mock data with a **Mock data** badge and a "agentuxd is not running" banner, and reloads by itself once the daemon is up.
 - The backend keeps one `events.subscribe` stream open and forwards each event to the UI (`daemon://event`). When the daemon stops it reports the disconnect, retries with exponential backoff (0.5 s up to 15 s) and resubscribes from the last `seq` it saw, so nothing is lost while the daemon restarts. On daemons that mark the end of a replay (`replay_done`, agentux-core #9) the stream reports itself connected once the replayed events are forwarded; the UI reloads the project/run/request lists on every reconnect.
 - Opening a run loads its stored events (session timelines) and its agent-bus log (`bus.list`); the bus page and the board's rail load the log of the most recent runs the same way. The run's history is read with `runs.events` in pages and continued with `events.subscribe { runId, since: headSeq }` up to its `replay_done`; daemons without `runs.events` (-32601) fall back to replaying a subscription, ended by the marker or, on the oldest daemons, by a short pause. Live `bus_message` events keep them current, merged by id. Questions agents ask through `ask_human` land in the approvals inbox: pick a suggested answer (buttons, or `1`–`9`), type one, or decline. See the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
-- Optional daemon methods (`sessions.prompt`, `bus.post`) are probed after each load. The session composer (`sessions.prompt`) puts your message in the session as your own bubble; the bus composer, on the bus page and in a run's **Bus** tab, posts as you (`bus.post`) to a role, one session or the whole run, or answers a message (**Reply**, `inReplyTo`). Each stays disabled, with the reason shown, on daemons that do not serve its method and on finished runs.
+- Optional daemon methods (`sessions.prompt`, `bus.post`, `terminals.*`) are probed after each load. The session composer (`sessions.prompt`) puts your message in the session as your own bubble; the bus composer, on the bus page and in a run's **Bus** tab, posts as you (`bus.post`) to a role, one session or the whole run, or answers a message (**Reply**, `inReplyTo`). Each stays disabled, with the reason shown, on daemons that do not serve its method and on finished runs.
+- **Terminal mode** (agentux-core #11). The session view's **Structured / Terminal** toggle (`T`) opens the session in its harness's own TUI (`terminals.open`, `command: harness-tui`) on a PTY the daemon manages, rendered with xterm.js, sized to the panel and themed from the cockpit's colours. While the session's turn is in progress the terminal waits (shown as such; input is dropped); then the daemon hands the session over and its badge shows **attached** (turns for it queue until the TUI exits). When the daemon cannot resume the session in a TUI it runs a shell instead, and the reason is shown as a banner. **Shell in worktree** on an active run opens a shell in the run's worktree in a **Shell** tab. While the terminal has the keyboard, the cockpit's shortcuts are off (Escape too, the TUI uses it); `Shift+Esc` or `Ctrl+]` gives the keyboard back.
+  The daemon ties a terminal to the connection that opened it, so the backend gives each terminal its own socket connection (`src-tauri/src/daemon/terminal.rs`) and emits its output as `terminal://<stream>` events, a name the UI listens on before opening. Input and resizes go as JSON-RPC notifications on that connection. A view that is rebuilt while its terminal runs re-attaches (`terminals.attach`: scrollback, then live output) instead of opening another. Leaving terminal mode closes the run's TUIs (the sessions go back to ACP), closing the shell tab closes the shell, closing the run panel closes all of the run's terminals, and a closed or reloaded window drops every terminal connection. In mock mode the terminal is a fake echo shell that behaves the same way (waiting, attached, Antigravity's fallback).
 
 ### Layout of the code
 
@@ -71,7 +73,7 @@ Components only talk to the `DaemonClient` interface; `createDaemonClient()` pic
 
 ### Keyboard
 
-`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode, `N` starts a new run (with a daemon), `[`/`]` cycle projects, `?` lists everything.
+`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode (`Shift+Esc` or `Ctrl+]` leaves the terminal), `N` starts a new run (with a daemon), `[`/`]` cycle projects, `?` lists everything.
 
 ### Packaging
 
@@ -98,7 +100,7 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 
 ### Not there yet
 
-- Terminal mode is a placeholder; the embedded PTY will come from `agentuxd`.
+- Terminal mode needs agentux-core with `terminals.*` (#11); with older daemons the toggle stays disabled. A terminal does not survive a reload of the window.
 - The daemon is reached over a Unix socket only, so on Windows the Tauri build always shows mock data.
 - Prices in the mock are illustrative.
 

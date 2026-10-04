@@ -94,7 +94,11 @@ export interface Run {
   error?: string;
 }
 
-export type SessionState = "active" | "idle" | "waiting" | "ended";
+/**
+ * `waiting`: on a permission request; `attached`: open in its harness's own
+ * TUI (terminal mode), so turns for it wait until that terminal closes.
+ */
+export type SessionState = "active" | "idle" | "waiting" | "attached" | "ended";
 
 export interface Session {
   id: string;
@@ -114,6 +118,12 @@ export interface Session {
   usage: SessionUsage;
   startedAt: number;
   endedAt?: number;
+  /**
+   * The harness's own id of the session (the ACP session id, which Claude
+   * Code, Codex and OpenCode share with their CLI): what the TUI resumes.
+   * Absent until the harness started it.
+   */
+  vendorSessionId?: string;
   /** Daemon only: seq of the last event folded into `events`, to skip replays. */
   lastSeq?: number;
 }
@@ -333,6 +343,36 @@ export interface BusPostResult {
   queuedForRole?: string;
 }
 
+/** What a terminal runs: the session's harness TUI, or a shell in the run's worktree. */
+export type TerminalCommand = "harness-tui" | "shell";
+
+/** `waiting`: for the session's turn in progress to end before the TUI starts. */
+export type TerminalState = "waiting" | "running" | "exited";
+
+/**
+ * A process on a pseudo-terminal managed by agentuxd (terminal mode). A
+ * `harness-tui` request the daemon could not honour runs a shell instead:
+ * `command` is then `shell` and `fallback` says why.
+ */
+export interface Terminal {
+  terminalId: string;
+  sessionId?: string;
+  runId?: string;
+  command: TerminalCommand;
+  fallback?: string;
+  /** Empty while waiting. */
+  argv: string[];
+  /** The run's worktree. */
+  cwd: string;
+  cols: number;
+  rows: number;
+  state: TerminalState;
+  exitCode?: number;
+  createdAt: number;
+  /** This cockpit opened the terminal and owns it (it closes with the cockpit). */
+  held?: boolean;
+}
+
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 export interface Connection {
@@ -354,10 +394,12 @@ export interface CockpitState {
   requests: Record<string, PermissionRequest>;
   /** Agent-bus log of the runs loaded so far, oldest first. */
   bus: BusMessage[];
+  /** Terminals this cockpit opened or looked up, by id (exited ones stay until replaced). */
+  terminals: Record<string, Terminal>;
   /**
    * Optional daemon methods found by probing (absent or false: not served).
    * `sessionsPrompt`: the human can prompt a session; `busPost`: the human
-   * can post on a run's bus.
+   * can post on a run's bus; `terminals`: terminal mode (`terminals.*`).
    */
-  capabilities?: { sessionsPrompt?: boolean; busPost?: boolean };
+  capabilities?: { sessionsPrompt?: boolean; busPost?: boolean; terminals?: boolean };
 }
