@@ -341,6 +341,80 @@ mod socket_tests {
     }
 
     #[tokio::test]
+    async fn bus_list_probes_and_answers_over_the_socket() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let entry = json!({
+            "id": "b1", "runId": "r1", "projectId": "p1", "kind": "question",
+            "tool": "ask_human",
+            "from": {"kind": "session", "sessionId": "s1", "role": "implementer", "vendor": "codex"},
+            "to": {"kind": "human"},
+            "subject": "Postgres or SQLite?", "body": "Postgres or SQLite?", "at": 5,
+            "turn": 0, "maxTurns": 6, "messageId": null, "exchange": null, "inReplyTo": null,
+            "questionId": 1, "requestId": "q1", "deliveredTo": [], "queuedForRole": null
+        });
+        let served = entry.clone();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            // bus.list on a current daemon: the log, untouched.
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::BUS_LIST);
+            assert_eq!(req["params"], json!({"runId": "r1"}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": [served]}))
+                .await;
+            // An unknown run is an error the caller sees.
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": -32001, "message": "no run r9"}}))
+                .await;
+            // An older daemon without bus.list: an empty log.
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": -32601, "message": "method not found"}}))
+                .await;
+            // Probes: sessions.prompt is served (it refuses empty params),
+            // bus.post is not.
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::SESSIONS_PROMPT);
+            assert_eq!(req["params"], json!({}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": -32602, "message": "missing sessionId"}}))
+                .await;
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::BUS_POST);
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": -32601, "message": "method not found"}}))
+                .await;
+            // Answering a question: the answer goes through as given.
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::REQUESTS_APPROVE);
+            assert_eq!(req["params"], json!({"requestId": "q1", "answer": "sqlite"}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "result": {"id": "q1", "status": "approved", "answer": "sqlite"}}))
+                .await;
+        });
+
+        let mut client = Client::connect(&path).await.unwrap();
+        assert_eq!(client.list_bus("r1").await.unwrap(), json!([entry]));
+        match client.list_bus("r9").await {
+            Err(ClientError::Rpc { code, .. }) => assert_eq!(code, -32001),
+            other => panic!("unexpected {other:?}"),
+        }
+        assert_eq!(client.list_bus("r1").await.unwrap(), json!([]));
+        assert!(client.serves(method::SESSIONS_PROMPT).await.unwrap());
+        assert!(!client.serves(method::BUS_POST).await.unwrap());
+        let answered = client
+            .call(
+                method::REQUESTS_APPROVE,
+                json!({"requestId": "q1", "answer": "sqlite"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(answered["answer"], "sqlite");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn connect_to_missing_socket_is_unavailable() {
         let path = temp_socket();
         match Client::connect(&path).await {

@@ -8,12 +8,12 @@ interface Props {
   pending: PermissionRequest[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
   onOpenRun: (runId: string) => void;
 }
 
-/** Every approval from every run in one queue: plans, steps, agents' tool calls, budget overruns. */
+/** Every approval from every run in one queue: plans, steps, agents' tool calls and questions, budget overruns. */
 export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, onDeny, onOpenRun }: Props) {
   const resolved = Object.values(state.requests)
     .filter((r) => r.status !== "pending")
@@ -24,9 +24,11 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
     <div className="page">
       <div className="page-intro">
         <p>
-          Plan and step approvals, agents asking before a tool call, and runs over budget land here, oldest first.
+          Plan and step approvals, agents asking before a tool call or asking you a question, and runs over budget land
+          here, oldest first.
           <span className="kbd-hints">
-            <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>A</kbd> approve · <kbd>D</kbd> deny · <kbd>Enter</kbd> open run
+            <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>A</kbd> approve · <kbd>D</kbd> deny · <kbd>1</kbd>–<kbd>9</kbd> pick an
+            answer · <kbd>Enter</kbd> open run
           </span>
         </p>
       </div>
@@ -47,7 +49,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
                 now={now}
                 selected={r.id === selectedId}
                 showShortcuts={r.id === selectedId}
-                onApprove={() => onApprove(r.id)}
+                onApprove={(answer) => onApprove(r.id, answer)}
                 onDeny={() => onDeny(r.id)}
                 onOpen={() => onOpenRun(r.runId)}
               />

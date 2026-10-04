@@ -1,5 +1,5 @@
 import type {
-  BusTool,
+  BusMessageKind,
   CheckStatus,
   PlanItem,
   RequestKind,
@@ -39,8 +39,14 @@ export interface ScenarioSpec {
   };
   checks: { name: string; command: string }[];
   gateFailure?: { check: string; output: string; note: string; fix: DiffSpec };
-  /** The agent asks the human over the bus (`ask_human`; not served by agentuxd yet). */
-  question?: { at: "implement" | "review"; text: string; options: string[] };
+  /** The agent asks the human over the bus (`ask_human`): a `question` request in the inbox. */
+  question?: { at: "implement" | "review"; text: string; options: string[]; context?: string };
+  /**
+   * A bus refusal to show: `tool_denied` (the planner calls a tool the
+   * project's `bus.allow` leaves out) or `turn_limit` (the review exchange
+   * runs out of turns).
+   */
+  busRefusal?: "tool_denied" | "turn_limit";
   /** The run goes over its budget before the review and pauses on a `budget` request. */
   budgetPause?: boolean;
   review: {
@@ -52,7 +58,17 @@ export interface ScenarioSpec {
   pr: { number: number; summary: string };
 }
 
-export type Endpoint = Role | "human" | "daemon";
+/** A session (by role), the run's channel, the human or the daemon. */
+export type Endpoint = Role | "run" | "human" | "daemon";
+
+/** Optional fields of a bus entry the script sets. */
+export interface BusExtra {
+  /** Entries with the same key share one exchange (and its turn budget); omitted: a new exchange. */
+  exchange?: string;
+  turn?: number;
+  /** For `tool_denied`: the refused tool. */
+  tool?: string;
+}
 
 /** Operations a beat may perform on its run. Implemented by the mock client. */
 export interface RunCtx {
@@ -76,7 +92,19 @@ export interface RunCtx {
   /** Sets the run's budget just under its cost and asks to extend it. */
   budget(): string;
   decision(requestId: string): { status: RequestStatus; answer?: string };
-  bus(tool: BusTool, from: Endpoint, to: Endpoint, subject: string, body: string, turn?: number): void;
+  /**
+   * Posts a bus entry. Routed kinds (message, review_request, handoff) to a
+   * session also log the daemon's wake for it, like agentuxd.
+   */
+  bus(kind: BusMessageKind, from: Endpoint, to: Endpoint, subject: string, body: string, extra?: BusExtra): void;
+  /** `ask_human`: a pending `question` request plus its bus entry. Returns the request id. */
+  question(role: Role, text: string, options: string[], context?: string): string;
+  /**
+   * The agent stops waiting for an answer (agentuxd: after two minutes).
+   * True if the question is still pending; its answer then also arrives as
+   * a `human_answer` message with a wake.
+   */
+  questionTimeout(requestId: string): boolean;
   checks(status: CheckStatus, only?: string): void;
   gateAttempt(n: number): void;
   reviewRound(n: number): void;
@@ -126,6 +154,14 @@ export function buildScript(s: ScenarioSpec): Beat[] {
   b(1500, (c) => c.say("planner", s.explore.intro, [9_000, 180]));
   b(1300, (c) => c.toolStart("planner", "search", "search", `Search for "${s.explore.search}"`, `rg -n "${s.explore.search}"`));
   b(1100, (c) => c.toolEnd("search", "ok", s.explore.searchOutput));
+  if (s.busRefusal === "tool_denied") {
+    b(900, (c) => {
+      c.bus("tool_denied", "planner", "daemon", "`get_run_state` is not allowed in this project (bus.allow)", "", {
+        tool: "get_run_state",
+      });
+      c.system("planner", "The bus refused get_run_state (not in bus.allow); reading the issue instead.");
+    });
+  }
   b(1200, (c) => c.toolStart("planner", "read", "read", `Read ${s.explore.read}`, s.explore.read));
   b(1000, (c) => c.toolEnd("read", "ok"));
   b(1800, (c) => c.say("planner", s.explore.finding, [24_000, 420]));
@@ -145,7 +181,7 @@ export function buildScript(s: ScenarioSpec): Beat[] {
     });
   }
   b(1000, (c) => {
-    c.bus("handoff", "planner", "implementer", `Plan for #${s.issue}`, s.plan.map((p, i) => `${i + 1}. ${p}`).join("\n"));
+    c.bus("handoff", "planner", "implementer", `Handoff: Plan for #${s.issue}`, s.plan.map((p, i) => `${i + 1}. ${p}`).join("\n"));
     c.sessionState("planner", "ended");
   });
 
@@ -233,7 +269,10 @@ Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it n
     c.reviewRound(1);
     c.sessionState("implementer", "idle");
     turn = 1;
-    c.bus("request_review", "implementer", "reviewer", `Review ${c.branch}`, `Ready for review. ${s.implement.summary}`, turn);
+    c.bus("review_request", "implementer", "reviewer", `Review request: ${c.branch}`, `Ready for review. ${s.implement.summary}`, {
+      exchange: "review",
+      turn,
+    });
     c.system("reviewer", "Review requested by the implementer over the agentux bus.");
   });
   b(1400, (c) => c.toolStart("reviewer", "stat", "execute", "git diff --stat", "git diff main...HEAD --stat"));
@@ -245,7 +284,7 @@ Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it n
     b(1800, (c) => {
       turn += 1;
       c.say("reviewer", ch.comment, [12_000, 340]);
-      c.bus("post_message", "reviewer", "implementer", "Changes requested", ch.comment, turn);
+      c.bus("message", "reviewer", "implementer", "Changes requested", ch.comment, { exchange: "review", turn });
       c.activity("Reviewer requested changes");
     }, "review-changes");
     b(1300, (c) => {
@@ -256,7 +295,7 @@ Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it n
     b(1600, (c) => {
       turn += 1;
       c.say("implementer", ch.reply, [16_000, 220]);
-      c.bus("post_message", "implementer", "reviewer", "Re: Changes requested", ch.reply, turn);
+      c.bus("message", "implementer", "reviewer", "Re: Changes requested", ch.reply, { exchange: "review", turn });
     });
     b(1400, (c) => c.toolStart("implementer", "rfix", "edit", `Edit ${ch.fix.path}`, ch.fix.path));
     b(1200, (c) => {
@@ -269,15 +308,28 @@ Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it n
       c.reviewRound(2);
       c.sessionState("implementer", "idle");
       turn += 1;
-      c.bus("request_review", "implementer", "reviewer", `Re-review ${c.branch}`, "Feedback addressed, checks green.", turn);
+      c.bus("review_request", "implementer", "reviewer", `Re-review: ${c.branch}`, "Feedback addressed, checks green.", {
+        exchange: "review",
+        turn,
+      });
     });
   }
   b(1700, (c) => {
     turn += 1;
     c.say("reviewer", s.review.approve, [21_000, 280]);
-    c.bus("post_message", "reviewer", "implementer", "Approved", s.review.approve, turn);
+    c.bus("message", "reviewer", "implementer", "Approved", s.review.approve, { exchange: "review", turn });
     c.sessionState("reviewer", "ended");
   });
+  if (s.busRefusal === "turn_limit") {
+    b(900, (c) => {
+      turn += 1;
+      c.bus("message", "implementer", "reviewer", "Thanks!", "Thanks for the review.", { exchange: "review", turn });
+    });
+    b(800, (c) => {
+      c.bus("turn_limit", "reviewer", "daemon", "", "", { exchange: "review" });
+      c.system("reviewer", "The exchange reached its turn limit; not replying further.");
+    });
+  }
 
   // ---- pull request -----------------------------------------------------
   b(1200, (c) => {
@@ -295,13 +347,20 @@ Tool call cmd (${cmd.tool}). The agent waits for your answer; denying tells it n
 
   function addQuestion(role: Role) {
     const q = s.question!;
+    let asked = "";
     b(1300, (c) => {
-      c.bus("ask_human", role, "human", "Decision needed", `${q.text}
-
-Options: ${q.options.join(" / ")}`);
+      asked = c.question(role, q.text, q.options, q.context);
       c.activity("Asked you a question over the bus");
     }, "question");
-    b(2600, (c) => c.system(role, `No answer yet; going with the suggested option: ${q.options[0]}.`));
+    // The agent waits for the answer (agentuxd: up to two minutes), then goes on.
+    b(9000, (c) => {
+      if (c.questionTimeout(asked)) {
+        c.system(role, `No answer yet; going with the suggested option: ${q.options[0]}. A later answer arrives as mail.`);
+        return;
+      }
+      const d = c.decision(asked);
+      c.system(role, d.status === "approved" ? `The human answered: ${d.answer ?? ""}` : "The human declined to answer; deciding alone.");
+    });
   }
 }
 

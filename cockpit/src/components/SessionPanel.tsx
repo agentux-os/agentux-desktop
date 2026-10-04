@@ -30,9 +30,11 @@ interface Props {
   terminal: boolean;
   onTerminal: (open: boolean) => void;
   onClose: () => void;
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
   onSend: (sessionId: string, text: string) => void;
+  /** Why the human cannot prompt sessions (the daemon has no `sessions.prompt`); absent when they can. */
+  sendDisabled?: string;
   /** Cancels the run; absent when the client cannot (mock data). */
   onCancel?: () => void;
 }
@@ -130,7 +132,7 @@ export function SessionPanel(props: Props) {
           ) : (
             <EventScroller session={session} {...props} />
           )}
-          <Composer session={session} onSend={props.onSend} />
+          <Composer session={session} onSend={props.onSend} disabledReason={props.sendDisabled} />
         </>
       ) : (
         <div className="empty">
@@ -272,9 +274,17 @@ function TerminalPlaceholder({ session }: { session: Session }) {
   );
 }
 
-function Composer({ session, onSend }: { session: Session; onSend: (sessionId: string, text: string) => void }) {
+function Composer({
+  session,
+  onSend,
+  disabledReason,
+}: {
+  session: Session;
+  onSend: (sessionId: string, text: string) => void;
+  disabledReason?: string;
+}) {
   const [text, setText] = useState("");
-  const ended = session.state === "ended";
+  const ended = session.state === "ended" || !!disabledReason;
   const send = () => {
     const t = text.trim();
     if (!t) return;
@@ -294,7 +304,7 @@ function Composer({ session, onSend }: { session: Session; onSend: (sessionId: s
         value={text}
         disabled={ended}
         placeholder={
-          ended ? "Session ended" : `Message the ${roleLabel(session.role).toLowerCase()} (${harnessInfo(session.vendor, session.harness).label})…`
+          ended ? (disabledReason ?? "Session ended") : `Message the ${roleLabel(session.role).toLowerCase()} (${harnessInfo(session.vendor, session.harness).label})…`
         }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

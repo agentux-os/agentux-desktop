@@ -15,12 +15,46 @@ describe("MockDaemonClient", () => {
     expect(sessions.every((s) => s.usage.usedTokens <= s.usage.contextTokens && s.harness === s.vendor)).toBe(true);
   });
 
-  it("uses the daemon's request kinds, with a session only on permission requests", () => {
-    expect(new Set(requests.map((r) => r.kind))).toEqual(new Set(["plan", "permission", "budget"]));
+  it("uses the daemon's request kinds, with a session only on permission and question requests", () => {
+    expect(new Set(requests.map((r) => r.kind))).toEqual(new Set(["plan", "permission", "budget", "question"]));
     for (const r of requests) {
-      if (r.kind === "permission") expect(state.sessions[r.sessionId!]?.runId).toBe(r.runId);
+      if (r.kind === "permission" || r.kind === "question") expect(state.sessions[r.sessionId!]?.runId).toBe(r.runId);
       else expect(r.sessionId).toBeUndefined();
+      if (r.kind !== "question") expect(r.options).toEqual([]);
     }
+  });
+
+  it("logs the bus like agentuxd: every kind but late answers, exchanges with turns, wakes", () => {
+    const kinds = new Set(state.bus.map((m) => m.kind));
+    for (const k of ["message", "review_request", "handoff", "question", "wake", "turn_limit", "tool_denied", "joined", "left"]) {
+      expect(kinds).toContain(k);
+    }
+    for (const m of state.bus) {
+      expect(state.runs[m.runId]).toBeDefined();
+      if (["message", "review_request", "handoff"].includes(m.kind)) {
+        expect(m.exchange).toBeGreaterThan(0);
+        expect(m.turn).toBeGreaterThan(0);
+        expect(m.tool).toBeDefined();
+      }
+      if (m.kind === "wake") expect(m.from).toEqual({ kind: "daemon" });
+    }
+    const limit = state.bus.find((m) => m.kind === "turn_limit")!;
+    expect(state.bus.some((m) => m.kind === "message" && m.exchange === limit.exchange && m.runId === limit.runId)).toBe(true);
+  });
+
+  it("answers a question over the bus; a question does not pause the run", async () => {
+    const question = requests.find((r) => r.kind === "question" && r.status === "pending")!;
+    expect(question.options.length).toBeGreaterThan(0);
+    expect(client.getState().runs[question.runId].status).not.toBe("failed");
+    await expect(client.approve(question.id)).rejects.toThrow(/answer/);
+    await client.approve(question.id, question.options[1]);
+    const s = client.getState();
+    expect(s.requests[question.id]).toMatchObject({ status: "approved", answer: question.options[1] });
+    const answer = s.bus.find((m) => m.kind === "answer" && m.requestId === question.id)!;
+    expect(answer).toMatchObject({ from: { kind: "human" }, body: question.options[1] });
+    // The agent had stopped waiting during seeding: the answer is also mail.
+    expect(s.bus.some((m) => m.kind === "human_answer" && m.runId === question.runId)).toBe(true);
+    expect(s.runs[question.runId].status).not.toBe("failed");
   });
 
   it("extends the budget on approval and fails the run on a denied plan", async () => {

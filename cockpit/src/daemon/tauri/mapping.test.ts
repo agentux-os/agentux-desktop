@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { CockpitState, Session, SessionEvent } from "../types";
-import type { ApiEvent, ApiRequest, ApiRun, ApiSession, ApiSessionEvent, ApiSnapshot } from "./api";
+import type { BusMessage, BusMessageKind, CockpitState, Session, SessionEvent } from "../types";
+import { BUS_KINDS } from "../types";
+import type { ApiBusMessage, ApiEvent, ApiRequest, ApiRun, ApiSession, ApiSessionEvent, ApiSnapshot } from "./api";
 import {
+  applyBusList,
   applyEvent,
   applyRunHistory,
   applySnapshot,
   harnessToVendor,
+  mapBusEndpoint,
+  mapBusMessage,
+  mergeBus,
   mapProject,
   mapRequest,
   mapRun,
@@ -25,8 +30,23 @@ import recordedOld from "./__fixtures__/fake-agents-run.json";
 // `aux daemon --fake-agents` cannot produce this: its fake executor opens no
 // sessions.
 import recordedAcp from "./__fixtures__/acp-run.json";
+// Recorded from agentuxd on agentux-core fec37d1 (0.2.0, the agent bus): a
+// test like the daemon's own bus tests (in-process fake ACP agents calling
+// the bus with their session tokens, the way `aux bus-stdio` does), served
+// state, `bus.list` and the run's events dumped as raw JSON from the socket.
+// The implementer (codex) asks three questions (answered "sqlite", declined,
+// answered after it stopped waiting -> human_answer), calls a tool bus.allow
+// leaves out (tool_denied), posts to the run channel and the human, then
+// pings the reviewer (claude-code), whose session is started for the queued
+// message; they ping-pong to the turn limit (3), the reviewer hands off, and
+// its review step asks the implementer for a review before the run ends.
+// One change to the daemon for the recording: the ask_human wait was 3 s
+// instead of 2 min, so the late answer did not take two minutes.
+import recordedBus from "./__fixtures__/bus-run.json";
 
 type Fixture = { snapshot: ApiSnapshot; events: ApiEvent[] };
+type BusFixture = Fixture & { bus: ApiBusMessage[] };
+const busFixture = recordedBus as unknown as BusFixture;
 const oldFixture = recordedOld as unknown as Fixture;
 const acpFixture = recordedAcp as unknown as Fixture;
 
@@ -217,11 +237,32 @@ describe("mapRequest", () => {
       stepIndex: 0,
       title: "Approve the plan",
       detail: "1. do it",
+      options: [],
       status: "pending",
       answer: undefined,
       createdAt: 2000,
       resolvedAt: undefined,
     });
+  });
+
+  it("maps a question with its options and answer", () => {
+    const r = mapRequest(
+      apiRequest({
+        kind: "question",
+        sessionId: "s1",
+        options: ["postgres", "sqlite"],
+        status: "approved",
+        answer: "sqlite",
+        resolvedAt: 2500,
+      }),
+    );
+    expect(r).toMatchObject({ kind: "question", sessionId: "s1", options: ["postgres", "sqlite"], status: "approved", answer: "sqlite" });
+  });
+
+  it("gives requests from older daemons no options", () => {
+    const { options: _, ...old } = apiRequest({ kind: "question" });
+    expect(mapRequest(old as ApiRequest).options).toEqual([]);
+    expect(mapRequest(apiRequest({ options: ["a", 3 as unknown as string] })).options).toEqual(["a"]);
   });
 
   it("maps step approvals and cancelled requests", () => {
@@ -261,7 +302,7 @@ describe("mapRequest", () => {
   });
 
   it("treats unknown kinds as step approvals and unknown statuses as resolved", () => {
-    const r = mapRequest(apiRequest({ kind: "question", status: "answered" }));
+    const r = mapRequest(apiRequest({ kind: "escalation", status: "answered" }));
     expect(r.kind).toBe("step");
     expect(r.status).toBe("cancelled");
   });
@@ -463,6 +504,151 @@ describe("applyRunHistory", () => {
   });
 });
 
+function apiBus(over: Partial<ApiBusMessage> = {}): ApiBusMessage {
+  return {
+    id: "b1",
+    runId: "3f9a0c12",
+    projectId: "p1",
+    kind: "message",
+    tool: "post_message",
+    from: { kind: "session", sessionId: "s1", role: "implementer", vendor: "codex" },
+    to: { kind: "session", sessionId: "s2", role: "reviewer", vendor: "claude-code" },
+    subject: "ping",
+    body: "ping",
+    at: 5000,
+    turn: 1,
+    maxTurns: 6,
+    messageId: 1,
+    exchange: 1,
+    inReplyTo: null,
+    questionId: null,
+    requestId: null,
+    deliveredTo: ["s2"],
+    queuedForRole: null,
+    ...over,
+  };
+}
+
+const busEv = (message: ApiBusMessage, seq: number) => ev({ kind: "bus_message", message }, seq);
+
+describe("bus messages", () => {
+  const implementer = { kind: "session" as const, sessionId: "s1", role: "implementer", vendor: "codex" };
+
+  it("maps endpoints: sessions get the vendor of their harness, unknown kinds become the daemon", () => {
+    expect(mapBusEndpoint(implementer)).toEqual({ kind: "session", sessionId: "s1", role: "implementer", harness: "codex", vendor: "codex" });
+    expect(mapBusEndpoint({ kind: "session", sessionId: "s9", role: "qa", vendor: "aider" })).toEqual({
+      kind: "session",
+      sessionId: "s9",
+      role: "qa",
+      harness: "aider",
+      vendor: undefined,
+    });
+    expect(mapBusEndpoint({ kind: "role", role: "reviewer" })).toEqual({ kind: "role", role: "reviewer" });
+    expect(mapBusEndpoint({ kind: "run" })).toEqual({ kind: "run" });
+    expect(mapBusEndpoint({ kind: "human" })).toEqual({ kind: "human" });
+    expect(mapBusEndpoint({ kind: "daemon" })).toEqual({ kind: "daemon" });
+    expect(mapBusEndpoint({ kind: "elsewhere" })).toEqual({ kind: "daemon" });
+  });
+
+  it("maps a routed message field by field", () => {
+    expect(mapBusMessage(apiBus({ inReplyTo: 4, queuedForRole: null }))).toEqual<BusMessage>({
+      id: "b1",
+      runId: "3f9a0c12",
+      projectId: "p1",
+      kind: "message",
+      tool: "post_message",
+      from: { kind: "session", sessionId: "s1", role: "implementer", harness: "codex", vendor: "codex" },
+      to: { kind: "session", sessionId: "s2", role: "reviewer", harness: "claude-code", vendor: "claude-code" },
+      subject: "ping",
+      body: "ping",
+      at: 5000,
+      turn: 1,
+      maxTurns: 6,
+      messageId: 1,
+      exchange: 1,
+      inReplyTo: 4,
+      questionId: undefined,
+      requestId: undefined,
+      deliveredTo: ["s2"],
+      queuedForRole: undefined,
+    });
+  });
+
+  // One wire entry per kind, shaped like agentuxd's (see the recorded fixture).
+  const daemon = { kind: "daemon" as const };
+  const human = { kind: "human" as const };
+  const wire: Record<BusMessageKind, Partial<ApiBusMessage>> = {
+    message: {},
+    review_request: { tool: "request_review", to: { kind: "role", role: "reviewer" }, deliveredTo: [], queuedForRole: "reviewer" },
+    handoff: { tool: "handoff", subject: "Handoff: finish it" },
+    human_answer: { tool: null, from: human, to: implementer, deliveredTo: ["s1"] },
+    question: { tool: "ask_human", to: human, turn: 0, messageId: null, exchange: null, questionId: 2, requestId: "q2", deliveredTo: [] },
+    answer: { tool: "ask_human", from: human, to: implementer, turn: 0, messageId: null, exchange: null, questionId: 2, requestId: "q2", deliveredTo: [] },
+    wake: { tool: null, from: daemon, to: implementer, turn: 0, exchange: null, deliveredTo: [] },
+    turn_limit: { tool: "post_message", to: daemon, turn: 0, messageId: null, deliveredTo: [] },
+    tool_denied: { tool: "get_run_state", to: daemon, turn: 0, messageId: null, exchange: null, deliveredTo: [] },
+    joined: { tool: null, to: { kind: "run" }, turn: 0, messageId: null, exchange: null, deliveredTo: [] },
+    left: { tool: null, to: { kind: "run" }, turn: 0, messageId: null, exchange: null, deliveredTo: [] },
+  };
+
+  it.each(BUS_KINDS.map((k) => [k]))("maps a %s entry and logs it", (kind) => {
+    const m = mapBusMessage(apiBus({ kind, ...wire[kind] }));
+    expect(m.kind).toBe(kind);
+    const s = applyEvent(withSession(), busEv(apiBus({ kind, ...wire[kind] }), 5));
+    expect(s.bus).toEqual([m]);
+  });
+
+  it("unknown kinds become plain messages; entries without an id are ignored", () => {
+    expect(mapBusMessage(apiBus({ kind: "telepathy" })).kind).toBe("message");
+    const base = withSession();
+    expect(applyEvent(base, ev({ kind: "bus_message", message: { kind: "message" } }))).toBe(base);
+  });
+
+  it("adds routed entries, questions and answers to the involved sessions' timelines", () => {
+    let s = withSession();
+    const shown: BusMessageKind[] = [];
+    BUS_KINDS.forEach((kind, i) => {
+      const before = entries(s).length;
+      s = applyEvent(s, busEv(apiBus({ id: `b${i}`, kind, ...wire[kind] }), 10 + i));
+      if (entries(s).length > before) shown.push(kind);
+    });
+    // Wakes, joins/leaves and refusals stay in the bus log only. The review
+    // request reached no mailbox (queued for the role) but s1 sent it.
+    expect(shown).toEqual(["message", "review_request", "handoff", "human_answer", "question", "answer"]);
+    expect(entries(s).every((e) => e.kind === "bus")).toBe(true);
+    // The recipient session gets a placeholder until its snapshot arrives.
+    expect(s.sessions.s2.events.map((e) => (e.kind === "bus" ? e.messageId : ""))).toEqual(["b0", "b2"]);
+  });
+
+  it("merges by id: replays and bus.list never duplicate, the log stays in time order", () => {
+    let s = withSession();
+    s = applyEvent(s, busEv(apiBus({ id: "b2", at: 20 }), 5));
+    s = applyEvent(s, busEv(apiBus({ id: "b2", at: 20 }), 5));
+    expect(s.bus).toHaveLength(1);
+    const same = applyBusList(s, [apiBus({ id: "b2", at: 20 })]);
+    expect(same).toBe(s);
+    s = applyBusList(s, [apiBus({ id: "b1", at: 10 }), apiBus({ id: "b2", at: 20 }), apiBus({ id: "b3", at: 30 })]);
+    expect(s.bus.map((m) => m.id)).toEqual(["b1", "b2", "b3"]);
+    // bus.list fills the log only; timelines come from the events.
+    expect(entries(s).filter((e) => e.kind === "bus")).toHaveLength(1);
+    expect(mergeBus(s.bus, [])).toBe(s.bus);
+  });
+
+  it("rebuilds bus entries of a run's timelines from its history", () => {
+    let s = applyEvent(withSession(), busEv(apiBus({ id: "late", at: 90 }), 12));
+    s = applyRunHistory(s, "3f9a0c12", {
+      head: 11,
+      events: [
+        sev({ kind: "message", from: "user", text: "prompt" }, 5),
+        busEv(apiBus({ id: "b1", at: 60 }), 6),
+        busEv(apiBus({ id: "past head", at: 70 }), 13),
+      ],
+    });
+    expect(entries(s).map((e) => (e.kind === "bus" ? e.messageId : e.kind))).toEqual(["message", "b1"]);
+    expect(s.bus.map((m) => m.id)).toEqual(["b1", "late"]);
+  });
+});
+
 describe("recorded daemon output", () => {
   const sameAsListing = (fixture: Fixture) => {
     const replayed = fixture.events.reduce(applyEvent, emptyState("test"));
@@ -486,6 +672,86 @@ describe("recorded daemon output", () => {
     expect(run.roles.planner).toBe("claude-code");
     const [request] = Object.values(s.requests);
     expect(request).toMatchObject({ kind: "plan", status: "approved", runId: run.id, sessionId: undefined });
+  });
+
+  describe("the agent bus", () => {
+    // The recording holds the run's events only (no project events): replay
+    // them over the listing, as the cockpit does with a run's history.
+    const state = () => applyBusList(busFixture.events.reduce(applyEvent, applySnapshot(emptyState("test"), busFixture.snapshot)), busFixture.bus);
+
+    it("replays the same log the daemon lists, with every entry kind", () => {
+      const replayed = busFixture.events.reduce(applyEvent, emptyState("test"));
+      const listed = applySnapshot(emptyState("test"), busFixture.snapshot);
+      expect(replayed.runs).toEqual(listed.runs);
+      expect(replayed.requests).toEqual(listed.requests);
+      expect(replayed.bus).toEqual(busFixture.bus.map(mapBusMessage));
+      expect(applyBusList(replayed, busFixture.bus)).toBe(replayed);
+      expect(new Set(replayed.bus.map((m) => m.kind))).toEqual(new Set(BUS_KINDS));
+    });
+
+    it("maps the questions: options, answers, a decline and a late answer", () => {
+      const s = state();
+      const questions = Object.values(s.requests)
+        .filter((r) => r.kind === "question")
+        .sort((a, b) => a.createdAt - b.createdAt);
+      const implementer = Object.values(s.sessions).find((x) => x.role === "implementer")!;
+      expect(questions.map((q) => [q.status, q.answer, q.options, q.sessionId])).toEqual([
+        ["approved", "sqlite", ["postgres", "sqlite"], implementer.id],
+        ["denied", undefined, ["yes", "no"], implementer.id],
+        ["approved", "yes, drop it", ["yes", "no"], implementer.id],
+      ]);
+      const answers = s.bus.filter((m) => m.kind === "answer");
+      expect(answers.map((m) => [m.body, m.requestId])).toEqual([
+        ["sqlite", questions[0].id],
+        ["(the human declined to answer)", questions[1].id],
+        ["yes, drop it", questions[2].id],
+      ]);
+      const late = s.bus.find((m) => m.kind === "human_answer")!;
+      expect(late).toMatchObject({ from: { kind: "human" }, to: { kind: "session", sessionId: implementer.id }, deliveredTo: [implementer.id] });
+    });
+
+    it("keeps exchanges, turns and refusals", () => {
+      const s = state();
+      const ping = s.bus.filter((m) => m.kind === "message" && m.exchange === 3);
+      expect(ping.map((m) => [m.body, m.turn, m.maxTurns])).toEqual([
+        ["ping", 1, 3],
+        ["pong", 2, 3],
+        ["pong", 3, 3],
+      ]);
+      expect(ping[0]).toMatchObject({ to: { kind: "role", role: "reviewer" }, queuedForRole: "reviewer", deliveredTo: [] });
+      expect(s.bus.find((m) => m.kind === "turn_limit")).toMatchObject({ exchange: 3, to: { kind: "daemon" } });
+      expect(s.bus.find((m) => m.kind === "tool_denied")).toMatchObject({ tool: "get_run_state" });
+      const wakes = s.bus.filter((m) => m.kind === "wake");
+      expect(wakes.every((w) => w.from.kind === "daemon" && w.messageId != null)).toBe(true);
+      expect(s.bus.filter((m) => m.kind === "joined" || m.kind === "left")).toHaveLength(4);
+    });
+
+    it("puts the conversation in the sessions' timelines", () => {
+      const s = state();
+      const byRole = (role: string) => {
+        const session = Object.values(s.sessions).find((x) => x.role === role)!;
+        return session.events
+          .filter((e) => e.kind === "bus")
+          .map((e) => s.bus.find((m) => m.id === (e as { messageId: string }).messageId)!.kind);
+      };
+      expect(byRole("implementer")).toEqual([
+        "question",
+        "answer",
+        "question",
+        "answer",
+        "question",
+        "message",
+        "message",
+        "message",
+        "message",
+        "message",
+        "handoff",
+        "answer",
+        "human_answer",
+        "review_request",
+      ]);
+      expect(byRole("reviewer")).toEqual(["message", "message", "handoff", "review_request"]);
+    });
   });
 
   describe("the ACP executor", () => {

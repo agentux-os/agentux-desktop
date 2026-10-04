@@ -758,15 +758,17 @@ kbd {
   background: var(--surface-3);
   color: var(--text-muted);
 }
-.bus-tool.tool-request_review {
+.bus-tool.kind-review_request {
   color: var(--info);
   background: color-mix(in srgb, var(--info) 14%, transparent);
 }
-.bus-tool.tool-ask_human {
+.bus-tool.kind-question,
+.bus-tool.kind-answer,
+.bus-tool.kind-human_answer {
   color: var(--attention);
   background: var(--attention-soft);
 }
-.bus-tool.tool-handoff {
+.bus-tool.kind-handoff {
   color: var(--accent);
   background: var(--accent-soft);
 }
@@ -798,6 +800,104 @@ kbd {
   margin-left: auto;
   font: 10.5px var(--font-mono);
   color: var(--text-faint);
+}
+
+.bus-tool.kind-turn_limit,
+.bus-tool.kind-tool_denied {
+  color: var(--attention);
+  background: var(--attention-soft);
+}
+.bus-item.is-warning {
+  border-color: var(--attention-border);
+  background: linear-gradient(var(--attention-soft), var(--attention-soft)), var(--surface);
+}
+.bus-warn-icon {
+  color: var(--attention);
+}
+/* Wakes, joins and leaves: one quiet line. */
+.bus-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  min-width: 0;
+}
+.bus-line-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.bus-line .bus-time {
+  flex: none;
+}
+.bus-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+.bus-group.is-limited {
+  border-color: var(--attention-border);
+}
+.bus-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.bus-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bus-turn.is-limited {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--attention);
+}
+
+/* ---- questions -------------------------------------------------------- */
+.req-question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.req-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.req-option {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+.req-answer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.req-answer-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.req-answer-input:focus {
+  outline: none;
+  border-color: var(--focus);
 }
 
 /* ---- pages (inbox, bus) ----------------------------------------------- */

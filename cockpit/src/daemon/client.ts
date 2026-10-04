@@ -30,15 +30,28 @@ export interface DaemonClient {
    */
   watchRun(runId: string): void;
 
-  /** Approve a pending request (for `budget`: extend the budget and go on). */
+  /**
+   * The UI shows these runs' agent-bus log: load it (`bus.list`) once per run;
+   * live entries follow on the event stream. A no-op for the mock.
+   */
+  watchBus(runIds: string[]): void;
+
+  /**
+   * Approve a pending request (for `budget`: extend the budget and go on).
+   * A `question` needs `answer` (one of its options or free text).
+   */
   approve(requestId: string, answer?: string): Promise<void>;
+  /** Deny or reject; for a `question`, the agent is told the human declined. */
   deny(requestId: string): Promise<void>;
 
   /** Register the project at `projectPath` if needed and start a run on it. */
   startRun(input: StartRunInput): Promise<Run>;
   cancelRun(runId: string): Promise<void>;
 
-  /** Send a prompt from the human into a running session. */
+  /**
+   * Send a prompt from the human into a running session. Needs
+   * `capabilities.sessionsPrompt` on the real daemon.
+   */
   sendPrompt(sessionId: string, text: string): Promise<void>;
 
   /**

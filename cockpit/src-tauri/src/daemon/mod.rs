@@ -305,6 +305,60 @@ pub async fn daemon_deny(
     call(&state, method::REQUESTS_DENY, resolve_params(request_id, answer)).await
 }
 
+/// A run's agent bus log (`bus.list`), oldest first; `[]` from daemons
+/// before agentux-core 0.2.0.
+#[tauri::command]
+pub async fn daemon_bus_list(
+    state: State<'_, DaemonState>,
+    run_id: String,
+) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(CALL_TIMEOUT, async {
+        Client::connect(socket).await?.list_bus(&run_id).await
+    })
+    .await
+}
+
+/// Optional methods the daemon serves, probed on one connection. The UI keeps
+/// what needs them disabled otherwise.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Capabilities {
+    pub sessions_prompt: bool,
+    pub bus_post: bool,
+}
+
+#[tauri::command]
+pub async fn daemon_capabilities(
+    state: State<'_, DaemonState>,
+) -> Result<Capabilities, CommandError> {
+    let socket = state.socket()?;
+    timed(CALL_TIMEOUT, async {
+        let mut c = Client::connect(socket).await?;
+        Ok(Capabilities {
+            sessions_prompt: c.serves(method::SESSIONS_PROMPT).await?,
+            bus_post: c.serves(method::BUS_POST).await?,
+        })
+    })
+    .await
+}
+
+/// Sends the human's prompt into a session (`sessions.prompt`), on daemons
+/// that serve it (see `daemon_capabilities`).
+#[tauri::command]
+pub async fn daemon_send_prompt(
+    state: State<'_, DaemonState>,
+    session_id: String,
+    text: String,
+) -> Result<Value, CommandError> {
+    call(
+        &state,
+        method::SESSIONS_PROMPT,
+        json!({ "sessionId": session_id, "text": text }),
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn daemon_cancel(
     state: State<'_, DaemonState>,

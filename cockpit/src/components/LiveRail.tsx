@@ -1,4 +1,5 @@
 import type { CockpitState, PermissionRequest } from "../daemon/types";
+import { BUS_SYSTEM_KINDS } from "../daemon/types";
 import { BusItem } from "./BusItem";
 import { Icon } from "./Icon";
 import { RequestCard } from "./RequestCard";
@@ -19,14 +20,18 @@ export function LiveRail({
   now: number;
   projectId: string | null;
   pending: PermissionRequest[];
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
   onOpenRun: (runId: string) => void;
   onInbox: () => void;
   onBus: () => void;
 }) {
   const scoped = pending.filter((r) => projectId === null || r.projectId === projectId);
-  const bus = state.bus.filter((m) => projectId === null || m.projectId === projectId).slice(-12).reverse();
+  // Wakes and joins/leaves are left to the bus page.
+  const bus = state.bus
+    .filter((m) => (projectId === null || m.projectId === projectId) && !BUS_SYSTEM_KINDS.includes(m.kind))
+    .slice(-12)
+    .reverse();
   return (
     <aside className="rail">
       <section className="rail-section">
@@ -46,7 +51,7 @@ export function LiveRail({
             run={state.runs[r.runId]}
             session={r.sessionId ? state.sessions[r.sessionId] : undefined}
             now={now}
-            onApprove={() => onApprove(r.id)}
+            onApprove={(answer) => onApprove(r.id, answer)}
             onDeny={() => onDeny(r.id)}
             onOpen={() => onOpenRun(r.runId)}
           />
