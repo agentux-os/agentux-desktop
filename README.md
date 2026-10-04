@@ -92,7 +92,7 @@ How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kd
 
 The overlay has to land in the image at build time, since `/usr` is read-only on the installed system. Copy only `usr/` and `etc/`; `plasma/check.sh` must not end up in `/`. Two options:
 
-1. **Release tarball (recommended).** The release workflow also attaches `agentux-plasma-<version>.tar.gz`, built with `tar -C plasma -czf … usr etc`, and the Containerfile pins it next to the cockpit RPM:
+1. **Release tarball (recommended).** The release workflow also attaches `agentux-plasma-<version>.tar.gz`, built reproducibly from `plasma/usr` and `plasma/etc` only (paths relative to `/`), plus a `.sha256`. The Containerfile pins it next to the cockpit RPM:
 
    ```dockerfile
    ARG AGENTUX_DESKTOP_VERSION=0.1.0
