@@ -80,7 +80,39 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install check tools
-        run: dnf -y install --setopt=install_weak_deps=False desktop-file-utils nodejs libxml2 findutils grep sed
+        # util-linux: setpriv, so check.sh can run the cockpit autostart wrapper
+        # as a system user and as a regular user.
+        run: dnf -y install --setopt=install_weak_deps=False desktop-file-utils nodejs libxml2 findutils grep sed util-linux
 
       - name: Check plasma overlay
         run: plasma/check.sh
+
+      # The overlay hooks into files and plugin ids of Fedora 44 packages
+      # (plasma-welcome's kded module, Plasma Login's drop-in directory). Fail
+      # if a package update moves them, and make sure no overlay file replaces
+      # a file a Fedora package owns (the image build would silently overwrite it).
+      - name: Check Fedora 44 paths the overlay relies on
+        shell: bash
+        run: |
+          set -euo pipefail
+          owners() { dnf -q repoquery --whatprovides "$1" 2>/dev/null || true; }
+          ok=1
+          for path in \
+              /usr/lib64/qt6/plugins/kf6/kded/kded_plasma_welcome.so \
+              /usr/lib/plasmalogin/plasmalogin.conf.d \
+              /usr/lib/plasmalogin/defaults.conf; do
+            if [ -n "$(owners "$path")" ]; then
+              echo "ok: $path ($(owners "$path" | head -n 1))"
+            else
+              echo "::error::no Fedora 44 package ships $path"; ok=0
+            fi
+          done
+          while IFS= read -r file; do
+            owner=$(owners "/$file" | head -n 1)
+            if [ -n "$owner" ]; then
+              echo "::error::overlay file /$file is owned by $owner"; ok=0
+            else
+              echo "ok: /$file is not owned by a package"
+            fi
+          done < <(cd plasma && find usr etc -type f | sort)
+          [ "$ok" = 1 ]
