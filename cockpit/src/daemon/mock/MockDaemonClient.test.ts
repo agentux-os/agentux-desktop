@@ -71,6 +71,38 @@ describe("MockDaemonClient", () => {
     expect(s.runs[plan.runId]).toMatchObject({ status: "failed" });
   });
 
+  it("records the human's prompt as theirs and routes the human's bus posts", async () => {
+    const live = Object.values(client.getState().runs).find(
+      (r) => (r.status === "running" || r.status === "waiting") && Object.values(r.sessions).some((sid) => client.getState().sessions[sid]?.state !== "ended"),
+    )!;
+    const sid = Object.values(live.sessions).find((id) => client.getState().sessions[id]?.state !== "ended")!;
+    await client.sendPrompt(sid, "Also log every request");
+    const events = client.getState().sessions[sid].events;
+    const said = events[events.length - 1];
+    expect(said).toMatchObject({ kind: "message", from: "human", text: "Also log every request" });
+
+    const posted = await client.postBus({ runId: live.id, to: { kind: "session", sessionId: sid }, body: "Ping", subject: "Hi" });
+    let s = client.getState();
+    const mine = s.bus.find((m) => m.messageId === posted.messageId && m.runId === live.id && m.from.kind === "human")!;
+    expect(mine).toMatchObject({ subject: "Hi", body: "Hi\n\nPing", turn: 1, deliveredTo: [sid], to: { kind: "session", sessionId: sid } });
+    expect(s.sessions[sid].events.some((e) => e.kind === "bus" && e.messageId === mine.id)).toBe(true);
+    expect(s.bus.some((m) => m.kind === "wake" && m.messageId === posted.messageId && m.runId === live.id)).toBe(true);
+
+    // A reply goes to the sender, in its exchange; never back to the human.
+    await expect(client.postBus({ runId: live.id, body: "x", inReplyTo: posted.messageId })).rejects.toThrow(/cannot go to you/);
+    const agent = s.bus.find((m) => m.runId === live.id && m.kind === "message" && m.from.kind === "session" && m.messageId != null)!;
+    const reply = await client.postBus({ runId: live.id, body: "And tests", inReplyTo: agent.messageId });
+    s = client.getState();
+    expect(reply.exchange).toBe(agent.exchange);
+    const sent = s.bus.find((m) => m.messageId === reply.messageId && m.runId === live.id && m.from.kind === "human")!;
+    expect(sent).toMatchObject({ to: agent.from, inReplyTo: agent.messageId });
+    expect(sent.turn).toBeGreaterThan(agent.turn);
+
+    await expect(client.postBus({ runId: live.id, to: { kind: "run" }, body: " " })).rejects.toThrow(/empty/);
+    const done = Object.values(s.runs).find((r) => r.status === "done");
+    if (done) await expect(client.postBus({ runId: done.id, to: { kind: "run" }, body: "x" })).rejects.toThrow(/finished/);
+  });
+
   it("records edits as whole texts and tool calls with ids", () => {
     const events = sessions.flatMap((s) => s.events);
     const diff = events.find((e) => e.kind === "diff");

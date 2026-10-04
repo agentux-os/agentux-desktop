@@ -128,9 +128,13 @@ export type ApiSessionEvent =
   | { kind: "permission"; requestId: string }
   | { kind: "usage"; usage: ApiSessionUsage };
 
-/** `{ kind: "session" | "role" | "run" | "human" | "daemon", ... }`; `vendor` is the harness. */
+/**
+ * `{ kind: "session" | "role" | "run" | "human" | "daemon", ... }`; `vendor`
+ * is the harness. A session endpoint may name only `sessionId` (as `bus.post`
+ * accepts it); the cockpit then takes role and harness from the run's sessions.
+ */
 export type ApiBusEndpoint =
-  | { kind: "session"; sessionId: string; role: string; vendor: string }
+  | { kind: "session"; sessionId: string; role?: string; vendor?: string }
   | { kind: "role"; role: string }
   | { kind: "run" }
   | { kind: "human" }
@@ -189,12 +193,36 @@ export interface ApiSnapshot {
 }
 
 /**
- * What `daemon_run_history` returns: the run's stored events up to `head`
- * (the daemon's newest seq when it was asked), oldest first.
+ * What `daemon_run_history` returns: every stored event of the run up to
+ * `head`, oldest first. Events with a higher seq come on the live stream.
+ * `source`: `runs.events` (paged, then continued with
+ * `events.subscribe { runId, since: headSeq }` up to its `replay_done`), or
+ * `replay` (daemons before agentux-core #9: a replayed subscription).
  */
 export interface ApiRunHistory {
   head: number;
   events: ApiEvent[];
+  source?: "runs.events" | "replay";
+}
+
+/** One page of `runs.events { runId, sinceSeq?, limit? }`. */
+export interface ApiRunEventsPage {
+  events: ApiEvent[];
+  more: boolean;
+  /** Newest seq in the whole log when the page was read. */
+  headSeq: number;
+}
+
+/** `bus.post` target: `role` and `vendor` of a session may be omitted. */
+export type ApiBusTarget = { kind: "session"; sessionId: string } | { kind: "role"; role: string } | { kind: "run" };
+
+/** Result of `bus.post` (`daemon_bus_post`). */
+export interface ApiBusPostResult {
+  messageId: number;
+  exchange: number;
+  turn: number;
+  deliveredTo: string[];
+  queuedForRole: string | null;
 }
 
 /**

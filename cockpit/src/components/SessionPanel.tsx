@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import type { CockpitState, Run, Session } from "../daemon/types";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { BusMessage, BusPostInput, CockpitState, Run, Session } from "../daemon/types";
 import { STEPS } from "../daemon/types";
 import { harnessInfo } from "../daemon/vendors";
+import { groupBus } from "../lib/bus";
 import { formatDuration, formatTokens, formatUsd } from "../lib/format";
 import { STEP_LABEL, roleLabel, runRef } from "../lib/labels";
+import { BusComposer } from "./BusComposer";
+import { BusGroupView } from "./BusFeed";
 import { Icon } from "./Icon";
 import { SessionEvents } from "./SessionEvents";
 import { VendorBadge, vendorStyle } from "./VendorBadge";
@@ -37,6 +40,9 @@ interface Props {
   sendDisabled?: string;
   /** Cancels the run; absent when the client cannot (mock data). */
   onCancel?: () => void;
+  mode: "mock" | "daemon";
+  /** Posts the human's message on the run's bus; resolves true once taken. */
+  onPost: (input: BusPostInput) => Promise<boolean>;
 }
 
 export function SessionPanel(props: Props) {
@@ -44,6 +50,8 @@ export function SessionPanel(props: Props) {
   const sessions = runSessions(run, state);
   const session = sessions.find((s) => s.id === props.sessionId) ?? defaultSession(run, sessions);
   const project = state.projects.find((p) => p.id === run.projectId);
+  const [busTab, setBusTab] = useState(false);
+  const busCount = useMemo(() => state.bus.filter((m) => m.runId === run.id).length, [state.bus, run.id]);
 
   return (
     <aside className="panel" aria-label={`Run ${run.title}`}>
@@ -94,18 +102,31 @@ export function SessionPanel(props: Props) {
           <button
             key={s.id}
             role="tab"
-            aria-selected={s.id === session?.id}
-            className={`tab ${s.id === session?.id ? "is-active" : ""}`}
+            aria-selected={!busTab && s.id === session?.id}
+            className={`tab ${!busTab && s.id === session?.id ? "is-active" : ""}`}
             style={vendorStyle(s.vendor)}
-            onClick={() => props.onSession(s.id)}
+            onClick={() => {
+              setBusTab(false);
+              props.onSession(s.id);
+            }}
           >
             <span className="vmono">{harnessInfo(s.vendor, s.harness).mono}</span>
             {roleLabel(s.role)}
             <span className={`state-dot state-${s.state}`} title={s.state} />
           </button>
         ))}
+        <button
+          role="tab"
+          aria-selected={busTab}
+          className={`tab tab-bus ${busTab ? "is-active" : ""}`}
+          onClick={() => setBusTab(true)}
+          title="The run's agent bus: read it and post to its agents"
+        >
+          <Icon name="bus" size={13} /> Bus
+          {busCount > 0 && <span className="muted">{busCount}</span>}
+        </button>
         <span className="tabs-spacer" />
-        {session && (
+        {session && !busTab && (
           <div className="seg" role="group" aria-label="Session view mode">
             <button className={!terminal ? "is-on" : ""} onClick={() => onTerminal(false)}>
               Structured
@@ -117,7 +138,9 @@ export function SessionPanel(props: Props) {
         )}
       </div>
 
-      {session ? (
+      {busTab ? (
+        <RunBus run={run} state={state} mode={props.mode} onPost={props.onPost} />
+      ) : session ? (
         <>
           <div className="session-bar">
             <VendorBadge vendor={session.vendor} harness={session.harness} />
@@ -147,6 +170,40 @@ export function SessionPanel(props: Props) {
         </div>
       )}
     </aside>
+  );
+}
+
+/** The run's bus log (newest activity first) with the human's composer. */
+function RunBus({
+  run,
+  state,
+  mode,
+  onPost,
+}: {
+  run: Run;
+  state: CockpitState;
+  mode: "mock" | "daemon";
+  onPost: (input: BusPostInput) => Promise<boolean>;
+}) {
+  const [replyTo, setReplyTo] = useState<BusMessage | undefined>();
+  const groups = useMemo(() => groupBus(state.bus.filter((m) => m.runId === run.id)), [state.bus, run.id]);
+  return (
+    <>
+      <div className="scroller run-bus">
+        {groups.map((g) => (
+          <BusGroupView key={g.key} group={g} state={state} onReply={setReplyTo} />
+        ))}
+        {groups.length === 0 && <div className="empty">Nothing on this run&apos;s bus yet.</div>}
+      </div>
+      <BusComposer
+        state={state}
+        mode={mode}
+        runs={[run]}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(undefined)}
+        onPost={onPost}
+      />
+    </>
   );
 }
 

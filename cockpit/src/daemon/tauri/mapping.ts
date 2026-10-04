@@ -44,7 +44,10 @@
  * Session events (`session_event`), folded into `Session.events`:
  *   message                   -> appended; an agent message right after another
  *                                agent message is joined to it (the daemon cuts
- *                                long replies into ~4 KB chunks)
+ *                                long replies into ~4 KB chunks). `from`:
+ *                                user (AgentUX's prompt), agent, system, human
+ *                                (the cockpit user's `sessions.prompt`, shown
+ *                                as their own bubble); unknown values: system
  *   tool_call                 -> the first event for a toolCallId adds an entry;
  *                                later ones update its tool/title/status/output
  *   diff                      -> appended with the whole texts (oldText null ->
@@ -65,7 +68,11 @@
  *   from, to                  -> session endpoints keep sessionId and role;
  *                                their `vendor` (the harness) becomes `harness`
  *                                plus the cockpit vendor; role/run/human/daemon
- *                                same; unknown endpoint kinds become `daemon`
+ *                                same; unknown endpoint kinds become `daemon`.
+ *                                A session endpoint with only `sessionId` gets
+ *                                role and harness from that session (or the
+ *                                run's role -> session map), now or when the
+ *                                session's snapshot arrives
  *   Entries are kept in `state.bus` by id (a replay or a later `bus.list`
  *   replaces, never duplicates), ordered by `at`. Routed entries (all but
  *   wake/joined/left and the refusals) from `bus_message` events are also added
@@ -98,7 +105,7 @@ import type {
   ToolStatus,
   Vendor,
 } from "../types";
-import { BUS_KINDS, BUS_SYSTEM_KINDS, BUS_WARNING_KINDS, VENDORS } from "../types";
+import { BUS_KINDS, BUS_SYSTEM_KINDS, BUS_WARNING_KINDS, MESSAGE_FROM, VENDORS } from "../types";
 import type {
   ApiBusEndpoint,
   ApiBusMessage,
@@ -123,7 +130,6 @@ const SESSION_STATES: readonly SessionState[] = ["active", "idle", "waiting", "e
 const TOOL_KINDS: readonly ToolKind[] = ["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "other"];
 const TOOL_STATUSES: readonly ToolStatus[] = ["running", "ok", "error"];
 const PLAN_STATUSES: readonly PlanItem["status"][] = ["pending", "in_progress", "done"];
-const MESSAGE_FROM = ["user", "agent", "system"] as const;
 
 /** Other names harness configs may use for the cockpit's vendors. */
 const HARNESS_ALIASES: Record<string, Vendor> = {
@@ -223,11 +229,12 @@ export function mapBusEndpoint(ep: ApiBusEndpoint | null | undefined): BusEndpoi
   const str = (v: unknown) => (typeof v === "string" ? v : undefined);
   switch (e.kind) {
     case "session": {
-      const harness = str(e.vendor);
+      // Empty role / absent harness: not named, resolved from the run's sessions.
+      const harness = str(e.vendor) || undefined;
       return {
         kind: "session",
         sessionId: str(e.sessionId) ?? "",
-        role: str(e.role) ?? "agent",
+        role: str(e.role) ?? "",
         harness,
         vendor: harnessToVendor(harness),
       };
@@ -267,6 +274,56 @@ export function mapBusMessage(m: ApiBusMessage): BusMessage {
   };
 }
 
+/** Whether a session endpoint still lacks its role or harness. */
+function unresolved(ep: BusEndpoint): boolean {
+  return ep.kind === "session" && (!ep.role || !ep.harness);
+}
+
+/**
+ * Fills the role, harness and vendor of a session endpoint that named only
+ * its session (`{ kind: "session", sessionId }`), from the session's snapshot,
+ * else from the run's role -> session map and the run's roles. Other
+ * endpoints, and what cannot be found yet, are returned unchanged.
+ */
+export function resolveBusEndpoint(ep: BusEndpoint, runId: string, state: CockpitState): BusEndpoint {
+  if (ep.kind !== "session" || !unresolved(ep)) return ep;
+  const session = state.sessions[ep.sessionId];
+  const run = state.runs[runId] ?? (session ? state.runs[session.runId] : undefined);
+  const mapped = run ? Object.entries(run.sessions).find(([, id]) => id === ep.sessionId)?.[0] : undefined;
+  // A placeholder (no snapshot yet) has no harness and only a guessed role.
+  const known = session && session.harness ? session : undefined;
+  const role = ep.role || known?.role || mapped || "";
+  const harness = ep.harness ?? known?.harness;
+  const vendor = ep.vendor ?? known?.vendor ?? harnessToVendor(harness) ?? (role ? run?.roles[role as Role] : undefined);
+  if (role === ep.role && harness === ep.harness && vendor === ep.vendor) return ep;
+  return { ...ep, role, harness, vendor };
+}
+
+function resolveBusMessage(m: BusMessage, state: CockpitState): BusMessage {
+  const from = resolveBusEndpoint(m.from, m.runId, state);
+  const to = resolveBusEndpoint(m.to, m.runId, state);
+  return from === m.from && to === m.to ? m : { ...m, from, to };
+}
+
+/**
+ * Re-resolves logged endpoints that still miss a role or harness, once the
+ * sessions or runs they name are known (after a snapshot or a session
+ * snapshot). `sessionId` limits it to the entries naming that session.
+ */
+export function refreshBusEndpoints(state: CockpitState, sessionId?: string): CockpitState {
+  const names = (ep: BusEndpoint) =>
+    unresolved(ep) && (sessionId === undefined || (ep.kind === "session" && ep.sessionId === sessionId));
+  if (!state.bus.some((m) => names(m.from) || names(m.to))) return state;
+  let changed = false;
+  const bus = state.bus.map((m) => {
+    if (!names(m.from) && !names(m.to)) return m;
+    const next = resolveBusMessage(m, state);
+    if (next !== m) changed = true;
+    return next;
+  });
+  return changed ? { ...state, bus } : state;
+}
+
 function sameBus(a: BusMessage, b: BusMessage): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -300,7 +357,8 @@ function busSessions(m: BusMessage): string[] {
 }
 
 /** Applies bus entries: the run's log, plus a `bus` entry in each involved session's timeline. */
-export function applyBusMessages(state: CockpitState, messages: BusMessage[], seq?: number): CockpitState {
+export function applyBusMessages(state: CockpitState, incoming: BusMessage[], seq?: number): CockpitState {
+  const messages = incoming.map((m) => resolveBusMessage(m, state));
   const bus = mergeBus(state.bus, messages);
   let sessions = state.sessions;
   for (const m of messages) {
@@ -322,7 +380,8 @@ export function applyBusMessages(state: CockpitState, messages: BusMessage[], se
  * their bus entries from the run's events, in order with everything else.
  */
 export function applyBusList(state: CockpitState, list: ApiBusMessage[]): CockpitState {
-  const bus = mergeBus(state.bus, list.filter((m) => m && typeof m.id === "string").map(mapBusMessage));
+  const messages = list.filter((m) => m && typeof m.id === "string").map((m) => resolveBusMessage(mapBusMessage(m), state));
+  const bus = mergeBus(state.bus, messages);
   return bus === state.bus ? state : { ...state, bus };
 }
 
@@ -447,13 +506,13 @@ function byId<T extends { id: string }>(items: T[]): Record<string, T> {
 
 /** Replaces projects, runs, requests and sessions with a fresh listing from the daemon. */
 export function applySnapshot(state: CockpitState, snap: ApiSnapshot): CockpitState {
-  return {
+  return refreshBusEndpoints({
     ...state,
     projects: snap.projects.map(mapProject),
     runs: byId(snap.runs.map(mapRun)),
     requests: byId(snap.requests.map(mapRequest)),
     sessions: byId((snap.sessions ?? []).map((s) => mapSession(s, state.sessions[s.id]))),
-  };
+  });
 }
 
 /**
@@ -479,7 +538,7 @@ export function applyEvent(state: CockpitState, event: ApiEvent): CockpitState {
     case "session": {
       const api = (event as { session: ApiSession }).session;
       const session = mapSession(api, state.sessions[api.id]);
-      return { ...state, sessions: { ...state.sessions, [session.id]: session } };
+      return refreshBusEndpoints({ ...state, sessions: { ...state.sessions, [session.id]: session } }, session.id);
     }
     case "session_event": {
       const { sessionId, event: ev } = event as { sessionId: string; event: ApiSessionEvent };

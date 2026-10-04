@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::client::{Client, ClientError};
+use super::client::{is_method_not_found, method, Client, ClientError, Notice};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,11 +93,21 @@ fn status(socket: &Path, state: LinkState, detail: String, last_seq: Option<i64>
 /// Runs one connection: subscribe from `last_seq`, forward events until the
 /// daemon closes the stream or an error occurs. `last_seq` is advanced past
 /// every forwarded event, so the next call resumes where this one stopped.
+///
+/// Daemons that mark the end of a replay (`replay_done`, agentux-core #9)
+/// are reported `connected` once the replayed events are forwarded, so the
+/// frontend reloads its snapshot on a live stream. Older daemons are
+/// reported connected right after subscribing. Both kinds are told apart by
+/// `runs.events`, which came with the marker.
 pub async fn follow_once(socket: &Path, last_seq: &mut Option<i64>, sink: &mut impl Sink) -> Ended {
     let failed = |error, connected| Ended::Failed { error, connected };
-    let mut sub = loop {
-        let client = match Client::connect(socket).await {
+    let (mut sub, marks_replay) = loop {
+        let mut client = match Client::connect(socket).await {
             Ok(c) => c,
+            Err(e) => return failed(e, false),
+        };
+        let marks_replay = match client.serves(method::RUNS_EVENTS).await {
+            Ok(yes) => yes,
             Err(e) => return failed(e, false),
         };
         let (head, sub) = match client.subscribe(*last_seq, None).await {
@@ -117,17 +127,33 @@ pub async fn follow_once(socket: &Path, last_seq: &mut Option<i64>, sink: &mut i
             }
             Some(_) => {}
         }
-        break sub;
+        break (sub, marks_replay);
     };
-    sink.status(&status(
-        socket,
-        LinkState::Connected,
-        format!("connected to agentuxd at {}", socket.display()),
-        *last_seq,
-    ));
+    let connected = |last_seq: Option<i64>| {
+        status(
+            socket,
+            LinkState::Connected,
+            format!("connected to agentuxd at {}", socket.display()),
+            last_seq,
+        )
+    };
+    let mut live = !marks_replay;
+    if live {
+        sink.status(&connected(*last_seq));
+    } else {
+        sink.status(&status(
+            socket,
+            LinkState::Connecting,
+            format!(
+                "replaying agentuxd events after seq {}",
+                last_seq.map_or_else(|| "0".to_string(), |s| s.to_string())
+            ),
+            *last_seq,
+        ));
+    }
     loop {
-        match sub.next().await {
-            Ok(Some(event)) => {
+        match sub.next_notice().await {
+            Ok(Some(Notice::Event(event))) => {
                 if let Some(seq) = event.get("seq").and_then(Value::as_i64) {
                     if last_seq.is_some_and(|seen| seq <= seen) {
                         continue; // already forwarded
@@ -135,6 +161,12 @@ pub async fn follow_once(socket: &Path, last_seq: &mut Option<i64>, sink: &mut i
                     *last_seq = Some(seq);
                 }
                 sink.event(event);
+            }
+            Ok(Some(Notice::ReplayDone { .. })) => {
+                if !live {
+                    live = true;
+                    sink.status(&connected(*last_seq));
+                }
             }
             Ok(None) => return Ended::Closed,
             Err(e) => return failed(e, true),
@@ -181,27 +213,103 @@ pub async fn follow(
     }
 }
 
-/// A run's stored events, oldest first, as `{ head, events }`: subscribes to
-/// the run from the start and collects the replayed backlog. `head` is the
-/// daemon's newest seq at subscription time. The daemon does not mark the end
-/// of a replay, so collection stops at the first event past `head` (a live
-/// one), when `head` itself arrives, or once no event came for `idle`
-/// (the backlog is written in one go, so a pause means it is over).
+/// Events per `runs.events` page.
+pub const HISTORY_PAGE: u32 = 1000;
+
+fn seq_of(event: &Value) -> Option<i64> {
+    event.get("seq").and_then(Value::as_i64)
+}
+
+/// A run's stored events, oldest first, as `{ head, events, source }`: every
+/// event of the run up to `head`; live ones after it come on the cockpit's
+/// event stream.
+///
+/// On daemons with `runs.events` (agentux-core #9, `source: "runs.events"`)
+/// the history is read in pages until `more` is false, then continued with
+/// `events.subscribe { runId, since: headSeq }` up to its `replay_done`, so
+/// events stored between the last page and now are included and `head` is
+/// exact. Older daemons answer -32601 and get [`replay_history`].
 pub async fn run_history(
     socket: &Path,
     run_id: &str,
     idle: Duration,
 ) -> Result<Value, ClientError> {
-    let client = Client::connect(socket).await?;
+    let mut client = Client::connect(socket).await?;
+    let first = client.run_events(run_id, None, HISTORY_PAGE).await;
+    if is_method_not_found(&first) {
+        return replay_history(client, run_id, idle).await;
+    }
+    let mut page = first?;
+    let mut events = Vec::new();
+    let head_seq = loop {
+        let batch = page
+            .get("events")
+            .and_then(Value::as_array)
+            .ok_or_else(|| ClientError::Protocol("runs.events returned no events".into()))?;
+        let head = page
+            .get("headSeq")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| ClientError::Protocol("runs.events returned no headSeq".into()))?;
+        let more = page.get("more").and_then(Value::as_bool).unwrap_or(false);
+        let last = batch.last().and_then(seq_of);
+        events.extend(batch.iter().cloned());
+        if !more {
+            break head;
+        }
+        let Some(last) = last else {
+            return Err(ClientError::Protocol(
+                "runs.events said there is more but sent no event".into(),
+            ));
+        };
+        page = client.run_events(run_id, Some(last), HISTORY_PAGE).await?;
+    };
+
+    let (_, mut sub) = client.subscribe(Some(head_seq), Some(run_id)).await?;
+    let head = loop {
+        match sub.next_notice().await? {
+            Some(Notice::Event(event)) => {
+                if seq_of(&event).is_some_and(|seq| seq > head_seq) {
+                    events.push(event);
+                }
+            }
+            Some(Notice::ReplayDone { seq }) => break seq.max(head_seq),
+            None => {
+                return Err(ClientError::Protocol(
+                    "the daemon closed the history stream before replay_done".into(),
+                ))
+            }
+        }
+    };
+    Ok(json!({ "head": head, "events": events, "source": "runs.events" }))
+}
+
+/// History from daemons without `runs.events` (`source: "replay"`):
+/// subscribes to the run from the start and collects the replayed backlog.
+/// `head` is the daemon's newest seq at subscription time. A `replay_done`
+/// ends the backlog exactly; daemons that never send one are read until the
+/// first event past `head` (a live one), `head` itself, or a pause of `idle`
+/// (the backlog is written in one go, so a pause means it is over).
+pub async fn replay_history(
+    client: Client,
+    run_id: &str,
+    idle: Duration,
+) -> Result<Value, ClientError> {
     let (head, mut sub) = client.subscribe(Some(0), Some(run_id)).await?;
     let mut events = Vec::new();
     loop {
-        let next = match tokio::time::timeout(idle, sub.next()).await {
+        let next = match tokio::time::timeout(idle, sub.next_notice()).await {
             Err(_) => break,
             Ok(next) => next?,
         };
-        let Some(event) = next else { break };
-        let seq = event.get("seq").and_then(Value::as_i64).unwrap_or(i64::MAX);
+        let event = match next {
+            None => break,
+            Some(Notice::ReplayDone { seq }) => {
+                let head = seq.max(head);
+                return Ok(json!({ "head": head, "events": events, "source": "replay" }));
+            }
+            Some(Notice::Event(event)) => event,
+        };
+        let seq = seq_of(&event).unwrap_or(i64::MAX);
         if seq > head {
             break;
         }
@@ -210,7 +318,7 @@ pub async fn run_history(
             break;
         }
     }
-    Ok(json!({ "head": head, "events": events }))
+    Ok(json!({ "head": head, "events": events, "source": "replay" }))
 }
 
 #[cfg(test)]
@@ -276,6 +384,26 @@ mod socket_tests {
             let mut line = serde_json::to_vec(&value).unwrap();
             line.push(b'\n');
             self.writer.write_all(&line).await.unwrap();
+        }
+
+        /// Answers the `runs.events` probe of a stream or history: a current
+        /// daemon refuses the empty params, an old one does not know it.
+        async fn probe(&mut self, served: bool) {
+            let req = self.request().await;
+            assert_eq!(req["method"], method::RUNS_EVENTS);
+            let (code, message) = if served {
+                (-32602, "missing runId")
+            } else {
+                (-32601, "method not found")
+            };
+            self.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": code, "message": message}}))
+                .await;
+        }
+
+        async fn replay_done(&mut self, seq: i64) {
+            self.send(json!({"jsonrpc": "2.0", "method": method::REPLAY_DONE, "params": {"seq": seq}}))
+                .await;
         }
 
         async fn event(&mut self, seq: i64) {
@@ -432,6 +560,7 @@ mod socket_tests {
             // First connection: no `since`, head is 5; two events, then the
             // daemon goes away.
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             assert_eq!(req["method"], method::EVENTS_SUBSCRIBE);
             assert_eq!(req["params"], json!({}));
@@ -444,6 +573,7 @@ mod socket_tests {
             // Reconnect: must resume after 7. Replay includes a duplicate (7)
             // that must not be forwarded twice.
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             assert_eq!(req["params"], json!({"since": 7}));
             conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 8}}))
@@ -505,12 +635,14 @@ mod socket_tests {
         let listener = UnixListener::bind(&path).unwrap();
         let server = tokio::spawn(async move {
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             assert_eq!(req["params"], json!({"since": 40}));
             // A fresh daemon store: head is far behind what the client saw.
             conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 2}}))
                 .await;
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             assert_eq!(req["params"], json!({"since": 2}));
             conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 2}}))
@@ -527,12 +659,13 @@ mod socket_tests {
         server.await.unwrap();
     }
     #[tokio::test]
-    async fn run_history_collects_the_backlog_up_to_head() {
+    async fn run_history_on_old_daemons_collects_the_backlog_up_to_head() {
         let path = temp_socket();
         let listener = UnixListener::bind(&path).unwrap();
         let server = tokio::spawn(async move {
             // Head reached: stops at seq == head.
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             assert_eq!(req["method"], method::EVENTS_SUBSCRIBE);
             assert_eq!(req["params"], json!({"since": 0, "runId": "r1"}));
@@ -543,6 +676,7 @@ mod socket_tests {
 
             // The run's last event is older than head: stops when idle.
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 9}}))
                 .await;
@@ -553,6 +687,7 @@ mod socket_tests {
 
             // A live event past head ends it too.
             let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
             let req = conn.request().await;
             conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 4}}))
                 .await;
@@ -560,14 +695,6 @@ mod socket_tests {
             conn.event(5).await;
         });
 
-        let seqs = |v: &Value| -> Vec<i64> {
-            v["events"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|e| e["seq"].as_i64().unwrap())
-                .collect()
-        };
         let idle = Duration::from_millis(100);
         let h = run_history(&path, "r1", idle).await.unwrap();
         assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(7), vec![3, 7]));
@@ -575,6 +702,231 @@ mod socket_tests {
         assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(9), vec![2]));
         let h = run_history(&path, "r1", idle).await.unwrap();
         assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(4), vec![1]));
+        server.await.unwrap();
+    }
+
+    fn seqs(v: &Value) -> Vec<i64> {
+        v["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["seq"].as_i64().unwrap())
+            .collect()
+    }
+
+    fn log_event(seq: i64) -> Value {
+        json!({"seq": seq, "at": 1, "runId": "r1", "kind": "log", "text": format!("e{seq}")})
+    }
+
+    #[tokio::test]
+    async fn run_history_pages_runs_events_then_continues_to_replay_done() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            // First page: from the start, more to come.
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::RUNS_EVENTS);
+            assert_eq!(req["params"], json!({"runId": "r1", "limit": HISTORY_PAGE}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result":
+                {"events": [log_event(1), log_event(2)], "more": true, "headSeq": 8}}))
+                .await;
+            // Second page: after the last seq of the first; the last one.
+            let req = conn.request().await;
+            assert_eq!(
+                req["params"],
+                json!({"runId": "r1", "limit": HISTORY_PAGE, "sinceSeq": 2})
+            );
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result":
+                {"events": [log_event(5)], "more": false, "headSeq": 9}}))
+                .await;
+            // Continues on the run's stream from headSeq up to the marker; an
+            // event stored meanwhile is part of the history.
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::EVENTS_SUBSCRIBE);
+            assert_eq!(req["params"], json!({"since": 9, "runId": "r1"}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 10}}))
+                .await;
+            conn.event(10).await;
+            conn.replay_done(10).await;
+            // Live after the marker: not history.
+            conn.event(11).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+
+        // `idle` must not matter here: a short one would cut a slow replay.
+        let h = run_history(&path, "r1", Duration::from_millis(1))
+            .await
+            .unwrap();
+        assert_eq!(h["source"], "runs.events");
+        assert_eq!(h["head"], 10);
+        assert_eq!(seqs(&h), [1, 2, 5, 10]);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run_history_refuses_an_empty_page_that_claims_more() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result":
+                {"events": [], "more": true, "headSeq": 3}}))
+                .await;
+            // An unknown run is the daemon's error, passed on.
+            let mut conn = Conn::accept(&listener).await;
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"],
+                "error": {"code": -32001, "message": "no run r9"}}))
+                .await;
+        });
+        match run_history(&path, "r1", Duration::from_millis(50)).await {
+            Err(ClientError::Protocol(m)) => assert!(m.contains("more"), "{m}"),
+            other => panic!("unexpected {other:?}"),
+        }
+        match run_history(&path, "r9", Duration::from_millis(50)).await {
+            Err(ClientError::Rpc { code, .. }) => assert_eq!(code, -32001),
+            other => panic!("unexpected {other:?}"),
+        }
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run_history_on_old_daemons_stops_at_replay_done_when_sent() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            conn.probe(false).await;
+            let req = conn.request().await;
+            assert_eq!(req["params"], json!({"since": 0, "runId": "r1"}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 5}}))
+                .await;
+            conn.event(3).await;
+            conn.event(4).await;
+            conn.replay_done(5).await;
+            // Live after the marker: not history.
+            conn.event(6).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        });
+        // A long idle: only the marker can end this quickly.
+        let started = std::time::Instant::now();
+        let h = run_history(&path, "r1", Duration::from_secs(5)).await.unwrap();
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(h["source"], "replay");
+        assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(5), vec![3, 4]));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run_history_replays_the_recorded_core_pages() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../src/daemon/tauri/__fixtures__/human-run.json"
+        ))
+        .unwrap();
+        let pages = fixture["pages"].as_array().unwrap().clone();
+        let subscribe = fixture["subscribe"].as_array().unwrap().clone();
+        let run_id = pages[0]["params"]["runId"].as_str().unwrap().to_string();
+        let replayed: Vec<Value> = subscribe
+            .iter()
+            .filter(|l| l["method"] == method::EVENT)
+            .map(|l| l["params"].clone())
+            .collect();
+        let done = subscribe
+            .iter()
+            .find(|l| l["method"] == method::REPLAY_DONE)
+            .expect("the recording has the marker")["params"]["seq"]
+            .as_i64()
+            .unwrap();
+
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let rid = run_id.clone();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            for page in &pages {
+                let req = conn.request().await;
+                assert_eq!(req["method"], method::RUNS_EVENTS);
+                assert_eq!(req["params"]["runId"], rid.as_str());
+                assert_eq!(req["params"].get("sinceSeq"), page["params"].get("sinceSeq"));
+                conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": page["result"]}))
+                    .await;
+            }
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::EVENTS_SUBSCRIBE);
+            assert_eq!(req["params"]["since"], done);
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": done}}))
+                .await;
+            conn.replay_done(done).await;
+        });
+        let h = run_history(&path, &run_id, Duration::from_millis(1))
+            .await
+            .unwrap();
+        assert_eq!(h["head"], done);
+        // Paging gives exactly what a full replay of the run gives.
+        assert_eq!(h["events"], Value::Array(replayed));
+        server.await.unwrap();
+    }
+
+    /// Records statuses and events in one sequence, to check their order.
+    #[derive(Default)]
+    struct Journal(Vec<String>);
+
+    impl Sink for Journal {
+        fn status(&mut self, status: &Status) {
+            self.0.push(format!("{:?}", status.state).to_lowercase());
+        }
+        fn event(&mut self, event: Value) {
+            self.0.push(event["seq"].to_string());
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_reports_connected_after_replay_done() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            conn.probe(true).await;
+            let req = conn.request().await;
+            assert_eq!(req["params"], json!({"since": 7}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 9}}))
+                .await;
+            conn.event(8).await;
+            conn.event(9).await;
+            conn.replay_done(9).await;
+            conn.event(10).await;
+        });
+        let mut sink = Journal::default();
+        let mut last_seq = Some(7);
+        let ended = follow_once(&path, &mut last_seq, &mut sink).await;
+        assert!(matches!(ended, Ended::Closed), "{ended:?}");
+        // Replayed events first, then `connected`, then live ones; the marker
+        // itself is not an event.
+        assert_eq!(sink.0, ["connecting", "8", "9", "connected", "10"]);
+        assert_eq!(last_seq, Some(10));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stream_on_a_first_connection_is_live_at_the_marker() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let mut conn = Conn::accept(&listener).await;
+            conn.probe(true).await;
+            let req = conn.request().await;
+            assert_eq!(req["params"], json!({}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 4}}))
+                .await;
+            conn.replay_done(4).await;
+            conn.event(5).await;
+        });
+        let mut sink = Journal::default();
+        let mut last_seq = None;
+        follow_once(&path, &mut last_seq, &mut sink).await;
+        assert_eq!(sink.0, ["connecting", "connected", "5"]);
         server.await.unwrap();
     }
 }

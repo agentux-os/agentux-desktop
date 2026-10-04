@@ -153,8 +153,18 @@ interface EventBase {
  * whose status and output are updated in place; the plan is one entry that
  * each new plan replaces; usage updates go to `Session.usage`, not here.
  */
+/**
+ * Who wrote a session message: `user` is the prompt AgentUX sent (a step's
+ * prompt, a bus wake), `human` is what the person at the cockpit typed into
+ * the session (`sessions.prompt`), `agent` the harness's reply, `system` a
+ * note.
+ */
+export type MessageFrom = "user" | "agent" | "system" | "human";
+
+export const MESSAGE_FROM: readonly MessageFrom[] = ["user", "agent", "system", "human"];
+
 export type SessionEvent =
-  | (EventBase & { kind: "message"; from: "user" | "agent" | "system"; text: string })
+  | (EventBase & { kind: "message"; from: MessageFrom; text: string })
   | (EventBase & {
       kind: "tool_call";
       toolCallId: string;
@@ -250,7 +260,11 @@ export const BUS_SYSTEM_KINDS: readonly BusMessageKind[] = ["wake", "joined", "l
 export const BUS_WARNING_KINDS: readonly BusMessageKind[] = ["turn_limit", "tool_denied"];
 
 export type BusEndpoint =
-  /** One session; `harness` as configured, `vendor` when the cockpit knows it. */
+  /**
+   * One session; `harness` as configured, `vendor` when the cockpit knows it.
+   * `role` is empty while unknown (an endpoint that named only the session,
+   * whose session the cockpit has not seen yet).
+   */
   | { kind: "session"; sessionId: string; role: string; harness?: string; vendor?: Vendor }
   /** Every session playing the role. */
   | { kind: "role"; role: string }
@@ -285,6 +299,34 @@ export interface BusMessage {
   questionId?: number;
   /** The `question` request holding a question. */
   requestId?: string;
+  /** Session ids whose mailbox received the message. */
+  deliveredTo: string[];
+  /** No session played the target role: the message waits for one. */
+  queuedForRole?: string;
+}
+
+/**
+ * Where the human posts on a run's bus (`bus.post`): one session, every
+ * session playing a role (a session is started for a role nobody plays), or
+ * the run's channel (read by every session, wakes nobody).
+ */
+export type BusTarget = { kind: "session"; sessionId: string } | { kind: "role"; role: string } | { kind: "run" };
+
+export interface BusPostInput {
+  runId: string;
+  /** Omitted with `inReplyTo`: the reply goes to that message's sender. */
+  to?: BusTarget;
+  body: string;
+  /** One line; becomes the message's first line. */
+  subject?: string;
+  /** The bus `messageId` this answers (same exchange). */
+  inReplyTo?: number;
+}
+
+export interface BusPostResult {
+  messageId: number;
+  exchange: number;
+  turn: number;
   /** Session ids whose mailbox received the message. */
   deliveredTo: string[];
   /** No session played the target role: the message waits for one. */

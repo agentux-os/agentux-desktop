@@ -1,6 +1,7 @@
 import type { BusEndpoint, BusMessage, Run } from "../daemon/types";
 import { BUS_SYSTEM_KINDS, BUS_WARNING_KINDS } from "../daemon/types";
 import { BUS_KIND_LABEL, roleLabel, runRef } from "../lib/labels";
+import { canReplyTo } from "../lib/busPost";
 import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon } from "./Icon";
@@ -50,6 +51,7 @@ export function BusItem({
   compact,
   inExchange,
   onOpen,
+  onReply,
 }: {
   msg: BusMessage;
   run?: Run;
@@ -57,6 +59,8 @@ export function BusItem({
   /** Shown inside an exchange group: the run link and turn limit are in its header. */
   inExchange?: boolean;
   onOpen?: () => void;
+  /** Answer this message on the bus; absent where the human cannot post. */
+  onReply?: (msg: BusMessage) => void;
 }) {
   if (isSystemEntry(msg)) {
     return (
@@ -94,6 +98,11 @@ export function BusItem({
         {!inExchange && run && (
           <button className="link-btn" onClick={onOpen}>
             {runRef(run)} {compact ? "" : run.title} <span className="muted">· {run.projectId}</span>
+          </button>
+        )}
+        {onReply && canReplyTo(msg) && (
+          <button className="link-btn" onClick={() => onReply(msg)} title="Answer this message on the bus (goes to its sender)">
+            Reply
           </button>
         )}
         <span className="bus-turn" title="Turn within this exchange / max_turns_per_exchange">

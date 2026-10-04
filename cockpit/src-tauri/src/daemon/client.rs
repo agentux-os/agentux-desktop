@@ -28,14 +28,20 @@ pub mod method {
     pub const EVENTS_SUBSCRIBE: &str = "events.subscribe";
     /// A run's agent bus log (agentux-core 0.2.0).
     pub const BUS_LIST: &str = "bus.list";
-    /// The human prompts a session. Not served yet (a pending agentux-core
-    /// change); probed with `Client::serves` before use.
+    /// The human prompts a session (agentux-core #9); probed with
+    /// `Client::serves` before use, older daemons answer -32601.
     pub const SESSIONS_PROMPT: &str = "sessions.prompt";
-    /// The human posts on a run's bus. Not served yet; probed like
+    /// The human posts on a run's bus (agentux-core #9); probed like
     /// `sessions.prompt`.
     pub const BUS_POST: &str = "bus.post";
+    /// A run's stored events in pages (agentux-core #9). Older daemons answer
+    /// -32601; the history then comes from a replayed subscription.
+    pub const RUNS_EVENTS: &str = "runs.events";
     /// Server-to-client notification carrying one event.
     pub const EVENT: &str = "event";
+    /// Server-to-client notification, once per subscription, where the replay
+    /// of stored events ends (agentux-core #9; older daemons never send it).
+    pub const REPLAY_DONE: &str = "replay_done";
 }
 
 #[derive(Debug)]
@@ -86,6 +92,40 @@ fn served(result: &Result<Value, ClientError>) -> Option<bool> {
         Err(ClientError::Rpc { code, .. }) => Some(*code != METHOD_NOT_FOUND),
         Err(_) => None,
     }
+}
+
+/// `runs.events` params: the page after `since_seq` (from the start when
+/// `None`), at most `limit` events.
+fn run_events_params(run_id: &str, since_seq: Option<i64>, limit: u32) -> Value {
+    let mut params = json!({ "runId": run_id, "limit": limit });
+    if let Some(since) = since_seq {
+        params["sinceSeq"] = since.into();
+    }
+    params
+}
+
+/// `bus.post` params. `to` is passed through as the daemon's `BusEndpoint`
+/// (`{kind: "session", sessionId}`, `{kind: "role", role}`, `{kind: "run"}`);
+/// without it, `in_reply_to` answers that message's sender. A blank subject
+/// is left out.
+pub fn bus_post_params(
+    run_id: &str,
+    to: Option<Value>,
+    body: &str,
+    subject: Option<&str>,
+    in_reply_to: Option<i64>,
+) -> Value {
+    let mut params = json!({ "runId": run_id, "body": body });
+    if let Some(to) = to.filter(|t| !t.is_null()) {
+        params["to"] = to;
+    }
+    if let Some(subject) = subject.map(str::trim).filter(|s| !s.is_empty()) {
+        params["subject"] = subject.into();
+    }
+    if let Some(id) = in_reply_to {
+        params["inReplyTo"] = id.into();
+    }
+    params
 }
 
 /// `events.subscribe` params: replay from `since` (else only new events),
@@ -164,15 +204,34 @@ fn parse_response(line: &str, id: u64) -> Option<Result<Value, ClientError>> {
     Some(Ok(value.get("result").cloned().unwrap_or(Value::Null)))
 }
 
-/// Extracts the event from a notification line; `None` for anything else.
-fn parse_event(line: &str) -> Result<Option<Value>, ClientError> {
+/// What a subscription delivers.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Notice {
+    /// One event's params (`{seq, at, runId, kind, ...}`).
+    Event(Value),
+    /// The replay of stored events is over; `seq` is the newest event in the
+    /// log when it was read. Everything after it is live.
+    ReplayDone { seq: i64 },
+}
+
+/// Extracts a subscription notice from a line; `None` for anything else.
+fn parse_notice(line: &str) -> Result<Option<Notice>, ClientError> {
     let mut value: Value = serde_json::from_str(line).map_err(protocol)?;
-    if value.get("method").and_then(Value::as_str) != Some(method::EVENT) {
-        return Ok(None);
-    }
-    match value.get_mut("params").map(Value::take) {
-        Some(params @ Value::Object(_)) => Ok(Some(params)),
-        _ => Err(ClientError::Protocol("event without params".into())),
+    let params = value.get_mut("params").map(Value::take);
+    match value.get("method").and_then(Value::as_str) {
+        Some(method::EVENT) => match params {
+            Some(params @ Value::Object(_)) => Ok(Some(Notice::Event(params))),
+            _ => Err(ClientError::Protocol("event without params".into())),
+        },
+        Some(method::REPLAY_DONE) => {
+            let seq = params
+                .as_ref()
+                .and_then(|p| p.get("seq"))
+                .and_then(Value::as_i64)
+                .ok_or_else(|| ClientError::Protocol("replay_done without seq".into()))?;
+            Ok(Some(Notice::ReplayDone { seq }))
+        }
+        _ => Ok(None),
     }
 }
 
@@ -232,6 +291,19 @@ mod imp {
             }
         }
 
+        /// One page of a run's stored events (`runs.events`):
+        /// `{ events, more, headSeq }`. -32601 from daemons before
+        /// agentux-core #9.
+        pub async fn run_events(
+            &mut self,
+            run_id: &str,
+            since_seq: Option<i64>,
+            limit: u32,
+        ) -> Result<Value, ClientError> {
+            self.call(method::RUNS_EVENTS, run_events_params(run_id, since_seq, limit))
+                .await
+        }
+
         /// Whether the daemon serves `method`, by calling it with empty
         /// params. Only for methods that refuse those (-32602) without side
         /// effects.
@@ -267,15 +339,27 @@ mod imp {
     }
 
     impl Subscription {
-        /// The next event's params (`{seq, at, runId, kind, ...}`), or `None`
-        /// when the daemon closes the connection.
-        pub async fn next(&mut self) -> Result<Option<Value>, ClientError> {
+        /// The next event or replay marker, or `None` when the daemon closes
+        /// the connection.
+        pub async fn next_notice(&mut self) -> Result<Option<Notice>, ClientError> {
             while let Some(line) = self.client.lines.next_line().await? {
-                if let Some(event) = parse_event(&line)? {
-                    return Ok(Some(event));
+                if let Some(notice) = parse_notice(&line)? {
+                    return Ok(Some(notice));
                 }
             }
             Ok(None)
+        }
+
+        /// The next event's params (`{seq, at, runId, kind, ...}`), skipping
+        /// the replay marker, or `None` when the daemon closes the connection.
+        pub async fn next(&mut self) -> Result<Option<Value>, ClientError> {
+            loop {
+                match self.next_notice().await? {
+                    Some(Notice::Event(event)) => return Ok(Some(event)),
+                    Some(Notice::ReplayDone { .. }) => continue,
+                    None => return Ok(None),
+                }
+            }
         }
     }
 }
@@ -307,6 +391,15 @@ mod imp {
             Err(ClientError::Unavailable(UNSUPPORTED.into()))
         }
 
+        pub async fn run_events(
+            &mut self,
+            _run_id: &str,
+            _since_seq: Option<i64>,
+            _limit: u32,
+        ) -> Result<Value, ClientError> {
+            Err(ClientError::Unavailable(UNSUPPORTED.into()))
+        }
+
         pub async fn subscribe(
             self,
             _since: Option<i64>,
@@ -319,6 +412,10 @@ mod imp {
     pub struct Subscription;
 
     impl Subscription {
+        pub async fn next_notice(&mut self) -> Result<Option<Notice>, ClientError> {
+            Ok(None)
+        }
+
         pub async fn next(&mut self) -> Result<Option<Value>, ClientError> {
             Ok(None)
         }
@@ -326,6 +423,11 @@ mod imp {
 }
 
 pub use imp::{Client, Subscription};
+
+/// Whether `result` is the daemon saying it does not know the method.
+pub fn is_method_not_found<T>(result: &Result<T, ClientError>) -> bool {
+    matches!(result, Err(ClientError::Rpc { code, .. }) if *code == METHOD_NOT_FOUND)
+}
 
 #[cfg(test)]
 mod tests {
@@ -394,12 +496,52 @@ mod tests {
     #[test]
     fn events_keep_unknown_fields() {
         let line = r#"{"jsonrpc":"2.0","method":"event","params":{"seq":9,"kind":"session","session":{"id":"s1"}}}"#;
-        let event = parse_event(line).unwrap().unwrap();
+        let Some(Notice::Event(event)) = parse_notice(line).unwrap() else {
+            panic!("not an event");
+        };
         assert_eq!(event["kind"], "session");
         assert_eq!(event["session"]["id"], "s1");
-        assert!(parse_event(r#"{"jsonrpc":"2.0","method":"other","params":{}}"#)
+        assert!(parse_notice(r#"{"jsonrpc":"2.0","method":"other","params":{}}"#)
             .unwrap()
             .is_none());
-        assert!(parse_event("not json").is_err());
+        assert!(parse_notice("not json").is_err());
+    }
+
+    #[test]
+    fn the_replay_marker_is_a_notice() {
+        let line = r#"{"jsonrpc":"2.0","method":"replay_done","params":{"seq":57}}"#;
+        assert_eq!(
+            parse_notice(line).unwrap(),
+            Some(Notice::ReplayDone { seq: 57 })
+        );
+        assert!(parse_notice(r#"{"jsonrpc":"2.0","method":"replay_done","params":{}}"#).is_err());
+    }
+
+    #[test]
+    fn run_events_params_page_after_a_seq() {
+        assert_eq!(
+            run_events_params("r1", None, 1000),
+            json!({"runId": "r1", "limit": 1000})
+        );
+        assert_eq!(
+            run_events_params("r1", Some(11), 10),
+            json!({"runId": "r1", "limit": 10, "sinceSeq": 11})
+        );
+    }
+
+    #[test]
+    fn bus_post_params_leave_out_what_is_not_given() {
+        assert_eq!(
+            bus_post_params("r1", Some(json!({"kind": "run"})), "hi", Some("  "), None),
+            json!({"runId": "r1", "to": {"kind": "run"}, "body": "hi"})
+        );
+        assert_eq!(
+            bus_post_params("r1", None, "Thanks", Some("Re: plan"), Some(5)),
+            json!({"runId": "r1", "body": "Thanks", "subject": "Re: plan", "inReplyTo": 5})
+        );
+        assert_eq!(
+            bus_post_params("r1", Some(Value::Null), "x", None, Some(2)),
+            json!({"runId": "r1", "body": "x", "inReplyTo": 2})
+        );
     }
 }

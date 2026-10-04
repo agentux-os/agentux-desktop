@@ -1,7 +1,8 @@
 import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
-import type { CockpitState, Run } from "../types";
+import type { BusPostInput, BusPostResult, CockpitState, Run } from "../types";
 import type {
   ApiBusMessage,
+  ApiBusPostResult,
   ApiCapabilities,
   ApiEvent,
   ApiRun,
@@ -74,9 +75,13 @@ export function emptyState(daemon: string): CockpitState {
  *
  * The stream starts at the daemon's head, so session entries from before the
  * cockpit started come from a run's stored events (`daemon_run_history`),
- * loaded once per run when the UI opens it (`watchRun`). Live session events
- * for that run keep being applied meanwhile and are applied again on top of
- * the history; sessions skip events they already folded (by seq).
+ * loaded once per run when the UI opens it (`watchRun`). The backend pages
+ * them with `runs.events` and continues with
+ * `events.subscribe { runId, since: headSeq }` up to its `replay_done`, so the
+ * history is exact up to its `head`; daemons before agentux-core #9 get a
+ * replayed subscription instead. Live session events for that run keep being
+ * applied meanwhile and are applied again on top of the history; sessions
+ * skip events they already folded (by seq).
  *
  * The agent-bus log of a run comes from `bus.list` (`daemon_bus_list`), loaded
  * once per run when the UI shows it (`watchRun`, `watchBus`), and then from
@@ -195,6 +200,30 @@ export class TauriDaemonClient implements DaemonClient {
       throw new Error("this agentuxd does not accept prompts into sessions (no sessions.prompt)");
     }
     await this.transport.invoke("daemon_send_prompt", { sessionId, text });
+  }
+
+  async postBus(input: BusPostInput): Promise<BusPostResult> {
+    if (!this.state.capabilities?.busPost) {
+      throw new Error("this agentuxd does not take posts on the bus (no bus.post)");
+    }
+    const body = input.body.trim();
+    if (!body) throw new Error("the message is empty");
+    if (!input.to && input.inReplyTo == null) throw new Error("choose who gets the message, or reply to one");
+    const r = await this.transport.invoke<ApiBusPostResult>("daemon_bus_post", {
+      runId: input.runId,
+      to: input.to,
+      body,
+      subject: input.subject?.trim() || undefined,
+      inReplyTo: input.inReplyTo,
+    });
+    // The entry itself follows on the stream as a `bus_message` event.
+    return {
+      messageId: r.messageId,
+      exchange: r.exchange,
+      turn: r.turn,
+      deliveredTo: Array.isArray(r.deliveredTo) ? r.deliveredTo : [],
+      queuedForRole: r.queuedForRole ?? undefined,
+    };
   }
 
   async openTerminal(_sessionId: string): Promise<TerminalHandle | null> {

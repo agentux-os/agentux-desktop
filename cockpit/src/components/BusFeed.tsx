@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import type { CockpitState } from "../daemon/types";
+import type { BusMessage, BusPostInput, CockpitState } from "../daemon/types";
 import { groupBus, matchesBusFilter, type BusFilter, type BusGroup } from "../lib/bus";
+import { isActiveRun } from "../lib/busPost";
 import { runRef } from "../lib/labels";
+import { BusComposer } from "./BusComposer";
 import { BusItem } from "./BusItem";
 import { Icon } from "./Icon";
 
@@ -15,15 +17,29 @@ const FILTERS: { id: BusFilter; label: string }[] = [
 /** Audit log of everything agents said to each other (and to you) over the bus, by exchange. */
 export function BusFeed({
   state,
+  mode,
   projectId,
   onOpenRun,
+  onPost,
 }: {
   state: CockpitState;
+  mode: "mock" | "daemon";
   projectId: string | null;
   onOpenRun: (runId: string) => void;
+  onPost: (input: BusPostInput) => Promise<boolean>;
 }) {
   const [filter, setFilter] = useState<BusFilter>("all");
   const [showSystem, setShowSystem] = useState(true);
+  const [replyTo, setReplyTo] = useState<BusMessage | undefined>();
+  // Runs whose bus is open, newest activity first.
+  const runs = useMemo(
+    () =>
+      Object.values(state.runs)
+        .filter((r) => isActiveRun(r) && (projectId === null || r.projectId === projectId))
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    [state.runs, projectId],
+  );
+  const reply = (m: BusMessage) => setReplyTo(m);
   const groups = useMemo(
     () =>
       groupBus(
@@ -55,9 +71,17 @@ export function BusFeed({
           </button>
         </div>
       </div>
+      <BusComposer
+        state={state}
+        mode={mode}
+        runs={runs}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(undefined)}
+        onPost={onPost}
+      />
       <div className="bus-list">
         {groups.map((g) => (
-          <BusGroupView key={g.key} group={g} state={state} onOpenRun={onOpenRun} />
+          <BusGroupView key={g.key} group={g} state={state} onOpenRun={onOpenRun} onReply={reply} />
         ))}
         {groups.length === 0 && <div className="empty">No messages yet.</div>}
       </div>
@@ -65,19 +89,31 @@ export function BusFeed({
   );
 }
 
-function BusGroupView({ group: g, state, onOpenRun }: { group: BusGroup; state: CockpitState; onOpenRun: (runId: string) => void }) {
+/** One exchange, question or single entry of the log. `onOpenRun` absent: shown inside that run. */
+export function BusGroupView({
+  group: g,
+  state,
+  onOpenRun,
+  onReply,
+}: {
+  group: BusGroup;
+  state: CockpitState;
+  onOpenRun?: (runId: string) => void;
+  onReply?: (m: BusMessage) => void;
+}) {
   const run = state.runs[g.runId];
+  const open = onOpenRun ? () => onOpenRun(g.runId) : undefined;
   if (g.kind === "single") {
     const [m] = g.entries;
-    return <BusItem msg={m} run={run} onOpen={() => onOpenRun(m.runId)} />;
+    return <BusItem msg={m} run={open ? run : undefined} inExchange={!open} onOpen={open} onReply={onReply} />;
   }
   return (
     <section className={`bus-group ${g.limited ? "is-limited" : ""}`}>
       <header className="bus-group-head">
         <Icon name={g.kind === "question" ? "question" : "bus"} size={13} />
         <strong>{g.kind === "question" ? `Question ${g.questionId}` : `Exchange ${g.exchange}`}</strong>
-        {run && (
-          <button className="link-btn" onClick={() => onOpenRun(g.runId)}>
+        {run && open && (
+          <button className="link-btn" onClick={open}>
             {runRef(run)} {run.title}
           </button>
         )}
@@ -89,7 +125,7 @@ function BusGroupView({ group: g, state, onOpenRun }: { group: BusGroup; state: 
       </header>
       <div className="bus-group-body">
         {g.entries.map((m) => (
-          <BusItem key={m.id} msg={m} run={run} inExchange onOpen={() => onOpenRun(m.runId)} />
+          <BusItem key={m.id} msg={m} run={run} inExchange onOpen={open} onReply={onReply} />
         ))}
       </div>
     </section>
