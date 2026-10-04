@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PermissionRequest, Run, Session } from "./daemon/types";
+import type { BusPostInput, BusPostResult, PermissionRequest, Run, Session } from "./daemon/types";
 import { harnessInfo } from "./daemon/vendors";
 import { recentRunIds } from "./lib/bus";
 import { REQUEST_LABEL, runRef } from "./lib/labels";
@@ -121,6 +121,17 @@ export default function App() {
 
   const sendPrompt = (sid: string, text: string) => {
     client.sendPrompt(sid, text).catch((e: unknown) => showToast(`Could not send: ${errorText(e)}`));
+  };
+
+  /** Posts on a run's bus; the entry itself arrives on the event stream. */
+  const postBus = async (input: BusPostInput): Promise<boolean> => {
+    try {
+      showToast(postedLine(await client.postBus(input)));
+      return true;
+    } catch (e: unknown) {
+      showToast(`Could not post: ${errorText(e)}`);
+      return false;
+    }
   };
 
   const startRun = async (input: StartRunInput) => {
@@ -340,7 +351,9 @@ export default function App() {
                 onOpenRun={openRun}
               />
             )}
-            {view === "bus" && <BusFeed state={state} projectId={projectId} onOpenRun={openRun} />}
+            {view === "bus" && (
+              <BusFeed state={state} mode={client.mode} projectId={projectId} onOpenRun={openRun} onPost={postBus} />
+            )}
           </div>
           {run && (
             <SessionPanel
@@ -358,6 +371,8 @@ export default function App() {
               onSend={sendPrompt}
               sendDisabled={sendDisabled}
               onCancel={client.mode === "daemon" ? () => cancelRun(run.id) : undefined}
+              mode={client.mode}
+              onPost={postBus}
             />
           )}
         </div>
@@ -387,6 +402,16 @@ function focusAnswerField() {
     document.querySelector<HTMLInputElement>(".req.is-selected .req-answer-input") ??
     document.querySelector<HTMLInputElement>(".req-answer-input");
   input?.focus();
+}
+
+/** "Posted message 3 (exchange 2): delivered to 1 session" and the like. */
+function postedLine(r: BusPostResult): string {
+  const where = r.queuedForRole
+    ? `queued for the ${r.queuedForRole} role (a session is starting)`
+    : r.deliveredTo.length
+      ? `delivered to ${r.deliveredTo.length} session${r.deliveredTo.length === 1 ? "" : "s"}`
+      : "posted";
+  return `Message ${r.messageId} (exchange ${r.exchange}, turn ${r.turn}): ${where}`;
 }
 
 function errorText(e: unknown): string {

@@ -243,6 +243,43 @@ describe("TauriDaemonClient", () => {
     expect(t.calls.some((c) => c.command === "daemon_send_prompt")).toBe(false);
   });
 
+  it("posts on the bus only once the probe found bus.post", async () => {
+    const t = new FakeTransport();
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: false };
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await tick();
+    await expect(client.postBus({ runId: "r1", to: { kind: "run" }, body: "hi" })).rejects.toThrow(/bus.post/);
+    expect(t.calls.some((c) => c.command === "daemon_bus_post")).toBe(false);
+
+    // A later load (reconnect) probes again and finds it.
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: true };
+    t.results.daemon_bus_post = { messageId: 1, exchange: 1, turn: 1, deliveredTo: [], queuedForRole: "reviewer" };
+    t.status = { ...t.status, state: "disconnected" };
+    t.emit(STATUS_CHANNEL, t.status);
+    t.emit(STATUS_CHANNEL, { ...t.status, state: "connected" });
+    await tick();
+    await tick();
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: true });
+    const posted = await client.postBus({
+      runId: "r1",
+      to: { kind: "role", role: "reviewer" },
+      body: " Look at the error path first. ",
+      subject: "Review focus",
+    });
+    expect(posted).toEqual({ messageId: 1, exchange: 1, turn: 1, deliveredTo: [], queuedForRole: "reviewer" });
+    expect(t.calls[t.calls.length - 1]).toEqual({
+      command: "daemon_bus_post",
+      args: { runId: "r1", to: { kind: "role", role: "reviewer" }, body: "Look at the error path first.", subject: "Review focus", inReplyTo: undefined },
+    });
+    // A reply goes without `to`; an empty body or no target never reaches the daemon.
+    await client.postBus({ runId: "r1", body: "Thanks", inReplyTo: 2 });
+    expect(t.calls[t.calls.length - 1].args).toEqual({ runId: "r1", to: undefined, body: "Thanks", subject: undefined, inReplyTo: 2 });
+    await expect(client.postBus({ runId: "r1", to: { kind: "run" }, body: "  " })).rejects.toThrow(/empty/);
+    await expect(client.postBus({ runId: "r1", body: "x" })).rejects.toThrow(/choose/);
+    expect(t.calls.filter((c) => c.command === "daemon_bus_post")).toHaveLength(2);
+  });
+
   it("answers a question with approve and declines it with deny", async () => {
     const t = new FakeTransport();
     const client = new TauriDaemonClient(t);

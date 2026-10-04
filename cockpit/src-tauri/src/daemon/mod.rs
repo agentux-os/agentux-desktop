@@ -189,7 +189,8 @@ pub fn daemon_status(state: State<'_, DaemonState>) -> Status {
         .unwrap_or_else(|e| e.into_inner().clone())
 }
 
-/// How long `daemon_run_history` waits for more replayed events.
+/// How long `daemon_run_history` waits for more replayed events, only on
+/// daemons without `runs.events` and `replay_done` (before agentux-core #9).
 const HISTORY_IDLE: Duration = Duration::from_millis(400);
 
 /// Projects, runs, all requests and all sessions in one round trip, for the
@@ -212,7 +213,8 @@ pub async fn daemon_snapshot(state: State<'_, DaemonState>) -> Result<Value, Com
     .await
 }
 
-/// A run's stored events (`{ head, events }`), for the session entries that
+/// A run's stored events (`{ head, events, source }`, see
+/// `stream::run_history`), for the session entries and bus traffic that
 /// happened before the cockpit's event stream started.
 #[tauri::command]
 pub async fn daemon_run_history(
@@ -355,6 +357,27 @@ pub async fn daemon_send_prompt(
         &state,
         method::SESSIONS_PROMPT,
         json!({ "sessionId": session_id, "text": text }),
+    )
+    .await
+}
+
+/// Posts the human's message on a run's bus (`bus.post`), on daemons that
+/// serve it (see `daemon_capabilities`). `to` is a daemon `BusEndpoint`
+/// (session, role or run); without it, `in_reply_to` answers that message's
+/// sender. Returns `{ messageId, exchange, turn, deliveredTo, queuedForRole }`.
+#[tauri::command]
+pub async fn daemon_bus_post(
+    state: State<'_, DaemonState>,
+    run_id: String,
+    to: Option<Value>,
+    body: String,
+    subject: Option<String>,
+    in_reply_to: Option<i64>,
+) -> Result<Value, CommandError> {
+    call(
+        &state,
+        method::BUS_POST,
+        client::bus_post_params(&run_id, to, &body, subject.as_deref(), in_reply_to),
     )
     .await
 }

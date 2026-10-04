@@ -88,6 +88,20 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
           </div>
         );
       }
+      if (ev.from === "human") {
+        // What the person at the cockpit typed into the session (sessions.prompt).
+        return (
+          <div className="msg msg-human" aria-label="Your message">
+            <div className="msg-head">
+              <time className="msg-time">{formatClock(ev.at)}</time>
+              <span className="msg-author">
+                You <span className="vmono you">You</span>
+              </span>
+            </div>
+            <div className="msg-text">{renderInline(ev.text)}</div>
+          </div>
+        );
+      }
       return (
         <div className={`msg msg-${ev.from}`}>
           <div className="msg-head">
@@ -98,8 +112,9 @@ const EventView = memo(function EventView({ ev, session, request, bus, now, onAp
                 <span className="muted">{roleLabel(session.role)}</span>
               </span>
             ) : (
-              <span className="msg-author">
-                <span className="vmono you">You</span>
+              <span className="msg-author" title="The prompt AgentUX sent to the session (a step, or a bus wake)">
+                <span className="vmono aux">AUX</span>
+                AgentUX <span className="muted">prompt</span>
               </span>
             )}
             <time className="msg-time">{formatClock(ev.at)}</time>

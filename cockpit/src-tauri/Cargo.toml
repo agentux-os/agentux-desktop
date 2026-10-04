@@ -1,6 +1,6 @@
 [package]
 name = "agentux-cockpit"
-version = "0.2.1"
+version = "0.3.0"
 description = "AgentUX cockpit: one interface over every coding-agent CLI"
 authors = ["AgentUX contributors"]
 license = "Apache-2.0"

@@ -52,9 +52,9 @@ Then click **New run** (or press `N`), enter a directory inside any git reposito
 How the connection behaves:
 
 - At startup the frontend probes the daemon. If it answers, the cockpit uses `TauriDaemonClient`; if not, it shows mock data with a **Mock data** badge and a "agentuxd is not running" banner, and reloads by itself once the daemon is up.
-- The backend keeps one `events.subscribe` stream open and forwards each event to the UI (`daemon://event`). When the daemon stops it reports the disconnect, retries with exponential backoff (0.5 s up to 15 s) and resubscribes from the last `seq` it saw, so nothing is lost while the daemon restarts; the UI reloads the project/run/request lists on every reconnect.
-- Opening a run loads its stored events (session timelines) and its agent-bus log (`bus.list`); the bus page and the board's rail load the log of the most recent runs the same way. Live `bus_message` events keep them current, merged by id. Questions agents ask through `ask_human` land in the approvals inbox: pick a suggested answer (buttons, or `1`–`9`), type one, or decline. See the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
-- Optional daemon methods (`sessions.prompt`, `bus.post`) are probed after each load; the session composer stays disabled on daemons that do not serve `sessions.prompt`.
+- The backend keeps one `events.subscribe` stream open and forwards each event to the UI (`daemon://event`). When the daemon stops it reports the disconnect, retries with exponential backoff (0.5 s up to 15 s) and resubscribes from the last `seq` it saw, so nothing is lost while the daemon restarts. On daemons that mark the end of a replay (`replay_done`, agentux-core #9) the stream reports itself connected once the replayed events are forwarded; the UI reloads the project/run/request lists on every reconnect.
+- Opening a run loads its stored events (session timelines) and its agent-bus log (`bus.list`); the bus page and the board's rail load the log of the most recent runs the same way. The run's history is read with `runs.events` in pages and continued with `events.subscribe { runId, since: headSeq }` up to its `replay_done`; daemons without `runs.events` (-32601) fall back to replaying a subscription, ended by the marker or, on the oldest daemons, by a short pause. Live `bus_message` events keep them current, merged by id. Questions agents ask through `ask_human` land in the approvals inbox: pick a suggested answer (buttons, or `1`–`9`), type one, or decline. See the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
+- Optional daemon methods (`sessions.prompt`, `bus.post`) are probed after each load. The session composer (`sessions.prompt`) puts your message in the session as your own bubble; the bus composer, on the bus page and in a run's **Bus** tab, posts as you (`bus.post`) to a role, one session or the whole run, or answers a message (**Reply**, `inReplyTo`). Each stays disabled, with the reason shown, on daemons that do not serve its method and on finished runs.
 
 ### Layout of the code
 
@@ -99,7 +99,6 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 ### Not there yet
 
 - Terminal mode is a placeholder; the embedded PTY will come from `agentuxd`.
-- Sending prompts into a session and posting on the bus as the human need daemon methods that are not released yet; the cockpit enables prompting only when the daemon serves `sessions.prompt`, and has no UI for posting on the bus yet.
 - The daemon is reached over a Unix socket only, so on Windows the Tauri build always shows mock data.
 - Prices in the mock are illustrative.
 

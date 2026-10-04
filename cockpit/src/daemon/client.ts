@@ -1,4 +1,4 @@
-import type { CockpitState, Run } from "./types";
+import type { BusPostInput, BusPostResult, CockpitState, Run } from "./types";
 import { MockDaemonClient } from "./mock/MockDaemonClient";
 
 /**
@@ -53,6 +53,13 @@ export interface DaemonClient {
    * `capabilities.sessionsPrompt` on the real daemon.
    */
   sendPrompt(sessionId: string, text: string): Promise<void>;
+
+  /**
+   * Post a message from the human on a run's bus: to a session, a role or the
+   * whole run, or as a reply (`inReplyTo`). Needs `capabilities.busPost` on
+   * the real daemon.
+   */
+  postBus(input: BusPostInput): Promise<BusPostResult>;
 
   /**
    * Attach to the harness's own TUI for this session (embedded PTY managed by
