@@ -18,12 +18,14 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const REQUEST_LABEL: Record<RequestKind, string> = {
   plan: "Plan approval",
   step: "Step approval",
-  command: "Run command",
-  edit: "Edit file",
-  network: "Network access",
-  question: "Question",
+  permission: "Permission",
   budget: "Budget exceeded",
 };
+
+/** Label of a pipeline role; custom role names are shown capitalised. */
+export function roleLabel(role: string): string {
+  return (ROLE_LABEL as Record<string, string>)[role] ?? (role ? role[0].toUpperCase() + role.slice(1) : "Agent");
+}
 
 export const BUS_TOOL_LABEL: Record<BusTool, string> = {
   post_message: "message",

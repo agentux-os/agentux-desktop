@@ -8,12 +8,12 @@ interface Props {
   pending: PermissionRequest[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onApprove: (requestId: string, answer?: string) => void;
+  onApprove: (requestId: string) => void;
   onDeny: (requestId: string) => void;
   onOpenRun: (runId: string) => void;
 }
 
-/** Every permission request and question from every agent, in one queue. */
+/** Every approval from every run in one queue: plans, steps, agents' tool calls, budget overruns. */
 export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, onDeny, onOpenRun }: Props) {
   const resolved = Object.values(state.requests)
     .filter((r) => r.status !== "pending")
@@ -24,7 +24,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
     <div className="page">
       <div className="page-intro">
         <p>
-          Permission requests and questions from every agent and vendor land here, oldest first.
+          Plan and step approvals, agents asking before a tool call, and runs over budget land here, oldest first.
           <span className="kbd-hints">
             <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>A</kbd> approve · <kbd>D</kbd> deny · <kbd>Enter</kbd> open run
           </span>
@@ -43,10 +43,11 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
               <RequestCard
                 request={r}
                 run={state.runs[r.runId]}
+                session={r.sessionId ? state.sessions[r.sessionId] : undefined}
                 now={now}
                 selected={r.id === selectedId}
                 showShortcuts={r.id === selectedId}
-                onApprove={(a) => onApprove(r.id, a)}
+                onApprove={() => onApprove(r.id)}
                 onDeny={() => onDeny(r.id)}
                 onOpen={() => onOpenRun(r.runId)}
               />
@@ -63,6 +64,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
                 key={r.id}
                 request={r}
                 run={state.runs[r.runId]}
+                session={r.sessionId ? state.sessions[r.sessionId] : undefined}
                 now={now}
                 onApprove={() => undefined}
                 onDeny={() => undefined}

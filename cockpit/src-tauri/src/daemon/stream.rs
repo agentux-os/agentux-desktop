@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::client::{Client, ClientError};
 
@@ -100,7 +100,7 @@ pub async fn follow_once(socket: &Path, last_seq: &mut Option<i64>, sink: &mut i
             Ok(c) => c,
             Err(e) => return failed(e, false),
         };
-        let (head, sub) = match client.subscribe(*last_seq).await {
+        let (head, sub) = match client.subscribe(*last_seq, None).await {
             Ok(s) => s,
             Err(e) => return failed(e, false),
         };
@@ -179,6 +179,38 @@ pub async fn follow(
         sink.status(&st);
         tokio::time::sleep(delay).await;
     }
+}
+
+/// A run's stored events, oldest first, as `{ head, events }`: subscribes to
+/// the run from the start and collects the replayed backlog. `head` is the
+/// daemon's newest seq at subscription time. The daemon does not mark the end
+/// of a replay, so collection stops at the first event past `head` (a live
+/// one), when `head` itself arrives, or once no event came for `idle`
+/// (the backlog is written in one go, so a pause means it is over).
+pub async fn run_history(
+    socket: &Path,
+    run_id: &str,
+    idle: Duration,
+) -> Result<Value, ClientError> {
+    let client = Client::connect(socket).await?;
+    let (head, mut sub) = client.subscribe(Some(0), Some(run_id)).await?;
+    let mut events = Vec::new();
+    loop {
+        let next = match tokio::time::timeout(idle, sub.next()).await {
+            Err(_) => break,
+            Ok(next) => next?,
+        };
+        let Some(event) = next else { break };
+        let seq = event.get("seq").and_then(Value::as_i64).unwrap_or(i64::MAX);
+        if seq > head {
+            break;
+        }
+        events.push(event);
+        if seq == head {
+            break;
+        }
+    }
+    Ok(json!({ "head": head, "events": events }))
 }
 
 #[cfg(test)]
@@ -418,6 +450,57 @@ mod socket_tests {
         assert!(matches!(ended, Ended::Closed), "{ended:?}");
         assert_eq!(sink.seqs, [3]);
         assert_eq!(last_seq, Some(3));
+        server.await.unwrap();
+    }
+    #[tokio::test]
+    async fn run_history_collects_the_backlog_up_to_head() {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            // Head reached: stops at seq == head.
+            let mut conn = Conn::accept(&listener).await;
+            let req = conn.request().await;
+            assert_eq!(req["method"], method::EVENTS_SUBSCRIBE);
+            assert_eq!(req["params"], json!({"since": 0, "runId": "r1"}));
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 7}}))
+                .await;
+            conn.event(3).await;
+            conn.event(7).await;
+
+            // The run's last event is older than head: stops when idle.
+            let mut conn = Conn::accept(&listener).await;
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 9}}))
+                .await;
+            conn.event(2).await;
+            // Keep the connection open past the idle timeout.
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            drop(conn);
+
+            // A live event past head ends it too.
+            let mut conn = Conn::accept(&listener).await;
+            let req = conn.request().await;
+            conn.send(json!({"jsonrpc": "2.0", "id": req["id"], "result": {"seq": 4}}))
+                .await;
+            conn.event(1).await;
+            conn.event(5).await;
+        });
+
+        let seqs = |v: &Value| -> Vec<i64> {
+            v["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| e["seq"].as_i64().unwrap())
+                .collect()
+        };
+        let idle = Duration::from_millis(100);
+        let h = run_history(&path, "r1", idle).await.unwrap();
+        assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(7), vec![3, 7]));
+        let h = run_history(&path, "r1", idle).await.unwrap();
+        assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(9), vec![2]));
+        let h = run_history(&path, "r1", idle).await.unwrap();
+        assert_eq!((h["head"].as_i64(), seqs(&h)), (Some(4), vec![1]));
         server.await.unwrap();
     }
 }

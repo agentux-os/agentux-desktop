@@ -667,6 +667,35 @@ kbd {
   max-height: 140px;
   overflow: auto;
 }
+.req-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.budget {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.budget-bar {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.budget-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.budget-bar.is-over > i {
+  background: var(--attention);
+}
+.is-over-budget {
+  color: var(--attention);
+}
 .req-detail.is-prose {
   font-family: var(--font-ui);
   font-size: 13px;
@@ -682,8 +711,7 @@ kbd {
   gap: 6px;
   font-size: 12px;
 }
-.req-outcome.is-approved,
-.req-outcome.is-answered {
+.req-outcome.is-approved {
   color: var(--ok);
 }
 .req-outcome.is-denied {

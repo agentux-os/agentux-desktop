@@ -1,5 +1,5 @@
 import type { BusEndpoint, BusMessage, Run } from "../daemon/types";
-import { BUS_TOOL_LABEL, ROLE_LABEL, runRef } from "../lib/labels";
+import { BUS_TOOL_LABEL, roleLabel, runRef } from "../lib/labels";
 import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon } from "./Icon";
@@ -11,7 +11,7 @@ function Endpoint({ ep }: { ep: BusEndpoint }) {
   return (
     <span className="bus-ep">
       <VendorBadge vendor={ep.vendor} compact />
-      {ROLE_LABEL[ep.role]}
+      {roleLabel(ep.role)}
     </span>
   );
 }

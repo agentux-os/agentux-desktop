@@ -171,7 +171,7 @@ export const SCENARIOS: ScenarioSpec[] = [
         },
       ],
       command: {
-        kind: "command",
+        tool: "execute",
         cmd: "cargo add --dev proptest",
         why: "I want a property test for the cap; that needs `proptest` as a dev-dependency.",
         output: "    Updating crates.io index\n      Adding proptest v1.6.0 to dev-dependencies",
@@ -385,7 +385,7 @@ export const SCENARIOS: ScenarioSpec[] = [
         },
       ],
       command: {
-        kind: "command",
+        tool: "execute",
         cmd: "npm install --save-dev @testing-library/user-event",
         why: "The interaction tests need `@testing-library/user-event`, which isn't installed yet.",
         output: "added 1 package, and audited 812 packages in 3s\nfound 0 vulnerabilities",
@@ -428,6 +428,7 @@ export const SCENARIOS: ScenarioSpec[] = [
     slug: "theme-flash",
     prompt: "With dark mode on, a hard reload shows a white page for ~200ms before the theme applies.",
     roles: { planner: "antigravity", implementer: "antigravity", reviewer: "claude-code" },
+    budgetPause: true,
     explore: {
       intro: "Checking when the theme class is applied.",
       search: "data-theme",
@@ -712,7 +713,7 @@ export const SEED: { key: string; until: string | number; minutesAgo: number }[]
   { key: "ledger-idempotency", until: "plan-approval", minutesAgo: 7 },
   { key: "atlas-palette-keys", until: "command-approval", minutesAgo: 12 },
   { key: "tide-s3-retry", until: "gate-fail", minutesAgo: 18 },
-  { key: "atlas-theme-flash", until: "question", minutesAgo: 9 },
+  { key: "atlas-theme-flash", until: "budget", minutesAgo: 9 },
   { key: "ledger-n-plus-one", until: 5, minutesAgo: 2 },
   { key: "tide-schema-drift", until: "gate-start", minutesAgo: 15 },
   { key: "core-bus-turns", until: "end", minutesAgo: 95 },

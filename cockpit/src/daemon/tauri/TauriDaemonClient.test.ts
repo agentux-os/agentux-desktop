@@ -50,7 +50,7 @@ class FakeTransport implements Transport {
     this.calls.push({ command, args });
     if (command === "daemon_status") return this.status as T;
     if (command === "daemon_snapshot") return (await (this.snapshots.shift() ?? { projects: [], runs: [], requests: [] })) as T;
-    if (command in this.results) return this.results[command] as T;
+    if (command in this.results) return (await this.results[command]) as T;
     return null as T;
   }
 
@@ -150,6 +150,42 @@ describe("TauriDaemonClient", () => {
     expect(client.getState().runs.r9.title).toBe("Fix it");
     await expect(client.sendPrompt("s1", "hi")).rejects.toThrow();
     expect(await client.openTerminal("s1")).toBeNull();
+  });
+
+  it("loads sessions with the snapshot and a run's history on watchRun", async () => {
+    const t = new FakeTransport();
+    const session = {
+      id: "s1", runId: "r1", projectId: "p1", role: "implementer", harness: "codex", model: null, state: "active",
+      cwd: "/wt", usage: { usedTokens: 5, contextTokens: 10, costUsd: 0.2 }, startedAt: 1, updatedAt: 1, endedAt: null,
+    };
+    t.snapshots.push({ projects: [], runs: [run("r1", { sessions: { implementer: "s1" }, costUsd: 0.2 })], requests: [], sessions: [session] });
+    const history = deferred<unknown>();
+    t.results.daemon_run_history = history.promise;
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    expect(client.getState().sessions.s1).toMatchObject({ vendor: "codex", usage: { costUsd: 0.2 }, events: [] });
+
+    client.watchRun("r1");
+    client.watchRun("r1");
+    expect(t.calls.filter((c) => c.command === "daemon_run_history")).toEqual([
+      { command: "daemon_run_history", args: { runId: "r1" } },
+    ]);
+    // Live while the history loads: shown now, kept after the history.
+    const live = (seq: number, text: string) =>
+      t.emit(EVENT_CHANNEL, { seq, at: seq, runId: "r1", kind: "session_event", sessionId: "s1", event: { kind: "message", from: "agent", text } });
+    live(9, "live ");
+    expect(client.getState().sessions.s1.events).toHaveLength(1);
+    history.resolve({
+      head: 8,
+      events: [
+        { seq: 3, at: 3, runId: "r1", kind: "session_event", sessionId: "s1", event: { kind: "message", from: "user", text: "go" } },
+        { seq: 9, at: 9, runId: "r1", kind: "session_event", sessionId: "s1", event: { kind: "message", from: "agent", text: "live " } },
+      ],
+    });
+    await tick();
+    live(10, "more");
+    const texts = client.getState().sessions.s1.events.map((e) => (e.kind === "message" ? e.text : e.kind));
+    expect(texts).toEqual(["go", "live more"]);
   });
 
   it("stops listening on disconnect", async () => {

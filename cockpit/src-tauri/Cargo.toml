@@ -1,12 +1,13 @@
 [package]
 name = "agentux-cockpit"
-version = "0.1.0"
+version = "0.2.0"
 description = "AgentUX cockpit: one interface over every coding-agent CLI"
 authors = ["AgentUX contributors"]
 license = "Apache-2.0"
 repository = "https://github.com/agentux-os/agentux-desktop"
 edition = "2021"
-rust-version = "1.85"
+# tauri 2.12 and its crates (tauri-build, tauri-utils, tray-icon, ...) need 1.90.
+rust-version = "1.90"
 
 [lib]
 # The `_lib` suffix keeps the lib name distinct from the bin name (cargo#8519 on Windows).

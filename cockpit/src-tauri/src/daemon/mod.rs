@@ -189,8 +189,12 @@ pub fn daemon_status(state: State<'_, DaemonState>) -> Status {
         .unwrap_or_else(|e| e.into_inner().clone())
 }
 
-/// Projects, runs and all requests in one round trip, for the initial load
-/// and after every reconnect.
+/// How long `daemon_run_history` waits for more replayed events.
+const HISTORY_IDLE: Duration = Duration::from_millis(400);
+
+/// Projects, runs, all requests and all sessions in one round trip, for the
+/// initial load and after every reconnect. Daemons without `sessions.list`
+/// (before agentux-core #6) give no sessions.
 #[tauri::command]
 pub async fn daemon_snapshot(state: State<'_, DaemonState>) -> Result<Value, CommandError> {
     let socket = state.socket()?;
@@ -199,8 +203,27 @@ pub async fn daemon_snapshot(state: State<'_, DaemonState>) -> Result<Value, Com
         let projects = c.call(method::PROJECTS_LIST, Value::Null).await?;
         let runs = c.call(method::RUNS_LIST, json!({})).await?;
         let requests = c.call(method::REQUESTS_LIST, json!({ "pending": false })).await?;
-        Ok(json!({ "projects": projects, "runs": runs, "requests": requests }))
+        let sessions = match c.call(method::SESSIONS_LIST, json!({})).await {
+            Err(ClientError::Rpc { code, .. }) if code == client::METHOD_NOT_FOUND => json!([]),
+            other => other?,
+        };
+        Ok(json!({ "projects": projects, "runs": runs, "requests": requests, "sessions": sessions }))
     })
+    .await
+}
+
+/// A run's stored events (`{ head, events }`), for the session entries that
+/// happened before the cockpit's event stream started.
+#[tauri::command]
+pub async fn daemon_run_history(
+    state: State<'_, DaemonState>,
+    run_id: String,
+) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(
+        CALL_TIMEOUT,
+        stream::run_history(socket, &run_id, HISTORY_IDLE),
+    )
     .await
 }
 

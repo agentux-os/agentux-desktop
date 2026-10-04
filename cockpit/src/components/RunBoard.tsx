@@ -144,7 +144,7 @@ function RunCard({
             round {run.reviewRound}/{run.reviewMaxRounds}
           </span>
         )}
-        {run.usage && <span className="card-cost">{formatUsd(run.usage.costUsd)}</span>}
+        {run.costUsd > 0 && <span className="card-cost">{formatUsd(run.costUsd)}</span>}
       </div>
     </button>
   );
