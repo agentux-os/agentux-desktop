@@ -1,5 +1,5 @@
 import type { BusEndpoint, BusMessage, Run } from "../daemon/types";
-import { BUS_TOOL_LABEL, ROLE_LABEL } from "../lib/labels";
+import { BUS_TOOL_LABEL, ROLE_LABEL, runRef } from "../lib/labels";
 import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon } from "./Icon";
@@ -41,7 +41,7 @@ export function BusItem({
       <footer className="bus-foot">
         {run && (
           <button className="link-btn" onClick={onOpen}>
-            #{run.issue} {compact ? "" : run.title} <span className="muted">· {run.projectId}</span>
+            {runRef(run)} {compact ? "" : run.title} <span className="muted">· {run.projectId}</span>
           </button>
         )}
         <span className="bus-turn" title="Turn within this exchange / max_turns_per_exchange">

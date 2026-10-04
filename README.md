@@ -2,7 +2,7 @@
 
 The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the cockpit app and the desktop configuration shipped with the distribution.
 
-> **Status:** cockpit scaffold running on mock data; `agentuxd` does not exist yet. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
+> **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Sessions, agent bus and spend are still mock-only. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
 
 ## Cockpit
 
@@ -16,7 +16,7 @@ One interface on top of every coding agent CLI (Tauri app, talks only to `agentu
 
 ## Developing the cockpit
 
-The cockpit lives in [`cockpit/`](cockpit): a [Tauri 2](https://v2.tauri.app) app with a React + TypeScript + Vite frontend (ADR 0006). Until `agentuxd` exists, it runs on a mock daemon that plays realistic runs through the pipeline: several projects, sessions from Claude Code, Codex, OpenCode and Antigravity, permission requests, cross-vendor review over the agent bus, and token spend per vendor.
+The cockpit lives in [`cockpit/`](cockpit): a [Tauri 2](https://v2.tauri.app) app with a React + TypeScript + Vite frontend (ADR 0006). Inside the Tauri window it talks to the real `agentuxd`; in a plain browser, or when no daemon is running, it uses a mock daemon that plays realistic runs through the pipeline: several projects, sessions from Claude Code, Codex, OpenCode and Antigravity, permission requests, cross-vendor review over the agent bus, and token spend per vendor.
 
 **Requirements:** Node.js 20+ and npm. For the desktop window you also need Rust (stable) and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) (on Fedora: `webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel`, plus the `C Development Tools and Libraries` group).
 
@@ -27,10 +27,33 @@ npm install
 npm run dev         # browser-only mock mode at http://localhost:1420 (no Rust needed)
 npm run tauri dev   # the same UI in the native Tauri window
 npm run typecheck   # tsc
+npm test            # vitest: daemon adapter and client
 npm run build       # typecheck + production bundle in dist/
 ```
 
-Append `?speed=3` to the dev URL to make the mock runs move faster.
+Append `?speed=3` to the dev URL to make the mock runs move faster, or `?daemon=mock` to force mock data inside Tauri.
+
+### Running against a real daemon
+
+The Tauri backend connects to `agentuxd` over its Unix socket, `$AGENTUX_SOCKET` or else `$XDG_RUNTIME_DIR/agentux/agentuxd.sock` (the same rule `aux` uses). For a demo without real agents, start the daemon with scripted fake agents from an [agentux-core](https://github.com/agentux-os/agentux-core) checkout:
+
+```sh
+# terminal 1: the daemon (fake agents answer every agent step; gates run real commands)
+cd agentux-core
+cargo run -p aux-cli --bin aux -- daemon --fake-agents
+
+# terminal 2: the cockpit window
+cd agentux-desktop/cockpit
+npm run tauri dev
+```
+
+Then click **New run** (or press `N`), enter a directory inside any git repository and a prompt. The run moves across the board, and the plan approval shows up in the approvals inbox (`A` to approve, `D` to deny); the open run's panel has **Cancel run**. `aux ps`, `aux approve <id>` and friends act on the same daemon, and the cockpit follows along.
+
+How the connection behaves:
+
+- At startup the frontend probes the daemon. If it answers, the cockpit uses `TauriDaemonClient`; if not, it shows mock data with a **Mock data** badge and a "agentuxd is not running" banner, and reloads by itself once the daemon is up.
+- The backend keeps one `events.subscribe` stream open and forwards each event to the UI (`daemon://event`). When the daemon stops it reports the disconnect, retries with exponential backoff (0.5 s up to 15 s) and resubscribes from the last `seq` it saw, so nothing is lost while the daemon restarts; the UI reloads the project/run/request lists on every reconnect.
+- The daemon does not report harness sessions, agent-bus messages or token usage yet, so in daemon mode the session view, bus feed and spend stay empty; see the mapping notes in `cockpit/src/daemon/tauri/mapping.ts`.
 
 ### Layout of the code
 
@@ -38,15 +61,16 @@ Append `?speed=3` to the dev URL to make the mock runs move faster.
 |---|---|
 | `cockpit/src/daemon/types.ts` | Domain model: projects, runs, steps, sessions, vendor-neutral session events, permission requests, bus messages, spend |
 | `cockpit/src/daemon/client.ts` | The `DaemonClient` interface the UI depends on, and `createDaemonClient()` |
+| `cockpit/src/daemon/tauri/` | `TauriDaemonClient` (real daemon via the Tauri backend), API wire types, and the API-to-cockpit mapping |
 | `cockpit/src/daemon/mock/` | `MockDaemonClient` plus the scripted scenarios it plays |
 | `cockpit/src/components/` | Run board, session view, approvals inbox, agent bus feed, status bar |
-| `cockpit/src-tauri/` | Minimal Rust shell that hosts the window |
+| `cockpit/src-tauri/` | Rust shell: hosts the window; `src/daemon/` is the socket client, the reconnecting event stream and the `daemon_*` commands |
 
-To plug in the real daemon, implement `DaemonClient` (keeping an immutable `CockpitState` up to date from the daemon's event stream) and return it from `createDaemonClient()`. No component talks to anything else.
+Components only talk to the `DaemonClient` interface; `createDaemonClient()` picks the implementation.
 
 ### Keyboard
 
-`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode, `[`/`]` cycle projects, `?` lists everything.
+`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode, `N` starts a new run (with a daemon), `[`/`]` cycle projects, `?` lists everything.
 
 ### Packaging
 
@@ -66,7 +90,8 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 ### Not there yet
 
 - Terminal mode is a placeholder; the embedded PTY will come from `agentuxd`.
-- Starting runs ("New run") needs the daemon.
+- Sessions, session events, agent bus, sending prompts and spend are not in the daemon API yet; they only exist in mock mode.
+- The daemon is reached over a Unix socket only, so on Windows the Tauri build always shows mock data.
 - Prices in the mock are illustrative.
 
 ## Desktop configuration

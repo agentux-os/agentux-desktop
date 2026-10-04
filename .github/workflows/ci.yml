@@ -34,6 +34,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests (daemon adapter)
+        run: npm test
+
       - name: Build frontend
         run: npx vite build
 
@@ -61,6 +64,10 @@ jobs:
       - name: Cargo check (Tauri shell)
         working-directory: cockpit/src-tauri
         run: cargo check --locked
+
+      - name: Cargo test (daemon socket client)
+        working-directory: cockpit/src-tauri
+        run: cargo test --locked
 
   plasma:
     name: plasma overlay

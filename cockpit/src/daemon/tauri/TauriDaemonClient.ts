@@ -1,0 +1,234 @@
+import type { DaemonClient, StartRunInput, TerminalHandle } from "../client";
+import type { CockpitState, Run, TokenUsage, Vendor } from "../types";
+import { VENDORS } from "../types";
+import type { ApiEvent, ApiRun, ApiSnapshot, CommandError, LinkStatus, Probe } from "./api";
+import { applyEvent, applySnapshot, mapRun } from "./mapping";
+
+/** Tauri event channels emitted by the backend (`src-tauri/src/daemon/mod.rs`). */
+export const EVENT_CHANNEL = "daemon://event";
+export const STATUS_CHANNEL = "daemon://status";
+
+/** The two Tauri primitives the client needs; injectable for tests. */
+export interface Transport {
+  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
+  listen<T>(event: string, handler: (payload: T) => void): Promise<() => void>;
+}
+
+/** The real transport, loaded lazily so the browser build never touches Tauri. */
+export async function tauriTransport(): Promise<Transport> {
+  const [{ invoke }, { listen }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
+  return {
+    invoke: (command, args) => invoke(command, args),
+    listen: (event, handler) => listen(event, (e) => handler(e.payload as never)),
+  };
+}
+
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export async function probeDaemon(transport: Transport): Promise<Probe> {
+  try {
+    return await transport.invoke<Probe>("daemon_probe");
+  } catch (e) {
+    return { reachable: false, socket: null, detail: errorMessage(e) };
+  }
+}
+
+export function errorMessage(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object" && "message" in e) return String((e as CommandError).message);
+  return String(e);
+}
+
+const zeroUsage = (): TokenUsage => ({ input: 0, output: 0, costUsd: 0 });
+
+export function emptyState(daemon: string): CockpitState {
+  return {
+    connection: { status: "connecting", daemon, detail: "Connecting to agentuxd", mock: false },
+    projects: [],
+    runs: {},
+    sessions: {},
+    requests: {},
+    bus: [],
+    spend: Object.fromEntries(VENDORS.map((v) => [v, zeroUsage()])) as Record<Vendor, TokenUsage>,
+  };
+}
+
+/**
+ * DaemonClient backed by the real `agentuxd`, through the Tauri backend.
+ *
+ * State comes from two sources: a snapshot (`daemon_snapshot`: projects, runs
+ * and requests) loaded at start and after every reconnect, and the event
+ * stream the backend forwards. Events that arrive while a snapshot is loading
+ * are buffered and applied after it, in order; since every event carries a
+ * full object, replaying them over a newer snapshot converges to the latest
+ * state. The backend resumes its subscription from the last `seq` after a
+ * reconnect, so no event is lost while the daemon restarts.
+ */
+export class TauriDaemonClient implements DaemonClient {
+  readonly mode = "daemon" as const;
+  private state: CockpitState;
+  private listeners = new Set<() => void>();
+  private unlisten: (() => void)[] = [];
+  /** Bumped by connect/disconnect so late async work from an old connection is dropped. */
+  private generation = 0;
+  private active = false;
+  private buffer: ApiEvent[] | null = null;
+  private loading: Promise<void> | null = null;
+  private reloadAgain = false;
+
+  constructor(
+    private readonly transport: Transport,
+    socket = "agentuxd",
+  ) {
+    this.state = emptyState(socket);
+  }
+
+  // ---- DaemonClient ---------------------------------------------------------
+
+  async connect(): Promise<void> {
+    if (this.active) return;
+    this.active = true;
+    const gen = ++this.generation;
+    const stops = await Promise.all([
+      this.transport.listen<ApiEvent>(EVENT_CHANNEL, (e) => gen === this.generation && this.onEvent(e)),
+      this.transport.listen<LinkStatus>(STATUS_CHANNEL, (s) => gen === this.generation && this.onStatus(s)),
+    ]);
+    if (gen !== this.generation) {
+      stops.forEach((stop) => stop());
+      return;
+    }
+    this.unlisten.push(...stops);
+    try {
+      this.onStatus(await this.transport.invoke<LinkStatus>("daemon_status"));
+    } catch {
+      /* status arrives with the next daemon://status event */
+    }
+    // The startup probe found the daemon reachable: load now rather than
+    // waiting for the event stream to report `connected` (unless the status
+    // above already started a load).
+    await (this.loading ?? this.reload());
+  }
+
+  disconnect(): void {
+    this.generation++;
+    this.active = false;
+    this.unlisten.forEach((stop) => stop());
+    this.unlisten = [];
+    this.buffer = null;
+    this.loading = null;
+    this.reloadAgain = false;
+  }
+
+  getState = (): CockpitState => this.state;
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  async approve(requestId: string, answer?: string): Promise<void> {
+    await this.transport.invoke("daemon_approve", { requestId, answer });
+  }
+
+  async deny(requestId: string): Promise<void> {
+    await this.transport.invoke("daemon_deny", { requestId });
+  }
+
+  async startRun(input: StartRunInput): Promise<Run> {
+    const run = await this.transport.invoke<ApiRun>("daemon_start_run", {
+      path: input.projectPath,
+      prompt: input.prompt,
+      title: input.title,
+    });
+    // The run event follows on the stream; apply the result now so the UI can
+    // open the run immediately.
+    this.update((s) => applyEvent(s, { kind: "run", seq: 0, at: Date.now(), runId: run.id, run }));
+    return mapRun(run);
+  }
+
+  async cancelRun(runId: string): Promise<void> {
+    await this.transport.invoke("daemon_cancel", { runId });
+  }
+
+  async sendPrompt(_sessionId: string, _text: string): Promise<void> {
+    throw new Error("agentuxd does not accept prompts into sessions yet");
+  }
+
+  async openTerminal(_sessionId: string): Promise<TerminalHandle | null> {
+    return null;
+  }
+
+  // ---- internals ------------------------------------------------------------
+
+  private onEvent(event: ApiEvent): void {
+    if (this.buffer) {
+      this.buffer.push(event);
+      return;
+    }
+    this.update((s) => applyEvent(s, event));
+  }
+
+  private onStatus(status: LinkStatus): void {
+    const was = this.state.connection.status;
+    this.update((s) => ({
+      ...s,
+      connection: {
+        ...s.connection,
+        status: status.state,
+        daemon: status.socket ?? s.connection.daemon,
+        detail: status.state === "disconnected" && status.retryInMs != null
+          ? `${status.detail} (retrying in ${Math.round(status.retryInMs / 100) / 10}s)`
+          : status.detail,
+      },
+    }));
+    // After a reconnect, reload: the daemon may have restarted with changes
+    // that happened before the replayed events (or a reset store).
+    if (status.state === "connected" && was !== "connected") void this.reload();
+  }
+
+  /** Loads a snapshot, buffering events meanwhile. Coalesces concurrent calls. */
+  private reload(): Promise<void> {
+    if (this.loading) {
+      this.reloadAgain = true;
+      return this.loading;
+    }
+    const loading: Promise<void> = this.load().finally(() => {
+      if (this.loading === loading) this.loading = null;
+    });
+    this.loading = loading;
+    return loading;
+  }
+
+  private async load(): Promise<void> {
+    const gen = this.generation;
+    this.buffer = [];
+    try {
+      const snap = await this.transport.invoke<ApiSnapshot>("daemon_snapshot");
+      if (gen !== this.generation) return;
+      const buffered = this.buffer ?? [];
+      this.buffer = null;
+      this.update((s) => buffered.reduce(applyEvent, applySnapshot(s, snap)));
+    } catch (e) {
+      if (gen !== this.generation) return;
+      const buffered = this.buffer ?? [];
+      this.buffer = null;
+      this.update((s) => ({
+        ...buffered.reduce(applyEvent, s),
+        connection: { ...s.connection, detail: `Could not load state: ${errorMessage(e)}` },
+      }));
+    }
+    if (this.reloadAgain && gen === this.generation) {
+      this.reloadAgain = false;
+      await this.load();
+    }
+  }
+
+  private update(fn: (s: CockpitState) => CockpitState): void {
+    const next = fn(this.state);
+    if (next === this.state) return;
+    this.state = next;
+    this.listeners.forEach((l) => l());
+  }
+}

@@ -52,14 +52,14 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
 
       <div className="nav-heading">Projects</div>
       <div className="nav-group">
-        {[{ id: null, name: "All projects", language: "" }, ...state.projects].map((p) => {
+        {[{ id: null, name: "All projects", path: "", language: undefined }, ...state.projects].map((p) => {
           const s = projectStats(p.id);
           return (
             <button
               key={p.id ?? "all"}
               className={`nav-item project ${projectId === p.id ? "is-active" : ""}`}
               onClick={() => onProject(p.id)}
-              title={p.id ? `${p.name} · ${p.language}` : "All projects"}
+              title={p.id ? [p.name, p.language, p.path].filter(Boolean).join(" · ") : "All projects"}
             >
               <Icon name={p.id ? "folder" : "board"} />
               <span className="nav-label">{p.name}</span>

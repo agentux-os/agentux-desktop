@@ -1,0 +1,739 @@
+{
+ "snapshot": {
+  "projects": [
+   {
+    "id": "e812e65c",
+    "name": "demo",
+    "path": "/home/dev/src/demo",
+    "createdAt": 1791082377491
+   }
+  ],
+  "runs": [
+   {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "done",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 1,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377520,
+    "finishedAt": 1791082377520,
+    "pullRequest": {
+     "number": 1,
+     "url": "https://forge.invalid/pulls/1"
+    },
+    "activity": "done",
+    "error": null
+   }
+  ],
+  "requests": [
+   {
+    "id": "6de95b75",
+    "kind": "plan",
+    "runId": "a90f9410",
+    "projectId": "e812e65c",
+    "stepIndex": 0,
+    "step": "plan",
+    "title": "Approve the plan for \"Add a health endpoint\"",
+    "detail": "fake plan by planner done",
+    "status": "approved",
+    "answer": null,
+    "createdAt": 1791082377512,
+    "resolvedAt": 1791082377513
+   }
+  ]
+ },
+ "events": [
+  {
+   "seq": 1,
+   "at": 1791082377491,
+   "runId": null,
+   "kind": "project",
+   "project": {
+    "id": "e812e65c",
+    "name": "demo",
+    "path": "/home/dev/src/demo",
+    "createdAt": 1791082377491
+   }
+  },
+  {
+   "seq": 2,
+   "at": 1791082377492,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": null,
+    "worktree": null,
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377492,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "creating the worktree",
+    "error": null
+   }
+  },
+  {
+   "seq": 3,
+   "at": 1791082377510,
+   "runId": "a90f9410",
+   "kind": "log",
+   "text": "worktree /home/dev/src/demo.worktrees/a90f9410 on branch aux/a90f9410"
+  },
+  {
+   "seq": 4,
+   "at": 1791082377510,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377510,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "starting plan",
+    "error": null
+   }
+  },
+  {
+   "seq": 5,
+   "at": 1791082377511,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 1,
+    "runId": "a90f9410",
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "running",
+    "output": null,
+    "startedAt": 1791082377511,
+    "finishedAt": null
+   }
+  },
+  {
+   "seq": 6,
+   "at": 1791082377511,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377511,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "plan: planner (claude-code) is working",
+    "error": null
+   }
+  },
+  {
+   "seq": 7,
+   "at": 1791082377512,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 1,
+    "runId": "a90f9410",
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "succeeded",
+    "output": "fake plan by planner done",
+    "startedAt": 1791082377511,
+    "finishedAt": 1791082377512
+   }
+  },
+  {
+   "seq": 8,
+   "at": 1791082377512,
+   "runId": "a90f9410",
+   "kind": "log",
+   "text": "plan: fake plan by planner done"
+  },
+  {
+   "seq": 9,
+   "at": 1791082377512,
+   "runId": "a90f9410",
+   "kind": "request",
+   "request": {
+    "id": "6de95b75",
+    "kind": "plan",
+    "runId": "a90f9410",
+    "projectId": "e812e65c",
+    "stepIndex": 0,
+    "step": "plan",
+    "title": "Approve the plan for \"Add a health endpoint\"",
+    "detail": "fake plan by planner done",
+    "status": "pending",
+    "answer": null,
+    "createdAt": 1791082377512,
+    "resolvedAt": null
+   }
+  },
+  {
+   "seq": 10,
+   "at": 1791082377512,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 0,
+    "step": "plan",
+    "status": "waiting",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377512,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "waiting for approval (6de95b75)",
+    "error": null
+   }
+  },
+  {
+   "seq": 11,
+   "at": 1791082377513,
+   "runId": "a90f9410",
+   "kind": "request",
+   "request": {
+    "id": "6de95b75",
+    "kind": "plan",
+    "runId": "a90f9410",
+    "projectId": "e812e65c",
+    "stepIndex": 0,
+    "step": "plan",
+    "title": "Approve the plan for \"Add a health endpoint\"",
+    "detail": "fake plan by planner done",
+    "status": "approved",
+    "answer": null,
+    "createdAt": 1791082377512,
+    "resolvedAt": 1791082377513
+   }
+  },
+  {
+   "seq": 12,
+   "at": 1791082377513,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 1,
+    "step": "implement",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377513,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "starting implement",
+    "error": null
+   }
+  },
+  {
+   "seq": 13,
+   "at": 1791082377514,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 2,
+    "runId": "a90f9410",
+    "stepIndex": 1,
+    "step": "implement",
+    "status": "running",
+    "output": null,
+    "startedAt": 1791082377514,
+    "finishedAt": null
+   }
+  },
+  {
+   "seq": 14,
+   "at": 1791082377514,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 1,
+    "step": "implement",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377514,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "implement: implementer (claude-code) is working",
+    "error": null
+   }
+  },
+  {
+   "seq": 15,
+   "at": 1791082377515,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 2,
+    "runId": "a90f9410",
+    "stepIndex": 1,
+    "step": "implement",
+    "status": "succeeded",
+    "output": "fake implement by implementer done",
+    "startedAt": 1791082377514,
+    "finishedAt": 1791082377515
+   }
+  },
+  {
+   "seq": 16,
+   "at": 1791082377515,
+   "runId": "a90f9410",
+   "kind": "log",
+   "text": "implement: fake implement by implementer done"
+  },
+  {
+   "seq": 17,
+   "at": 1791082377515,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 2,
+    "step": "review",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377515,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "starting review",
+    "error": null
+   }
+  },
+  {
+   "seq": 18,
+   "at": 1791082377516,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 3,
+    "runId": "a90f9410",
+    "stepIndex": 2,
+    "step": "review",
+    "status": "running",
+    "output": null,
+    "startedAt": 1791082377516,
+    "finishedAt": null
+   }
+  },
+  {
+   "seq": 19,
+   "at": 1791082377516,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 2,
+    "step": "review",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 0,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377516,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "review: reviewer (codex) is working",
+    "error": null
+   }
+  },
+  {
+   "seq": 20,
+   "at": 1791082377517,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 3,
+    "runId": "a90f9410",
+    "stepIndex": 2,
+    "step": "review",
+    "status": "succeeded",
+    "output": "fake review by reviewer done",
+    "startedAt": 1791082377516,
+    "finishedAt": 1791082377517
+   }
+  },
+  {
+   "seq": 21,
+   "at": 1791082377517,
+   "runId": "a90f9410",
+   "kind": "log",
+   "text": "review: fake review by reviewer done"
+  },
+  {
+   "seq": 22,
+   "at": 1791082377517,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 1,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377517,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "starting pull_request",
+    "error": null
+   }
+  },
+  {
+   "seq": 23,
+   "at": 1791082377518,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 4,
+    "runId": "a90f9410",
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "running",
+    "output": null,
+    "startedAt": 1791082377518,
+    "finishedAt": null
+   }
+  },
+  {
+   "seq": 24,
+   "at": 1791082377519,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "running",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 1,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377518,
+    "finishedAt": null,
+    "pullRequest": null,
+    "activity": "opening the pull request",
+    "error": null
+   }
+  },
+  {
+   "seq": 25,
+   "at": 1791082377520,
+   "runId": "a90f9410",
+   "kind": "attempt",
+   "attempt": {
+    "id": 4,
+    "runId": "a90f9410",
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "succeeded",
+    "output": "https://forge.invalid/pulls/1",
+    "startedAt": 1791082377518,
+    "finishedAt": 1791082377520
+   }
+  },
+  {
+   "seq": 26,
+   "at": 1791082377520,
+   "runId": "a90f9410",
+   "kind": "log",
+   "text": "pull request #1 https://forge.invalid/pulls/1"
+  },
+  {
+   "seq": 27,
+   "at": 1791082377520,
+   "runId": "a90f9410",
+   "kind": "run",
+   "run": {
+    "id": "a90f9410",
+    "projectId": "e812e65c",
+    "title": "Add a health endpoint",
+    "prompt": "Add a health endpoint\n\nDetails here",
+    "issue": null,
+    "branch": "aux/a90f9410",
+    "worktree": "/home/dev/src/demo.worktrees/a90f9410",
+    "steps": [
+     "plan",
+     "implement",
+     "review",
+     "pull_request"
+    ],
+    "stepIndex": 3,
+    "step": "pull_request",
+    "status": "done",
+    "roles": {
+     "implementer": "claude-code",
+     "planner": "claude-code",
+     "reviewer": "codex"
+    },
+    "checks": [],
+    "gateAttempt": 0,
+    "gateMaxAttempts": 0,
+    "reviewRound": 1,
+    "reviewMaxRounds": 2,
+    "budgetUsd": 10.0,
+    "startedAt": 1791082377492,
+    "updatedAt": 1791082377520,
+    "finishedAt": 1791082377520,
+    "pullRequest": {
+     "number": 1,
+     "url": "https://forge.invalid/pulls/1"
+    },
+    "activity": "done",
+    "error": null
+   }
+  }
+ ]
+}

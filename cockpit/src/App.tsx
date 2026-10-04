@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PermissionRequest } from "./daemon/types";
+import type { PermissionRequest, Run } from "./daemon/types";
 import { VENDOR_INFO } from "./daemon/vendors";
-import { REQUEST_LABEL } from "./lib/labels";
+import { REQUEST_LABEL, runRef } from "./lib/labels";
 import { useNow } from "./lib/useNow";
 import { useCockpit, useDaemon } from "./state/daemon";
+import type { StartRunInput } from "./daemon/client";
 import { BusFeed } from "./components/BusFeed";
+import { DaemonBanner } from "./components/DaemonBanner";
 import { Icon } from "./components/Icon";
 import { Inbox } from "./components/Inbox";
 import { LiveRail } from "./components/LiveRail";
+import { NewRunDialog } from "./components/NewRunDialog";
 import { RunBoard } from "./components/RunBoard";
 import { SessionPanel } from "./components/SessionPanel";
 import { Sidebar, type View } from "./components/Sidebar";
@@ -37,6 +40,7 @@ export default function App() {
   const [terminal, setTerminal] = useState(false);
   const [inboxSel, setInboxSel] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [newRun, setNewRun] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -73,7 +77,7 @@ export default function App() {
     (requestId: string, answer?: string) => {
       const r = state.requests[requestId];
       void client.approve(requestId, answer);
-      if (r) showToast(`${r.kind === "question" ? "Answered" : "Approved"}: ${REQUEST_LABEL[r.kind]} · ${VENDOR_INFO[r.vendor].label} on #${state.runs[r.runId]?.issue}`);
+      if (r) showToast(`${r.kind === "question" ? "Answered" : "Approved"}: ${requestLine(r, state.runs[r.runId])}`);
     },
     [client, state, showToast],
   );
@@ -82,10 +86,28 @@ export default function App() {
     (requestId: string) => {
       const r = state.requests[requestId];
       void client.deny(requestId);
-      if (r) showToast(`Denied: ${REQUEST_LABEL[r.kind]} · ${VENDOR_INFO[r.vendor].label}`);
+      if (r) showToast(`Denied: ${requestLine(r, state.runs[r.runId])}`);
     },
     [client, state, showToast],
   );
+
+  const canStartRuns = client.mode === "daemon" && state.connection.status === "connected";
+
+  const startRun = async (input: StartRunInput) => {
+    const started = await client.startRun(input);
+    setNewRun(false);
+    setView("board");
+    setProjectId(started.projectId);
+    openRun(started.id);
+    showToast(`Started run ${started.id}: ${started.title}`);
+  };
+
+  const cancelRun = (id: string) => {
+    client.cancelRun(id).then(
+      () => showToast(`Cancelled run ${id}`),
+      (e: unknown) => showToast(`Could not cancel: ${errorText(e)}`),
+    );
+  };
 
   /** The request keyboard shortcuts act on, depending on where the user is. */
   const focusedRequest = (): PermissionRequest | undefined => {
@@ -112,6 +134,7 @@ export default function App() {
     const target = e.target as HTMLElement;
     if (target.closest("input, textarea, select, [contenteditable]")) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (newRun) return;
     const key = e.key.toLowerCase();
     const focused = focusedRequest();
     switch (key) {
@@ -160,6 +183,10 @@ export default function App() {
         break;
       case "t":
         if (run) setTerminal((t) => !t);
+        break;
+      case "n":
+        if (!canStartRuns) return;
+        setNewRun(true);
         break;
       case "[":
       case "]": {
@@ -215,10 +242,22 @@ export default function App() {
               <Icon name="inbox" size={14} /> {pending.length} waiting for you
             </button>
           )}
-          <button className="btn" disabled title="Starting runs needs agentuxd (not in mock mode)">
+          <button
+            className="btn"
+            disabled={!canStartRuns}
+            onClick={() => setNewRun(true)}
+            title={
+              client.mode === "mock"
+                ? "Starting runs needs agentuxd (the cockpit is showing mock data)"
+                : canStartRuns
+                  ? "Start a run (N)"
+                  : "Waiting for agentuxd"
+            }
+          >
             <Icon name="plus" size={14} /> New run
           </button>
         </header>
+        {state.connection.fallbackReason && <DaemonBanner reason={state.connection.fallbackReason} />}
         <div className={`content ${panelOpen ? "has-panel" : ""}`}>
           <div className="view">
             {view === "board" && (
@@ -275,6 +314,7 @@ export default function App() {
               onApprove={approve}
               onDeny={deny}
               onSend={(sid, text) => void client.sendPrompt(sid, text)}
+              onCancel={client.mode === "daemon" ? () => cancelRun(run.id) : undefined}
             />
           )}
         </div>
@@ -286,8 +326,31 @@ export default function App() {
         </div>
       )}
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
+      {newRun && (
+        <NewRunDialog
+          projects={state.projects}
+          initialPath={project?.path ?? ""}
+          onClose={() => setNewRun(false)}
+          onSubmit={startRun}
+        />
+      )}
     </div>
   );
+}
+
+function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object" && "message" in e) return String(e.message);
+  return String(e);
+}
+
+/** "Plan approval · Codex on #142" (vendor and run when known). */
+function requestLine(r: PermissionRequest, run: Run | undefined): string {
+  let line = REQUEST_LABEL[r.kind];
+  if (r.vendor) line += ` · ${VENDOR_INFO[r.vendor].label}`;
+  if (run) line += ` on ${runRef(run)}`;
+  return line;
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -298,6 +361,7 @@ const SHORTCUTS: [string, string][] = [
   ["J / K", "Move through the inbox"],
   ["Enter", "Open the selected request's run"],
   ["T", "Toggle terminal mode for the open session"],
+  ["N", "Start a new run (needs agentuxd)"],
   ["[ / ]", "Previous / next project"],
   ["Esc", "Close the session panel"],
   ["?", "Show this help"],
