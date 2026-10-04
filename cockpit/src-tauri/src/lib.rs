@@ -4,9 +4,39 @@
 
 pub mod daemon;
 
+#[cfg(desktop)]
+use tauri::Manager;
+
+/// Label of the single window declared in `tauri.conf.json`.
+#[cfg(desktop)]
+const MAIN_WINDOW: &str = "main";
+
+/// Brings the existing cockpit window forward: restore it if minimized, map it
+/// if hidden, then ask the compositor for focus. Each step is best effort; on
+/// Wayland the compositor decides whether the focus request is honoured.
+#[cfg(desktop)]
+fn reveal_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return;
+    };
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Must be the first plugin: a second `agentux-cockpit` process (Meta+A,
+    // autostart, the launcher) hands over to the running one in this plugin's
+    // setup and exits before anything else is initialised.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        reveal_main_window(app);
+    }));
+
+    builder
         .setup(|app| {
             daemon::init(app.handle());
             Ok(())

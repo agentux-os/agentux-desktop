@@ -5,6 +5,7 @@ GenericName=Coding Agent Cockpit
 Comment=One interface over every coding-agent CLI
 Exec={{exec}}
 Icon={{icon}}
+StartupWMClass=agentux-cockpit
 Terminal=false
 Categories=Development;
 Keywords=agent;ai;coding;claude;codex;

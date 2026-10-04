@@ -8,5 +8,6 @@ Name=AgentUX Cockpit
 Comment=Open the AgentUX cockpit
 Exec=agentux-cockpit
 Icon=agentux-cockpit
+StartupWMClass=agentux-cockpit
 Terminal=false
 X-KDE-Shortcuts=Meta+A

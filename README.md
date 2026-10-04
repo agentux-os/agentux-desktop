@@ -76,6 +76,14 @@ Components only talk to the `DaemonClient` interface; `createDaemonClient()` pic
 
 `.github/workflows/release.yml` builds the cockpit as an RPM (`agentux-cockpit`, binary `/usr/bin/agentux-cockpit`, desktop entry "AgentUX Cockpit" under Development) inside a `fedora:44` container, so it links against the same WebKitGTK the AgentUX image ships. Pushing a `v*` tag matching the version in `tauri.conf.json` attaches the RPM to a GitHub release; running the workflow manually uploads it as an artifact. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
 
+### Single instance and window identity
+
+The cockpit runs once per user session. Meta+A, the login autostart and the launcher all run `agentux-cockpit`; when one is already running, the new process hands over to it through [`tauri-plugin-single-instance`](https://v2.tauri.app/plugin/single-instance/) (a D-Bus name `os.agentux.cockpit.SingleInstance` on the session bus) and exits. The running cockpit then unminimizes, shows and focuses its `main` window.
+
+On Wayland the window's `app_id` is `agentux-cockpit`: Tauri leaves `app.enableGTKAppId` off, so GTK uses the program name (the basename of `argv[0]`, i.e. the binary `/usr/bin/agentux-cockpit`). That matches the installed `/usr/share/applications/agentux-cockpit.desktop`, which is how KDE picks the task manager entry and icon. Keep `enableGTKAppId` off: turning it on would make the `app_id` `os.agentux.cockpit` (no such desktop file) and register a `GApplication` with that id. The desktop entries also set `StartupWMClass=agentux-cockpit` for X11/XWayland sessions.
+
+Focus on KDE Wayland is up to KWin. Raising a window there needs an [xdg-activation](https://wayland.app/protocols/xdg-activation-v1) token; Plasma hands one to the process it launches (`XDG_ACTIVATION_TOKEN`), but that is the short-lived second process, and the plugin forwards only its arguments and working directory, not the token. So the running window can only ask for focus without the launcher's token, and KWin's focus stealing prevention may answer by marking it as demanding attention (highlighted in the task manager) instead of raising it, and may leave a minimized window minimized. Not yet tested on a Plasma 6 session.
+
 ### WebKitGTK caveats
 
 On Linux, Tauri renders with the system WebKitGTK (`webkit2gtk4.1`), not Chromium, so behaviour and GPU quirks are WebKitGTK's. If the window is blank, flickers or crashes on start (seen mostly with the NVIDIA proprietary driver and some virtual GPUs), try:
@@ -150,7 +158,7 @@ These files follow the Plasma 6 sources (plasma-workspace `startplasma`, `KLookA
 
 Known limits:
 
-- **Meta+A starts the cockpit; it doesn't focus a running one.** kglobalacceld only launches the desktop entry, so pressing it twice opens a second window until the cockpit is single-instance (for example with Tauri's `single-instance` plugin bringing the existing window forward).
+- **Meta+A on a running cockpit brings its window forward instead of opening a second one** (the cockpit is single-instance, see [Single instance and window identity](#single-instance-and-window-identity)). Whether KWin actually raises and focuses it, rather than only marking it as demanding attention, has not been checked on Plasma 6 Wayland.
 - If Fedora's first-boot `plasma-setup` runs and the user picks light or dark, it applies `org.kde.breeze(dark).desktop` over our global theme. Aurora patches `plasma-setup` for this reason. With the Anaconda ISO (where the account is created in the installer) it should not run, but that hasn't been checked.
 - The login screen (Plasma Login / SDDM) is not themed.
 
