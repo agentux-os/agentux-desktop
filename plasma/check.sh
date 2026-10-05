@@ -147,6 +147,19 @@ while IFS= read -r -d '' file; do
     [[ "$file" == *.conf ]] || err "unexpected file in the Plasma Login drop-in directory: $file"
 done < <(find usr/lib/plasmalogin -type f -print0 2>/dev/null)
 
+# 13. Wallpaper packages with a dark variant: Plasma picks contents/images_dark/
+#     for dark colour schemes and contents/images/ otherwise, by the size closest
+#     to the screen. Both must exist and offer the same sizes.
+while IFS= read -r -d '' dark; do
+    pkg=${dark%/images_dark}
+    echo "wallpaper variants $pkg"
+    [[ -d "$pkg/images" ]] || { err "$pkg has images_dark/ but no images/"; continue; }
+    light_list=$(cd "$pkg/images" && ls | sort)
+    dark_list=$(cd "$dark" && ls | sort)
+    [[ -n "$dark_list" ]] || err "$dark is empty"
+    [[ "$light_list" == "$dark_list" ]] || err "$pkg: images/ and images_dark/ offer different files"
+done < <(find usr/share/wallpapers -type d -name images_dark -print0 2>/dev/null)
+
 if (( fail )); then
     echo "plasma overlay: FAILED" >&2
     exit 1

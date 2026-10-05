@@ -54,20 +54,23 @@ export function Icon({ name, size = 16, ...rest }: { name: IconName; size?: numb
   );
 }
 
-/** The AgentUX mark: four agents around one shared core. */
+/** The AgentUX mark ("the merge"): four agents' lanes joining into one line.
+ *  Small-size cut of agentux/brand/svg/favicon.svg. */
 export function Logo({ size = 22 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--accent)" />
-      <g stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round">
-        <path d="M9 9l7 7M23 9l-7 7M9 23l7-7M23 23l-7-7" />
-      </g>
-      <g fill="var(--accent-ink)">
-        <circle cx="16" cy="16" r="3.6" />
-        <circle cx="8.5" cy="8.5" r="2.4" />
-        <circle cx="23.5" cy="8.5" r="2.4" />
-        <circle cx="8.5" cy="23.5" r="2.4" />
-        <circle cx="23.5" cy="23.5" r="2.4" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="var(--accent)" />
+      <g
+        transform="translate(33.29 32) scale(0.86) translate(-32 -32)"
+        fill="none"
+        stroke="var(--accent-ink)"
+        strokeLinecap="round"
+      >
+        <path
+          strokeWidth="6.2"
+          d="M8 13C24.5 13 21.5 32 38 32M8 25.667C24.5 25.667 21.5 32 38 32M8 38.333C24.5 38.333 21.5 32 38 32M8 51C24.5 51 21.5 32 38 32"
+        />
+        <path strokeWidth="7" d="M36 32H56" />
       </g>
     </svg>
   );
