@@ -77,7 +77,13 @@ Components only talk to the `DaemonClient` interface; `createDaemonClient()` pic
 
 ### Packaging
 
-`.github/workflows/release.yml` builds the cockpit as an RPM (`agentux-cockpit`, binary `/usr/bin/agentux-cockpit`, desktop entry "AgentUX Cockpit" under Development) inside a `fedora:44` container, so it links against the same WebKitGTK the AgentUX image ships. Pushing a `v*` tag matching the version in `tauri.conf.json` attaches the RPM to a GitHub release; running the workflow manually uploads it as an artifact. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
+`.github/workflows/release.yml` builds the cockpit as an RPM (`agentux-cockpit`, binary `/usr/bin/agentux-cockpit`, desktop entry "AgentUX Cockpit" under Development) inside a `fedora:44` container, so it links against the same WebKitGTK the AgentUX image ships. It builds for both x86_64 and aarch64, each natively on GitHub's x86_64 and arm64 runners, and installs each RPM in a fresh container of its architecture to check that the binary's libraries resolve. Pushing a `v*` tag matching the version in `tauri.conf.json` attaches both RPMs to a GitHub release; running the workflow manually uploads them as artifacts. To install one on Fedora 44, pick the file for your architecture:
+
+```sh
+sudo dnf install ./agentux-cockpit-<version>-1.$(uname -m).rpm
+```
+
+The Plasma overlay tarball below is architecture-independent and built once. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
 
 ### Single instance and window identity
 
