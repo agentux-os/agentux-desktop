@@ -422,7 +422,7 @@ export class MockDaemonClient implements DaemonClient {
       this.patchTerminal(terminalId, { state: "exited", exitCode: code ?? undefined });
       const current = session && this.state.sessions[session.id];
       if (holdsSession && current?.state === "attached") {
-        this.patchSession(current.id, { state: "idle" });
+        this.patchSession(current.id, { state: "idle" }, { release: true });
         this.pushEvent(current.id, { kind: "message", from: "system", text: "The TUI closed; the session is back in AgentUX." });
         this.patchSession(current.id, { state: "idle" });
       }
@@ -918,11 +918,19 @@ export class MockDaemonClient implements DaemonClient {
     });
   }
 
-  private patchSession(sessionId: string, patch: Partial<Session>) {
+  /**
+   * Like agentuxd, a session held by its own TUI stays `attached` until the
+   * TUI exits (`release`): the run's turns, approvals and requests for it
+   * wait meanwhile, so they do not move it to `active`/`waiting`/`idle`. Only
+   * the end of the run (`ended`) overrides the hold.
+   */
+  private patchSession(sessionId: string, patch: Partial<Session>, opts: { release?: boolean } = {}) {
     this.update((s) => {
       const x = s.sessions[sessionId];
       if (!x) return s;
-      return { ...s, sessions: { ...s.sessions, [sessionId]: { ...x, ...patch } } };
+      const held = x.state === "attached" && !opts.release && patch.state !== undefined && patch.state !== "ended";
+      const next = held ? { ...patch, state: x.state } : patch;
+      return { ...s, sessions: { ...s.sessions, [sessionId]: { ...x, ...next } } };
     });
   }
 
