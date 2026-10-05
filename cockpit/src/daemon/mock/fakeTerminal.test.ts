@@ -30,8 +30,12 @@ describe("FakeTerminal", () => {
 describe("MockDaemonClient terminals", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // The mock times its script beats with Math.random: pin it so a run
+    // replays the same timeline every time.
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -58,6 +62,12 @@ describe("MockDaemonClient terminals", () => {
     expect(s.terminals[h.terminalId]).toMatchObject({ command: "harness-tui", state: "running", sessionId: sid, held: true });
     expect(s.terminals[h.terminalId].argv[0]).toBe("claude");
     expect(s.sessions[sid].state).toBe("attached");
+    // The run's script goes on (its beats are randomly timed), but while the
+    // TUI holds the session none of its turns or requests take it back.
+    await client.connect();
+    await vi.advanceTimersByTimeAsync(10_000);
+    client.disconnect();
+    expect(client.getState().sessions[sid].state).toBe("attached");
 
     h.input("hi\r");
     expect(plain(out)).toContain("claude: hi");
