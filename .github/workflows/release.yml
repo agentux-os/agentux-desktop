@@ -8,9 +8,17 @@ name: release
 # into agentux-plasma-<version>.tar.gz, paths relative to /, so the image build
 # can `tar -xz -C /` it next to the RPM under one version number.
 #
-# - push of a `v*` tag: build and attach the .rpm and the plasma tarball (+ .sha256)
-#   to a GitHub release for that tag
+# The RPM is built for x86_64 and aarch64, each natively on a runner of that
+# architecture (GitHub's arm64 runners are free for public repositories), from
+# the same multi-arch fedora:44 image, and each is install-checked in a fresh
+# container of its arch. The plasma tarball is arch-independent, so only the
+# x86_64 leg builds it.
+#
+# - push of a `v*` tag: build and attach both .rpm files and the plasma tarball
+#   (+ .sha256) to a GitHub release for that tag
 # - workflow_dispatch: build and upload them as workflow artifacts only
+#   (agentux-cockpit-rpm-x86_64, agentux-cockpit-rpm-aarch64,
+#   agentux-plasma-tarball)
 
 on:
   push:
@@ -26,12 +34,20 @@ permissions:
 
 jobs:
   rpm:
-    name: rpm (fedora 44)
-    runs-on: ubuntu-latest
+    name: rpm (fedora 44, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            plasma: true
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            plasma: false
+    runs-on: ${{ matrix.runner }}
     container:
       image: registry.fedoraproject.org/fedora:44
-    permissions:
-      contents: write # create the GitHub release on tag pushes
     steps:
       # Installed before checkout so actions/checkout can use git.
       - name: Install build dependencies
@@ -57,12 +73,14 @@ jobs:
           fi
 
       - name: Check plasma overlay
+        if: matrix.plasma
         run: plasma/check.sh
 
       # Deterministic: sorted entries, root ownership, file times from the commit
       # and a gzip header without name/timestamp, so a rebuild of the same commit
       # gives the same bytes.
       - name: Build plasma tarball
+        if: matrix.plasma
         id: plasma
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -107,7 +125,7 @@ jobs:
       - name: Inspect RPM
         id: rpm
         run: |
-          rpm_path=$(ls cockpit/src-tauri/target/release/bundle/rpm/*.rpm)
+          rpm_path=$(ls cockpit/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm)
           echo "path=${rpm_path}" >> "$GITHUB_OUTPUT"
           ls -l "${rpm_path}"
           rpm -qip "${rpm_path}"
@@ -128,15 +146,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifact
-        if: "!startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
-          name: agentux-cockpit-rpm
+          name: agentux-cockpit-rpm-${{ matrix.arch }}
           path: ${{ steps.rpm.outputs.path }}
           if-no-files-found: error
 
       - name: Upload plasma tarball artifact
-        if: "!startsWith(github.ref, 'refs/tags/v')"
+        if: matrix.plasma
         uses: actions/upload-artifact@v4
         with:
           name: agentux-plasma-tarball
@@ -145,18 +162,73 @@ jobs:
             ${{ steps.plasma.outputs.sha256 }}
           if-no-files-found: error
 
+  # Installs each RPM with dnf in a fresh fedora:44 container of its own arch
+  # and checks that every shared library the binary needs resolves.
+  verify:
+    name: verify rpm (fedora 44, ${{ matrix.arch }})
+    needs: rpm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: agentux-cockpit-rpm-${{ matrix.arch }}
+
+      - name: Install with dnf
+        run: |
+          rpm_file=$(ls agentux-cockpit-*.${{ matrix.arch }}.rpm)
+          dnf -y install --setopt=install_weak_deps=False "./${rpm_file}"
+          test "$(rpm -q --qf '%{ARCH}' agentux-cockpit)" = "${{ matrix.arch }}"
+          test "$(uname -m)" = "${{ matrix.arch }}"
+
+      - name: Check installed files
+        run: |
+          test -x /usr/bin/agentux-cockpit
+          test -f /usr/share/applications/agentux-cockpit.desktop
+          if ldd /usr/bin/agentux-cockpit | grep 'not found'; then
+            echo "::error::unresolved shared libraries"
+            exit 1
+          fi
+          {
+            echo '### Installed RPM'
+            echo '```'
+            rpm -qi agentux-cockpit
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: attach to GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [rpm, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release on tag pushes
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agentux-*
+          merge-multiple: true
+
       # prerelease: "true" for tags like v0.2.0-rc.1. Otherwise the input is left
       # empty, which action-gh-release treats as unset: a new release is created
       # as a normal release, and a release that already exists (e.g. created by
       # hand as a pre-release) keeps its own prerelease flag instead of being
       # flipped to false.
-      - name: Attach to GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.rpm.outputs.path }}
-            ${{ steps.plasma.outputs.tarball }}
-            ${{ steps.plasma.outputs.sha256 }}
+            agentux-cockpit-*.x86_64.rpm
+            agentux-cockpit-*.aarch64.rpm
+            agentux-plasma-*.tar.gz
+            agentux-plasma-*.tar.gz.sha256
           prerelease: ${{ contains(github.ref_name, '-') && 'true' || '' }}
           fail_on_unmatched_files: true
