@@ -163,7 +163,9 @@ done < <(find usr/share/wallpapers -type d -name images_dark -print0 2>/dev/null
 
 # 14. Login splash: /etc/xdg/ksplashrc and the global theme's defaults must pick
 #     the global theme's own splash, and that package must ship
-#     contents/splash/Splash.qml with every image it loads, at 1x and @2x.
+#     contents/splash/Splash.qml with every image it loads, at 1x and @2x and
+#     at the pixel sizes its `px` table lays them out with (the water sheet is
+#     5 x 5 frames), and nothing in images/ it does not load.
 #     With qmllint (qt6-qtdeclarative-devel), the QML is checked for syntax too.
 lnf_dir="usr/share/plasma/look-and-feel/${lnf}"
 splash_theme=$(sed -n '/^\[KSplash\]$/,/^\[/s/^Theme=//p' etc/xdg/ksplashrc 2>/dev/null)
@@ -175,14 +177,36 @@ defaults_theme=$(sed -n '/^\[ksplashrc\]\[KSplash\]$/,/^\[/s/^Theme=//p' "$lnf_d
 splash="$lnf_dir/contents/splash/Splash.qml"
 if [[ -f "$splash" ]]; then
     echo "splash $splash"
-    images=$(grep -oE '"images/[A-Za-z0-9_-]+"' "$splash" | tr -d '"' | sort -u)
-    [[ -n "$images" ]] || err "$splash loads no images/"
-    for image in $images; do
-        for variant in "" "@2x"; do
-            [[ -s "$lnf_dir/contents/splash/${image}${variant}.png" ]] \
-                || err "$splash loads ${image}${variant}.png, which is not in the package"
-        done
-    done
+    node -e '
+        const fs = require("fs"), path = require("path");
+        const [qml, dir] = process.argv.slice(1);
+        const text = fs.readFileSync(qml, "utf8");
+        const table = text.match(/property var px: \(\{([^}]*)\}\)/);
+        if (!table) { console.error("error: " + qml + " has no px table"); process.exit(1); }
+        const sizes = {};
+        for (const m of table[1].matchAll(/"([a-z-]+)": \[(\d+), (\d+), (\d+), (\d+)\]/g))
+            sizes[m[1]] = m.slice(2).map(Number);
+        const sheet = { water: 5 }; // frames per row and per column
+        let bad = 0;
+        const fail = (msg) => { console.error("error: " + msg); bad = 1; };
+        if (!Object.keys(sizes).length) fail(qml + ": empty px table");
+        for (const [name, s] of Object.entries(sizes)) {
+            for (const [variant, w, h] of [["", s[0], s[1]], ["@2x", s[2], s[3]]]) {
+                const file = path.join(dir, name + variant + ".png");
+                if (!fs.existsSync(file)) { fail(qml + " loads " + name + variant + ".png, which is not in the package"); continue; }
+                const png = fs.readFileSync(file);
+                const k = sheet[name] || 1;
+                const [fw, fh] = [png.readUInt32BE(16), png.readUInt32BE(20)];
+                if (fw !== w * k || fh !== h * k)
+                    fail(file + " is " + fw + "x" + fh + ", " + qml + " expects " + w * k + "x" + h * k);
+            }
+        }
+        for (const file of fs.readdirSync(dir)) {
+            const name = file.replace(/(@2x)?\.png$/, "");
+            if (!(name in sizes)) fail(path.join(dir, file) + " is not used by " + qml);
+        }
+        process.exit(bad);
+    ' "$splash" "$lnf_dir/contents/splash/images" || err "$splash and its images do not match"
     if command -v qmllint >/dev/null || [[ -x /usr/lib64/qt6/bin/qmllint ]]; then
         qmllint_bin=$(command -v qmllint || echo /usr/lib64/qt6/bin/qmllint)
         "$qmllint_bin" "$splash" || err "$splash failed qmllint"
