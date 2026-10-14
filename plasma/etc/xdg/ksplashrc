@@ -1,0 +1,8 @@
+# Login splash: the AgentUX global theme's splash (contents/splash/Splash.qml
+# in /usr/share/plasma/look-and-feel/os.agentux.desktop). The global theme's
+# defaults say the same; this also covers sessions where those defaults have
+# not been written to ~/.config/kdedefaults yet, and System Settings > Colors &
+# Themes > Splash Screen (which writes ~/.config/ksplashrc) still overrides it.
+[KSplash]
+Engine=KSplashQML
+Theme=os.agentux.desktop
