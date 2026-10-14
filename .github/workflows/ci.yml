@@ -82,7 +82,8 @@ jobs:
       - name: Install check tools
         # util-linux: setpriv, so check.sh can run the cockpit autostart wrapper
         # as a system user and as a regular user.
-        run: dnf -y install --setopt=install_weak_deps=False desktop-file-utils nodejs libxml2 findutils grep sed util-linux
+        # qt6-qtdeclarative-devel: qmllint, for the login splash QML.
+        run: dnf -y install --setopt=install_weak_deps=False desktop-file-utils nodejs libxml2 findutils grep sed util-linux qt6-qtdeclarative-devel
 
       - name: Check plasma overlay
         run: plasma/check.sh

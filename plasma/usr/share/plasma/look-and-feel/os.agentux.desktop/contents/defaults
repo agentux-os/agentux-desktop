@@ -1,7 +1,7 @@
 # Settings this global theme applies. Same keys as Breeze Dark
 # (plasma-workspace lookandfeel/org.kde.breezedark/contents/defaults);
-# only the wallpaper differs. The accent colour is not a global theme key:
-# it is set in /etc/xdg/kdeglobals ([General] AccentColor).
+# only the wallpaper and the login splash differ. The accent colour is not a
+# global theme key: it is set in /etc/xdg/kdeglobals ([General] AccentColor).
 
 [kdeglobals][KDE]
 widgetStyle=Breeze
@@ -24,3 +24,8 @@ cursorTheme=breeze_cursors
 [kwinrc][org.kde.kdecoration2]
 library=org.kde.breeze
 theme=Breeze
+
+# Login splash: this package's contents/splash/Splash.qml (Breeze Dark points
+# this at org.kde.breeze.desktop, whose splash is the Plasma logo).
+[ksplashrc][KSplash]
+Theme=os.agentux.desktop

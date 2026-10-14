@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Static checks for the Plasma defaults overlay in this directory.
 # Needs: desktop-file-validate (desktop-file-utils), node, xmllint (libxml2).
-# Optional: setpriv (util-linux), when run as root, to test the cockpit
-# autostart wrapper as both a system and a regular user.
+# Optional: qmllint (qt6-qtdeclarative-devel), to check the splash QML;
+# setpriv (util-linux), when run as root, to test the cockpit autostart wrapper
+# as both a system and a regular user.
 # Usage: plasma/check.sh   (from anywhere)
 set -euo pipefail
 
@@ -159,6 +160,38 @@ while IFS= read -r -d '' dark; do
     [[ -n "$dark_list" ]] || err "$dark is empty"
     [[ "$light_list" == "$dark_list" ]] || err "$pkg: images/ and images_dark/ offer different files"
 done < <(find usr/share/wallpapers -type d -name images_dark -print0 2>/dev/null)
+
+# 14. Login splash: /etc/xdg/ksplashrc and the global theme's defaults must pick
+#     the global theme's own splash, and that package must ship
+#     contents/splash/Splash.qml with every image it loads, at 1x and @2x.
+#     With qmllint (qt6-qtdeclarative-devel), the QML is checked for syntax too.
+lnf_dir="usr/share/plasma/look-and-feel/${lnf}"
+splash_theme=$(sed -n '/^\[KSplash\]$/,/^\[/s/^Theme=//p' etc/xdg/ksplashrc 2>/dev/null)
+[[ "$splash_theme" == "$lnf" ]] \
+    || err "etc/xdg/ksplashrc must set [KSplash] Theme=${lnf} (has '${splash_theme}')"
+defaults_theme=$(sed -n '/^\[ksplashrc\]\[KSplash\]$/,/^\[/s/^Theme=//p' "$lnf_dir/contents/defaults")
+[[ "$defaults_theme" == "$lnf" ]] \
+    || err "$lnf_dir/contents/defaults must set [ksplashrc][KSplash] Theme=${lnf} (has '${defaults_theme}')"
+splash="$lnf_dir/contents/splash/Splash.qml"
+if [[ -f "$splash" ]]; then
+    echo "splash $splash"
+    images=$(grep -oE '"images/[A-Za-z0-9_-]+"' "$splash" | tr -d '"' | sort -u)
+    [[ -n "$images" ]] || err "$splash loads no images/"
+    for image in $images; do
+        for variant in "" "@2x"; do
+            [[ -s "$lnf_dir/contents/splash/${image}${variant}.png" ]] \
+                || err "$splash loads ${image}${variant}.png, which is not in the package"
+        done
+    done
+    if command -v qmllint >/dev/null || [[ -x /usr/lib64/qt6/bin/qmllint ]]; then
+        qmllint_bin=$(command -v qmllint || echo /usr/lib64/qt6/bin/qmllint)
+        "$qmllint_bin" "$splash" || err "$splash failed qmllint"
+    else
+        echo "  qmllint skipped (not installed)"
+    fi
+else
+    err "the global theme ${lnf} ships no splash ($splash)"
+fi
 
 if (( fail )); then
     echo "plasma overlay: FAILED" >&2
