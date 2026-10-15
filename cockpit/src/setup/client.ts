@@ -68,6 +68,8 @@ export interface SetupClient {
   readonly mode: "mock" | "system";
   /** `scan` also looks for what is installed already (slower). */
   status(scan?: boolean): Promise<SetupStatus>;
+  /** Persist the selected OS profile for the system first-boot applier. */
+  selectProfile(profile: string): Promise<void>;
   /** Queue `ITEM[@VERSION]` specs; they install in the background. */
   start(specs: string[]): Promise<void>;
   retryFirstLogin(): Promise<void>;

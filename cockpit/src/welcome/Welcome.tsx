@@ -10,6 +10,15 @@ import { useSetupStatus } from "./useSetupStatus";
 
 type StepId = "agents" | "tools" | "git" | "done";
 
+const PROFILES = [
+  { id: "workstation", title: "Workstation", detail: "Desktop, local agent node and developer tools.", resources: "8 GB RAM · 40 GB storage · network recommended" },
+  { id: "node", title: "Agent Node", detail: "A headless execution node for local agents.", resources: "4 GB RAM · 20 GB storage · network optional" },
+  { id: "command", title: "Command", detail: "Organization orchestration server; services remain guarded until configured.", resources: "16 GB RAM · 100 GB storage · network required" },
+  { id: "executive", title: "Executive", detail: "Office command center and organization visibility.", resources: "8 GB RAM · 40 GB storage · network recommended" },
+  { id: "complete", title: "Complete", detail: "Workstation, Node, Command and Office capabilities.", resources: "24 GB RAM · 150 GB storage · network required" },
+  { id: "custom", title: "Custom", detail: "Choose the capabilities for this machine later.", resources: "Review the selected capabilities before applying" },
+] as const;
+
 const STEPS: { id: StepId; title: string; sub: string; heading: string; lead: string }[] = [
   {
     id: "agents",
@@ -69,6 +78,8 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   );
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
+  const [profile, setProfile] = useState("workstation");
+  const [profileSaving, setProfileSaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const first = useRef(true);
@@ -77,6 +88,22 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
     document.documentElement.dataset.theme = loadTheme();
     document.title = "Welcome to AgentUX";
   }, []);
+
+  useEffect(() => {
+    if (status?.profile.requested) setProfile(status.profile.requested);
+  }, [status?.profile.requested]);
+
+  const saveProfile = async () => {
+    setProfileSaving(true);
+    try {
+      await client.selectProfile(profile);
+      await refresh();
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Move focus to the new step's heading (not on the first render).
   useEffect(() => {
@@ -270,7 +297,33 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
         )}
 
         <div className={`wz-body ${s.id === "tools" ? "is-tools" : ""}`}>
-          {s.id === "agents" && <AgentsStep client={client} status={status} onError={fail} />}
+          {s.id === "agents" && (
+            <>
+              <section className="wz-panel" aria-labelledby="profile-selection-heading">
+                <div className="wz-panel-head">
+                  <div>
+                    <h2 id="profile-selection-heading">Choose this machine's role</h2>
+                    <p className="muted">This writes a local profile intent. The system applies it on first boot and can be reopened safely.</p>
+                  </div>
+                  <button className="btn btn-primary" onClick={() => void saveProfile()} disabled={profileSaving}>
+                    {profileSaving ? "Saving…" : "Save profile"}
+                  </button>
+                </div>
+                <div className="wz-profile-grid">
+                  {PROFILES.map((option) => (
+                    <label key={option.id} className={`wz-profile-option ${profile === option.id ? "is-selected" : ""}`}>
+                      <input type="radio" name="os-profile" value={option.id} checked={profile === option.id} onChange={() => setProfile(option.id)} />
+                      <strong>{option.title}</strong>
+                      <span>{option.detail}</span>
+                      <small>{option.resources}</small>
+                    </label>
+                  ))}
+                </div>
+                <p className="muted wz-small">Offline-safe: selection does not download anything. Command services require explicit image and configuration.</p>
+              </section>
+              <AgentsStep client={client} status={status} onError={fail} />
+            </>
+          )}
           {s.id === "tools" && (
             <ToolsStep
               ref={searchRef}

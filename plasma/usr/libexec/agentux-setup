@@ -499,6 +499,18 @@ cmd_status() {
          + (if $installed == null then {} else {installed: $installed} end)'
 }
 
+cmd_profile() {
+    local profile="${1:-}"
+    case "$profile" in
+        workstation|node|command|executive|complete|custom) ;;
+        *) die "profile: choose workstation, node, command, executive, complete or custom" ;;
+    esac
+    [[ -x /usr/bin/agentux ]] || die "profile: AgentUX OS profile manager is unavailable"
+    # The wizard may only seed a named profile; it cannot apply services or
+    # pass arbitrary arguments to the system profile manager.
+    pkexec /usr/bin/agentux profile seed "$profile"
+}
+
 # ---- desktop helpers -------------------------------------------------------------
 
 # run_detached CMD...: start a GUI program and return at once.
@@ -611,6 +623,7 @@ main() {
         install) cmd_install "$@" ;;
         start) cmd_start "$@" ;;
         status) cmd_status "$@" ;;
+        profile) cmd_profile "$@" ;;
         retry-first-login) cmd_retry_first_login ;;
         signin) cmd_signin "$@" ;;
         launch) cmd_launch "$@" ;;

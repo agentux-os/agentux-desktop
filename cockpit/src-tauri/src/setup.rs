@@ -26,6 +26,7 @@ const ALLOWED: &[&str] = &[
     "plan",
     "start",
     "status",
+    "profile",
     "retry-first-login",
     "signin",
     "launch",
@@ -154,6 +155,7 @@ mod tests {
     #[test]
     fn allows_only_listed_subcommands() {
         assert!(check_args(&args(&["status", "--scan"])).is_ok());
+        assert!(check_args(&args(&["profile", "workstation"])).is_ok());
         assert!(check_args(&args(&["start", "vscode", "java@temurin-21"])).is_ok());
         assert!(check_args(&args(&["autostart"])).is_err());
         assert!(check_args(&args(&["jetbrains-toolbox"])).is_err());
