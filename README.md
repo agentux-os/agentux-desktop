@@ -54,7 +54,7 @@ The native window and a real daemon: [Developing the cockpit](#developing-the-co
 
 ## Contents
 
-- **Cockpit:** [Features](#cockpit) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
+- **Cockpit:** [Features](#cockpit) · [Welcome wizard](#welcome-wizard) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
 - **Desktop:** [Desktop configuration](#desktop-configuration) · [How agentux-os consumes it](#how-agentux-os-consumes-it-proposal) · [Not verified on a running Plasma session](#not-verified-on-a-running-plasma-session)
 - [Relevant ADRs](#relevant-adrs) · [License](#license)
 
@@ -67,6 +67,26 @@ One interface on top of every coding agent CLI (Tauri app, talks only to `agentu
 - **Approvals inbox.** Every permission request and escalation from every agent in one queue, with one shortcut to approve.
 - **Agent bus feed.** Messages, review requests and handoffs between agents, grouped by exchange with their turn count; questions to you and your answers; turn limits and denied tools as warnings; wakes and sessions joining or leaving as quiet system lines.
 - **Spend.** Tokens and cost per run, project and vendor.
+- **Welcome to AgentUX.** A first-run wizard in its own window (see below).
+
+## Welcome wizard
+
+On a user's first login the cockpit opens **Welcome to AgentUX** (`agentux-cockpit --welcome`), after `plasma-setup` has created the account and Plasma has started. It is skippable, keyboard driven (`Alt+←`/`Alt+→` between steps, `/` to search, `Space` to tick) and can be reopened any time from the app menu (**Welcome to AgentUX**), the cockpit's sidebar (**Welcome & setup**) or `agentux-cockpit --welcome`. Four steps:
+
+1. **Agents.** The status of the agent CLIs that agentux-os's first-login service installs (Claude Code, OpenCode, Antigravity, Codex: installing, installed, failed with a retry), a **Sign in** button per CLI that opens a terminal with its own login (`claude`, `codex login`, `opencode auth login`, `agy`), and how to keep an API key in the desktop's secret service with `secret-tool`. Inference stays with the providers.
+2. **Tools & SDKs.** One searchable catalog with categories (editors and IDEs, languages and SDKs, cloud and Kubernetes, databases, API clients, Git, containers, browsers, design, communication, utilities). Each item installs one of four ways, shown as a small hint: a **Flatpak** from Flathub (per user), the **JetBrains Toolbox** App (JetBrains IDEs, unsandboxed, in `~/.local/share/JetBrains/Toolbox`), **mise** (languages and CLIs, `mise use --global`) or **Distrobox** (a Fedora or Ubuntu dev container, and packages in it). Installs run in the background and keep going when the window closes; each item shows its progress, its error and a retry, and the commands it runs.
+3. **Git & SSH.** Name, e-mail and default branch for `~/.gitconfig`; an ed25519 key with a button to GitHub's SSH keys page and `gh auth login`.
+4. **Done.** A summary, the JetBrains IDEs left to install from Toolbox, links to agentuxos.org and the getting-started guide, and **Open the cockpit**.
+
+**VS Code** (and VSCodium) come from Flathub with host integration: `flatpak override --user --talk-name=org.freedesktop.Flatpak --filesystem=home`, a default `settings.json` whose integrated terminal is `flatpak-spawn --host bash -l` (so mise SDKs, podman and the agent CLIs work in it; keys you set yourself win), `dev.containers.dockerPath` pointing at a small wrapper that runs the host's podman, and the `org.freedesktop.Sdk.Extension.*` matching your mise SDKs (`openjdk21`, `node24`, `golang`, `rust-stable`, `dotnet10`, ...) enabled with `FLATPAK_ENABLE_SDK_EXT` for the language extensions that run inside the sandbox. JetBrains IDEs never come as Flatpaks. The reasons are in [ADR 0013](https://github.com/agentux-os/agentux/blob/main/docs/adr/0013-first-run-wizard.md).
+
+How it is built:
+
+- **The backend is one script**, [`plasma/usr/libexec/agentux-setup`](plasma/usr/libexec/agentux-setup), shipped in the Plasma overlay. The wizard calls it through a single Tauri command (`setup_exec`, with an allowlist of subcommands); `agentux-setup --help` lists them. `start` runs a batch in a transient systemd user unit (`systemd-run --user`), one batch at a time; item states and logs go to `~/.local/state/agentux/setup/`. `plan` (or `install --dry-run`) prints the commands a batch would run without changing anything.
+- **The catalog is data**, [`plasma/usr/share/agentux/setup/catalog.json`](plasma/usr/share/agentux/setup/catalog.json), read by the script at run time and bundled into the cockpit. Adding an app is adding an entry. The Flathub remote is added per user from the shipped [`flathub.flatpakrepo`](plasma/usr/share/agentux/setup/flathub.flatpakrepo), so it needs no download.
+- **First run:** `/etc/xdg/autostart/agentux-welcome.desktop` runs `agentux-setup autostart`, which opens the wizard unless the user is a system account (`plasma-setup`'s session), the system is the live ISO (`/usr/share/agentux/live/marker` or `rd.live.image`), or `~/.local/state/agentux/welcome.done` exists. Finishing or skipping writes that marker; `agentux-setup reset` removes it.
+- **Without a system:** `npm run dev` and open `http://localhost:1420/?view=welcome` for the wizard on a mock backend (`&speed=3` to hurry it, `&fail=dbeaver,first-login` to see failures).
+- **Tests:** vitest checks the catalog (ids, categories, mise tool names, Flatpak id shapes, SDK extensions; `CHECK_FLATHUB=1 npm test` also asks Flathub's API about every Flatpak and its architectures), the command builder, that `agentux-setup plan` prints exactly what the UI shows for every item (where bash and jq exist), and the wizard flow on the mock backend. `plasma/check.sh` checks the script's dry run, the VS Code settings merge, `status` and the first-run marker.
 
 ## Developing the cockpit
 
@@ -125,8 +145,10 @@ How the connection behaves:
 | `cockpit/src/daemon/client.ts` | The `DaemonClient` interface the UI depends on, and `createDaemonClient()` |
 | `cockpit/src/daemon/tauri/` | `TauriDaemonClient` (real daemon via the Tauri backend), API wire types, and the API-to-cockpit mapping |
 | `cockpit/src/daemon/mock/` | `MockDaemonClient` plus the scripted scenarios it plays |
+| `cockpit/src/setup/` | The welcome wizard's backend interface: catalog types, the command builder, `TauriSetupClient` (runs `agentux-setup`) and `MockSetupClient` |
+| `cockpit/src/welcome/` | The welcome wizard's steps |
 | `cockpit/src/components/` | Run board, session view, approvals inbox, agent bus feed, status bar |
-| `cockpit/src-tauri/` | Rust shell: hosts the window; `src/daemon/` is the socket client, the reconnecting event stream and the `daemon_*` commands |
+| `cockpit/src-tauri/` | Rust shell: hosts the window; `src/daemon/` is the socket client, the reconnecting event stream and the `daemon_*` commands; `src/setup.rs` is the welcome window, `--welcome` and `setup_exec` |
 
 Components only talk to the `DaemonClient` interface; `createDaemonClient()` picks the implementation.
 
@@ -184,6 +206,10 @@ KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma
 | `etc/xdg/kded5rc` | Turns off the kded module `kded_plasma_welcome`, which opens Fedora's Welcome Center ("Welcome to Fedora!") on first login and after Plasma feature upgrades. It has no XDG autostart entry to hide; KF6's kded still reads `kded5rc`. The app stays installed, and users can turn the module back on in System Settings > Background Services. AgentUX's own first run belongs in the cockpit |
 | `usr/share/kglobalaccel/agentux-*-shortcut.desktop` | Global shortcuts: **Meta+A** launches the cockpit, **Meta+Return** opens Konsole (Konsole's own Ctrl+Alt+T stays) |
 | `etc/xdg/autostart/agentux-cockpit.desktop` | Starts the cockpit at login (`TryExec`, so it does nothing if the cockpit isn't installed). Users turn it off in System Settings > Autostart |
+| `etc/xdg/autostart/agentux-welcome.desktop` | Opens the [welcome wizard](#welcome-wizard) on a user's first login through `agentux-setup autostart` (not for system users, not on the live ISO, not once finished or skipped) |
+| `usr/share/applications/agentux-welcome.desktop` | **Welcome to AgentUX** in the app menu: reopens the wizard |
+| `usr/libexec/agentux-setup` | The wizard's backend: plans and runs installs (Flatpak, JetBrains Toolbox, mise, Distrobox) in transient user units, reports status as JSON, sets up Git and SSH, opens sign-in terminals |
+| `usr/share/agentux/setup/` | The wizard's catalog (`catalog.json`) and Flathub's repo file |
 | `usr/libexec/agentux-cockpit-autostart` | What the autostart entry runs: exits for system accounts (UID below `UID_MIN` from `/etc/login.defs`, the same rule as systemd's `ConditionUser=!@system`), otherwise execs `agentux-cockpit`. Fedora's first-boot wizard runs a whole Plasma session as the `plasma-setup` system user (UID 968), and XDG autostart, including ours, runs there too. A wrapper rather than a systemd drop-in for `app-agentux-cockpit@autostart.service` because it also covers Plasma's own autostart when systemd startup is off |
 
 How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kdeglobals`, writes that global theme's defaults into `~/.config/kdedefaults` (a defaults layer, not user settings) and applies the colour scheme with the accent colour. plasmashell runs the theme's layout script only when the user has no desktop layout yet, so existing users keep their panels. On Fedora Kinoite `/etc/xdg` comes before Fedora's own defaults in `/usr/share/kde-settings/kde-profile/default/xdg` in `XDG_CONFIG_DIRS`, so these keys win over Fedora's.

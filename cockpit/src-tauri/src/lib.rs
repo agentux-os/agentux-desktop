@@ -3,19 +3,21 @@
 //! event stream). Without a reachable daemon the UI runs on mock data.
 
 pub mod daemon;
+#[cfg(desktop)]
+pub mod setup;
 
 #[cfg(desktop)]
 use tauri::Manager;
 
 /// Label of the single window declared in `tauri.conf.json`.
 #[cfg(desktop)]
-const MAIN_WINDOW: &str = "main";
+pub(crate) const MAIN_WINDOW: &str = "main";
 
 /// Brings the existing cockpit window forward: restore it if minimized, map it
 /// if hidden, then ask the compositor for focus. Each step is best effort; on
 /// Wayland the compositor decides whether the focus request is honoured.
 #[cfg(desktop)]
-fn reveal_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+pub(crate) fn reveal_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return;
     };
@@ -31,14 +33,26 @@ pub fn run() {
     // Must be the first plugin: a second `agentux-cockpit` process (Meta+A,
     // autostart, the launcher) hands over to the running one in this plugin's
     // setup and exits before anything else is initialised.
+    // `agentux-cockpit --welcome` (the first-login autostart, the "Welcome to
+    // AgentUX" menu entry) opens the setup wizard instead.
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-        reveal_main_window(app);
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        if setup::wants_welcome(&argv) {
+            if let Err(e) = setup::open_welcome(app) {
+                eprintln!("agentux-cockpit: cannot open the welcome window: {e}");
+            }
+        } else {
+            reveal_main_window(app);
+        }
     }));
 
     builder
         .setup(|app| {
             daemon::init(app.handle());
+            #[cfg(desktop)]
+            if setup::wants_welcome(&std::env::args().collect::<Vec<_>>()) {
+                setup::open_welcome(app.handle())?;
+            }
             Ok(())
         })
         // Terminals live as long as the page that shows them: a reload (the
@@ -77,6 +91,9 @@ pub fn run() {
             daemon::terminal_close,
             daemon::terminal_detach,
             daemon::terminal_list,
+            setup::setup_exec,
+            setup::welcome_open,
+            setup::welcome_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the AgentUX cockpit");
