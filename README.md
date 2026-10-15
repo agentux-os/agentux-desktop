@@ -1,8 +1,62 @@
-# agentux-desktop
+<p align="center">
+  <a href="https://agentuxos.org">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/agentux-os/agentux/main/brand/svg/lockup-dark.svg">
+      <img alt="AgentUX" src="https://raw.githubusercontent.com/agentux-os/agentux/main/brand/svg/lockup-light.svg" width="340">
+    </picture>
+  </a>
+</p>
+
+<h3 align="center">agentux-desktop: the AgentUX cockpit and the desktop it lives in</h3>
+
+<p align="center">
+  <a href="https://github.com/agentux-os/agentux-desktop/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/agentux-os/agentux-desktop/ci.yml?branch=main&label=ci&logo=github&labelColor=0b0d10"></a>
+  <a href="https://github.com/agentux-os/agentux-desktop/actions/workflows/release.yml"><img alt="RPM release" src="https://img.shields.io/github/actions/workflow/status/agentux-os/agentux-desktop/release.yml?label=rpm%20build&logo=fedora&logoColor=white&labelColor=0b0d10"></a>
+  <a href="https://github.com/agentux-os/agentux-desktop/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/agentux-os/agentux-desktop?include_prereleases&label=release&labelColor=0b0d10&color=4f7d0b"></a>
+  <a href="https://v2.tauri.app"><img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-4f7d0b?logo=tauri&logoColor=white&labelColor=0b0d10"></a>
+  <a href="#desktop-configuration"><img alt="KDE Plasma 6" src="https://img.shields.io/badge/KDE%20Plasma-6-4f7d0b?logo=kde&logoColor=white&labelColor=0b0d10"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/agentux-os/agentux-desktop?labelColor=0b0d10&color=4f7d0b"></a>
+  <a href="https://agentuxos.org"><img alt="Website" src="https://img.shields.io/badge/website-agentuxos.org-c6f36b?labelColor=0b0d10"></a>
+</p>
+
+<p align="center">
+  <a href="https://agentuxos.org"><b>Website</b></a> ·
+  <a href="https://download.agentuxos.org"><b>Download</b></a> ·
+  <a href="https://github.com/agentux-os/agentux/tree/main/docs"><b>Docs</b></a> ·
+  <a href="https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md"><b>Getting started</b></a> ·
+  <a href="https://github.com/agentux-os/agentux-desktop/releases"><b>Releases</b></a>
+</p>
 
 The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the cockpit app and the desktop configuration shipped with the distribution.
 
+<p align="center">
+  <a href="https://raw.githubusercontent.com/agentux-os/agentux/main/docs/screenshots/cockpit-plan-approval.png"><img alt="The AgentUX cockpit on the live ISO: two demo runs, one waiting for plan approval" src="https://raw.githubusercontent.com/agentux-os/agentux/main/docs/screenshots/cockpit-plan-approval.png" width="760"></a>
+</p>
+
 > **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included), the agent bus and terminal mode (a session's harness TUI, or a shell in a run's worktree) come from the daemon. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
+
+## At a glance
+
+This repository holds two things, and the [AgentUX image](https://github.com/agentux-os/agentux-os) ships both:
+
+- **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Meta+A** brings it up.
+- **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel, shortcuts and cockpit autostart. Every user can override all of it in System Settings.
+
+See the cockpit in a minute, no Rust and no daemon needed (it plays scripted runs from a mock daemon):
+
+```sh
+cd cockpit
+npm install
+npm run dev    # open http://localhost:1420
+```
+
+The native window and a real daemon: [Developing the cockpit](#developing-the-cockpit). The overlay, file by file: [Desktop configuration](#desktop-configuration).
+
+## Contents
+
+- **Cockpit:** [Features](#cockpit) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
+- **Desktop:** [Desktop configuration](#desktop-configuration) · [How agentux-os consumes it](#how-agentux-os-consumes-it-proposal) · [Not verified on a running Plasma session](#not-verified-on-a-running-plasma-session)
+- [Relevant ADRs](#relevant-adrs) · [License](#license)
 
 ## Cockpit
 
@@ -49,6 +103,9 @@ npm run tauri dev
 
 Then click **New run** (or press `N`), enter a directory inside any git repository and a prompt. The run moves across the board, and the plan approval shows up in the approvals inbox (`A` to approve, `D` to deny); the open run's panel has **Cancel run**. `aux ps`, `aux approve <id>` and friends act on the same daemon, and the cockpit follows along.
 
+<details>
+<summary>How the connection behaves: probing, the event stream, reconnects, bus and terminals</summary>
+
 How the connection behaves:
 
 - At startup the frontend probes the daemon. If it answers, the cockpit uses `TauriDaemonClient`; if not, it shows mock data with a **Mock data** badge and a "agentuxd is not running" banner, and reloads by itself once the daemon is up.
@@ -57,6 +114,8 @@ How the connection behaves:
 - Optional daemon methods (`sessions.prompt`, `bus.post`, `terminals.*`) are probed after each load. The session composer (`sessions.prompt`) puts your message in the session as your own bubble; the bus composer, on the bus page and in a run's **Bus** tab, posts as you (`bus.post`) to a role, one session or the whole run, or answers a message (**Reply**, `inReplyTo`). Each stays disabled, with the reason shown, on daemons that do not serve its method and on finished runs.
 - **Terminal mode** (agentux-core #11). The session view's **Structured / Terminal** toggle (`T`) opens the session in its harness's own TUI (`terminals.open`, `command: harness-tui`) on a PTY the daemon manages, rendered with xterm.js, sized to the panel and themed from the cockpit's colours. While the session's turn is in progress the terminal waits (shown as such; input is dropped); then the daemon hands the session over and its badge shows **attached** (turns for it queue until the TUI exits). When the daemon cannot resume the session in a TUI it runs a shell instead, and the reason is shown as a banner. **Shell in worktree** on an active run opens a shell in the run's worktree in a **Shell** tab. While the terminal has the keyboard, the cockpit's shortcuts are off (Escape too, the TUI uses it); `Shift+Esc` or `Ctrl+]` gives the keyboard back.
   The daemon ties a terminal to the connection that opened it, so the backend gives each terminal its own socket connection (`src-tauri/src/daemon/terminal.rs`) and emits its output as `terminal://<stream>` events, a name the UI listens on before opening. Input and resizes go as JSON-RPC notifications on that connection. A view that is rebuilt while its terminal runs re-attaches (`terminals.attach`: scrollback, then live output) instead of opening another. Leaving terminal mode closes the run's TUIs (the sessions go back to ACP), closing the shell tab closes the shell, closing the run panel closes all of the run's terminals, and a closed or reloaded window drops every terminal connection. In mock mode the terminal is a fake echo shell that behaves the same way (waiting, attached, Antigravity's fallback).
+
+</details>
 
 ### Layout of the code
 
@@ -131,9 +190,17 @@ How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kd
 
 **KWin tiling: not included.** Plasma 6 stores custom tile layouts in `kwinrc` under `[Tiling][<virtual desktop id>][<output uuid>]`, and both ids are created per user and per monitor, so a system-wide default layout can't be written ahead of time. The built-in tiling needs no configuration: drag a window with Shift held, or edit tiles with Meta+T.
 
+<details>
+<summary>What <code>plasma/check.sh</code> and CI check</summary>
+
 **Check:** `plasma/check.sh` runs `desktop-file-validate` on every `.desktop` file, a syntax check (`node --check`) on the layout script, a JSON check on package metadata and an XML check on any SVG, checks that each wallpaper package with a dark variant ships the same image sizes for light and dark, makes sure every `file:///usr/...` reference ships in the overlay, and refuses anything under `/home`, `/root`, `/var/home`, `/var/roothome` or `/etc/skel`. It also checks that `/usr/libexec/agentux-*` scripts are executable and parse (`sh -n`), runs the cockpit autostart wrapper against a stub `agentux-cockpit` as a system user (must not start it) and as a regular user (must exec it with its arguments; both cases need root and `setpriv`), checks that `kded5rc` turns `kded_plasma_welcome` off, that only `.conf` files go into Plasma Login's drop-in directory, and that `ksplashrc` and the global theme's defaults select the global theme's own splash, which must ship `Splash.qml` and every image it loads at 1x and @2x, at the pixel sizes the QML lays them out with, and no image it does not load (plus `qmllint` on the QML, when installed; CI installs it). CI runs it in a `fedora:44` container (job `plasma overlay`), then uses `dnf repoquery` to check that the Fedora 44 paths the overlay relies on still exist (`kded_plasma_welcome.so`, `/usr/lib/plasmalogin/plasmalogin.conf.d`, `defaults.conf`) and that no overlay file replaces a file a Fedora package owns.
 
+</details>
+
 ### How agentux-os consumes it (proposal)
+
+<details>
+<summary>The two options: release tarball (recommended) or a pinned git checkout</summary>
 
 The overlay has to land in the image at build time, since `/usr` is read-only on the installed system. Copy only `usr/` and `etc/`; `plasma/check.sh` must not end up in `/`. Two options:
 
@@ -158,6 +225,8 @@ The overlay has to land in the image at build time, since `/usr` is read-only on
    ```
 
 The agentux-os change (and adding the tarball to `release.yml`) is a separate task.
+
+</details>
 
 ### Not verified on a running Plasma session
 
