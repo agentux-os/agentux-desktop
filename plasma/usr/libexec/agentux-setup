@@ -129,14 +129,17 @@ cmd_plan() {
 }
 
 # ---- item state -------------------------------------------------------------
-# items/<id>: STATE<TAB>VERSION<TAB>UNIT<TAB>EPOCH<TAB>MESSAGE
+# items/<id>: STATE, VERSION, UNIT, EPOCH and MESSAGE separated by US (\x1f).
+# Not tabs: `read` collapses runs of whitespace separators, so an empty
+# VERSION would shift every later field.
+US=$'\x1f'
 
 set_state() {
     local id="$1" state="$2" version="$3" unit="$4" message="${5:-}"
     mkdir -p "$items_dir"
-    message="${message//$'\t'/ }"
+    message="${message//$US/ }"
     message="${message//$'\n'/ }"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$state" "$version" "$unit" "$(date +%s)" "${message:0:300}" \
+    printf "%s$US%s$US%s$US%s$US%s\n" "$state" "$version" "$unit" "$(date +%s)" "${message:0:300}" \
         >"$items_dir/$id.tmp" && mv -f "$items_dir/$id.tmp" "$items_dir/$id"
 }
 
@@ -345,7 +348,7 @@ cmd_install() {
     # One batch at a time: flatpak and mise install fine side by side, but
     # mise's global config is one file.
     exec 9>"$setup_dir/lock"
-    flock 9
+    if command -v flock >/dev/null; then flock 9; fi
     local failed=0
     for spec in "${specs[@]}"; do
         parse_spec "$spec"
@@ -433,7 +436,8 @@ items_json() {
     for f in "$items_dir"/*; do
         [[ "$f" == *.tmp ]] && continue
         id="${f##*/}"
-        IFS=$'\t' read -r state version unit epoch message <"$f" || continue
+        IFS=$US read -r state version unit epoch message <"$f" || continue
+        [[ "$epoch" =~ ^[0-9]+$ ]] || epoch=0
         # A unit that is gone left its items behind (the grace period covers
         # the moment between `start` queuing them and systemd starting it).
         if [[ "$state" == queued || "$state" == running ]] && [[ -n "$unit" ]]             && (( $(date +%s) - ${epoch:-0} > 15 )) && ! unit_alive "$unit"; then

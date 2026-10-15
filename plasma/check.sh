@@ -259,6 +259,21 @@ if [[ -f "$setup" ]]; then
 
         HOME="$tmp/home" bash "$setup" status | jq -e '.items == {} and (.agents | length == 4) and (.firstLogin | has("done"))' >/dev/null             || err "$setup status did not print the expected JSON"
 
+        # A batch run for real with a stub flatpak: one item done, one failed
+        # (the stub fails for Slack), and `status` reports both, with their
+        # last log line and no version.
+        mkdir -p "$tmp/stub"
+        printf '#!/bin/sh\ncase "$*" in *com.slack.Slack*) echo "error: no route to Flathub" >&2; exit 1 ;; esac\necho "flatpak $*"\n' > "$tmp/stub/flatpak"
+        chmod 0755 "$tmp/stub/flatpak"
+        HOME="$tmp/batch" PATH="$tmp/stub:$PATH" bash "$setup" install flatseal slack >/dev/null 2>&1 \
+            && err "$setup install reported success with a failed item"
+        HOME="$tmp/batch" PATH="$tmp/stub:$PATH" bash "$setup" status \
+            | jq -e '.items.flatseal.state == "done" and .items.flatseal.version == "" and (.items.flatseal.updated > 0)
+                     and .items.slack.state == "failed" and (.items.slack.message | test("no route to Flathub"))' >/dev/null \
+            || err "$setup status after a batch: $(HOME="$tmp/batch" PATH="$tmp/stub:$PATH" bash "$setup" status 2>&1)"
+        grep -q 'flatpak install --user --noninteractive --or-update flathub com.github.tchx84.Flatseal' "$tmp/batch/.local/state/agentux/setup/logs/flatseal.log" \
+            || err "$setup install wrote no log for flatseal"
+
         # First-run marker and autostart, for a regular user (needs root and setpriv).
         if [[ "$(id -u)" == 0 ]] && command -v setpriv >/dev/null; then
             mkdir -p "$tmp/user" "$tmp/bin"
