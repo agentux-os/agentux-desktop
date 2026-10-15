@@ -41,6 +41,15 @@ describe("Welcome wizard (mock backend)", () => {
     expect(screen.getByText(/Inference stays with the providers/)).toBeTruthy();
   });
 
+  it("shows the selected AgentUX OS profile and applied capabilities", async () => {
+    const client = new MockSetupClient();
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    expect(screen.getByRole("region", { name: "AgentUX OS profile" })).toBeTruthy();
+    expect(screen.getByText("AgentUX Workstation")).toBeTruthy();
+    expect(screen.getByText("node · desktop")).toBeTruthy();
+  });
+
   it("offers a retry when first-login failed", async () => {
     const client = new MockSetupClient({ firstLoginDone: 2, fail: ["first-login"] });
     render(<Welcome client={client} pollMs={500} />);

@@ -106,6 +106,13 @@ export class MockSetupClient implements SetupClient {
         done,
         steps: this.steps.map((s) => ({ ...s })),
       },
+      profile: {
+        catalogVersion: 1,
+        requested: "workstation",
+        applied: ["node", "desktop"],
+        pending: [],
+        failed: [],
+      },
       ...(scan ? { installed: [...this.installed].sort() } : {}),
     };
   }
