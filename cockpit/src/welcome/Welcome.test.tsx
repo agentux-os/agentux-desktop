@@ -54,7 +54,7 @@ describe("Welcome wizard (mock backend)", () => {
     const client = new MockSetupClient();
     render(<Welcome client={client} pollMs={500} />);
     await flush();
-    fireEvent.click(screen.getByLabelText("Executive"));
+    fireEvent.click(screen.getByText("Executive"));
     fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
     await flush();
     expect(client.calls).toContain("profile executive");
