@@ -8,5 +8,5 @@ TryExec=agentux-cockpit
 Icon=agentux-cockpit
 StartupWMClass=agentux-cockpit
 Terminal=false
-Categories=Development;Settings;
+Categories=Settings;
 Keywords=setup;welcome;flatpak;sdk;ide;vscode;intellij;jetbrains;mise;distrobox;ssh;git;
