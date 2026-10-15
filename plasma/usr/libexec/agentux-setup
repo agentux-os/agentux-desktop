@@ -434,7 +434,9 @@ items_json() {
         [[ "$f" == *.tmp ]] && continue
         id="${f##*/}"
         IFS=$'\t' read -r state version unit epoch message <"$f" || continue
-        if [[ "$state" == queued || "$state" == running ]] && [[ -n "$unit" ]] && ! unit_alive "$unit"; then
+        # A unit that is gone left its items behind (the grace period covers
+        # the moment between `start` queuing them and systemd starting it).
+        if [[ "$state" == queued || "$state" == running ]] && [[ -n "$unit" ]]             && (( $(date +%s) - ${epoch:-0} > 15 )) && ! unit_alive "$unit"; then
             state=failed
             message="interrupted: $(last_line "$logs_dir/$id.log")"
         fi
