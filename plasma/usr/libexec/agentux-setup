@@ -476,6 +476,14 @@ installed_json() {
     if (( ${#ids[@]} )); then printf '%s\n' "${ids[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique'; else echo '[]'; fi
 }
 
+profile_json() {
+    if [[ -x /usr/bin/agentux ]]; then
+        /usr/bin/agentux profile show 2>/dev/null || echo '{"catalogVersion":1,"requested":null,"applied":[],"pending":[],"failed":[]}'
+    else
+        echo '{"catalogVersion":1,"requested":null,"applied":[],"pending":[],"failed":[]}'
+    fi
+}
+
 cmd_status() {
     need_catalog
     local scan=0
@@ -484,9 +492,10 @@ cmd_status() {
     (( scan )) && installed="$(installed_json)"
     jq -n --argjson items "$(items_json)" --argjson agents "$(agents_json)" \
         --argjson firstLogin "$(first_login_json)" --argjson installed "$installed" \
+        --argjson profile "$(profile_json)" \
         --arg arch "$(uname -m)" \
         --argjson flathub "$(flatpak remotes --user --columns=name 2>/dev/null | grep -qx flathub && echo true || echo false)" \
-        '{arch: $arch, flathub: $flathub, items: $items, agents: $agents, firstLogin: $firstLogin}
+        '{arch: $arch, flathub: $flathub, items: $items, agents: $agents, firstLogin: $firstLogin, profile: $profile}
          + (if $installed == null then {} else {installed: $installed} end)'
 }
 
