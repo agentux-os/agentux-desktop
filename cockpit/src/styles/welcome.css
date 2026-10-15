@@ -844,3 +844,20 @@ button.wz-method:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.wz-profile {
+  display: grid;
+  gap: 4px;
+  margin: 18px 16px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.wz-profile-kicker {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
