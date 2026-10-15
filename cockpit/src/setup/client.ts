@@ -36,6 +36,14 @@ export interface FirstLoginStatus {
   steps: { name: string; result: string; seconds: number }[];
 }
 
+export interface ProfileStatus {
+  catalogVersion: number;
+  requested: string | null;
+  applied: string[];
+  pending: string[];
+  failed: string[];
+}
+
 export interface SetupStatus {
   arch: string;
   /** The user's flathub remote exists. */
@@ -43,6 +51,7 @@ export interface SetupStatus {
   items: Record<string, ItemStatus>;
   agents: AgentStatus[];
   firstLogin: FirstLoginStatus;
+  profile: ProfileStatus;
   /** Catalog items found installed (only from `status(true)`). */
   installed?: string[];
 }
