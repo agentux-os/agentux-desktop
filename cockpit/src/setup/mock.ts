@@ -48,6 +48,7 @@ export class MockSetupClient implements SetupClient {
   private git: GitConfig = { name: "", email: "", defaultBranch: "" };
   private key: string | null = null;
   private finished = false;
+  private profile = "workstation";
 
   constructor(options: MockSetupOptions = {}) {
     this.speed = Math.max(0.1, options.speed ?? 1);
@@ -108,13 +109,18 @@ export class MockSetupClient implements SetupClient {
       },
       profile: {
         catalogVersion: 1,
-        requested: "workstation",
-        applied: ["node", "desktop"],
+        requested: this.profile,
+        applied: this.profile === "workstation" ? ["node", "desktop"] : [],
         pending: [],
         failed: [],
       },
       ...(scan ? { installed: [...this.installed].sort() } : {}),
     };
+  }
+
+  async selectProfile(profile: string): Promise<void> {
+    this.calls.push(`profile ${profile}`);
+    this.profile = profile;
   }
 
   async start(specs: string[]): Promise<void> {

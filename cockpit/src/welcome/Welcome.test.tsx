@@ -50,6 +50,17 @@ describe("Welcome wizard (mock backend)", () => {
     expect(screen.getByText("node · desktop")).toBeTruthy();
   });
 
+  it("persists a different OS profile without installing anything", async () => {
+    const client = new MockSetupClient();
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    fireEvent.click(screen.getByText("Executive"));
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await flush();
+    expect(client.calls).toContain("profile executive");
+    expect(screen.getByText("AgentUX Executive")).toBeTruthy();
+  });
+
   it("offers a retry when first-login failed", async () => {
     const client = new MockSetupClient({ firstLoginDone: 2, fail: ["first-login"] });
     render(<Welcome client={client} pollMs={500} />);

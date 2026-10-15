@@ -855,6 +855,63 @@ button.wz-method:hover {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
 }
 
+.wz-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.wz-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.wz-panel-head h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.wz-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wz-profile-option {
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.wz-profile-option.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.wz-profile-option input {
+  accent-color: var(--accent);
+  margin: 0 0 2px;
+}
+
+.wz-profile-option span,
+.wz-profile-option small {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .wz-profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .wz-profile-kicker {
   color: var(--text-muted);
   font-size: 10px;
