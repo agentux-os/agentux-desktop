@@ -1,4 +1,5 @@
 import type { CockpitState } from "../daemon/types";
+import { openWelcome } from "../setup/open";
 import { Icon, Logo, type IconName } from "./Icon";
 
 export type View = "board" | "inbox" | "bus";
@@ -71,6 +72,10 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
       </div>
 
       <div className="sidebar-foot">
+        <button className="ghost-btn" onClick={() => void openWelcome()} title="Agents sign-in, developer tools, SDKs, Git and SSH">
+          <Icon name="plus" />
+          Welcome &amp; setup
+        </button>
         <button className="ghost-btn" onClick={onToggleTheme} title="Toggle theme">
           <Icon name={theme === "dark" ? "sun" : "moon"} />
           {theme === "dark" ? "Light" : "Dark"} theme

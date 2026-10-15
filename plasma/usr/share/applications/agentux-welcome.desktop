@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to AgentUX
+GenericName=First-run setup
+Comment=Sign in to the coding agents and install developer tools, SDKs, Git and SSH
+Exec=agentux-cockpit --welcome
+TryExec=agentux-cockpit
+Icon=agentux-cockpit
+StartupWMClass=agentux-cockpit
+Terminal=false
+Categories=Development;Settings;
+Keywords=setup;welcome;flatpak;sdk;ide;vscode;intellij;jetbrains;mise;distrobox;ssh;git;

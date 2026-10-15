@@ -83,11 +83,14 @@ while IFS= read -r -d '' file; do
     done < <(sed -n 's/^Exec=\([^[:space:]]*\).*/\1/p' "$file")
 done < <(find usr etc -type f -name '*.desktop' -print0)
 
-# 9. Shell scripts: executable, POSIX sh syntax.
+# 9. Shell scripts: executable, and their shell's syntax (POSIX sh unless the
+#    shebang says bash).
 while IFS= read -r -d '' file; do
-    echo "sh -n $file"
+    shell=sh
+    [[ "$(head -n 1 "$file")" == '#!/usr/bin/bash' ]] && shell=bash
+    echo "$shell -n $file"
     [[ -x "$file" ]] || err "$file is not executable (git add --chmod=+x)"
-    sh -n "$file" || err "$file has a shell syntax error"
+    "$shell" -n "$file" || err "$file has a shell syntax error"
 done < <(find usr/libexec -type f -print0 2>/dev/null)
 
 # 10. The cockpit autostart wrapper skips system users (the first-boot wizard
@@ -215,6 +218,81 @@ if [[ -f "$splash" ]]; then
     fi
 else
     err "the global theme ${lnf} ships no splash ($splash)"
+fi
+
+# 15. The welcome wizard's backend: the catalog parses, `agentux-setup plan`
+#     prints the expected commands and refuses what it does not know, the
+#     VS Code settings merge keeps the user's own keys, `status` prints JSON,
+#     and the first-run marker decides whether the login autostart opens the
+#     wizard (not for system users, not on the live ISO, not twice).
+setup=usr/libexec/agentux-setup
+catalog=usr/share/agentux/setup/catalog.json
+if [[ -f "$setup" ]]; then
+    echo "behaviour $setup"
+    node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$catalog" || err "$catalog is not valid JSON"
+    grep -q '^Url=https://dl.flathub.org/repo/$' usr/share/agentux/setup/flathub.flatpakrepo         && grep -q '^GPGKey=' usr/share/agentux/setup/flathub.flatpakrepo         || err "usr/share/agentux/setup/flathub.flatpakrepo is not Flathub's repo file"
+    if command -v jq >/dev/null; then
+        tmp=$(mktemp -d)
+        chmod 0755 "$tmp"
+        echo 'VERSION_ID=44' > "$tmp/os-release"
+        export AGENTUX_SETUP_CATALOG="$PWD/$catalog" AGENTUX_OS_RELEASE="$tmp/os-release"
+        out=$(bash "$setup" install --dry-run vscode java@temurin-17 intellij-idea elixir 2>&1) || err "$setup install --dry-run failed: $out"
+        expected=$(printf '%s	%s
+'             vscode "flatpak remote-add --user --if-not-exists flathub /usr/share/agentux/setup/flathub.flatpakrepo"             vscode "flatpak install --user --noninteractive --or-update flathub com.visualstudio.code"             vscode "flatpak override --user --talk-name=org.freedesktop.Flatpak --filesystem=home com.visualstudio.code"             vscode "agentux-setup vscode-settings com.visualstudio.code .var/app/com.visualstudio.code/config/Code/User"             vscode "agentux-setup vscode-sdks"             java "mise use --global java@temurin-17"             java "agentux-setup vscode-sdks"             intellij-idea "agentux-setup jetbrains-toolbox"             elixir "agentux-setup distrobox-create fedora-dev registry.fedoraproject.org/fedora-toolbox:44"             elixir "distrobox enter -T fedora-dev -- sudo dnf -y install elixir erlang")
+        [[ "$out" == "$expected" ]] || err "$setup plan printed:"$'
+'"$out"$'
+'"expected:"$'
+'"$expected"
+        bash "$setup" plan no-such-item >/dev/null 2>&1 && err "$setup plan accepted an unknown item"
+        bash "$setup" plan 'java@$(id)' >/dev/null 2>&1 && err "$setup plan accepted a version with shell syntax"
+
+        # VS Code settings: defaults added, the user's keys kept.
+        settings="$tmp/home/.var/app/com.visualstudio.code/config/Code/User/settings.json"
+        mkdir -p "$(dirname "$settings")"
+        echo '{"editor.fontSize": 15, "terminal.integrated.defaultProfile.linux": "zsh"}' > "$settings"
+        HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/.local/share" bash "$setup" vscode-settings com.visualstudio.code             .var/app/com.visualstudio.code/config/Code/User >/dev/null || err "$setup vscode-settings failed"
+        jq -e '."editor.fontSize" == 15 and ."terminal.integrated.defaultProfile.linux" == "zsh"
+               and ."terminal.integrated.profiles.linux"."host bash".path == "/usr/bin/flatpak-spawn"
+               and (."terminal.integrated.profiles.linux"."host bash".args | index("--host"))
+               and (."dev.containers.dockerPath" | endswith("/agentux/bin/podman-host"))' "$settings" >/dev/null             || err "$setup vscode-settings did not merge as expected: $(cat "$settings")"
+        [[ -x "$tmp/home/.local/share/agentux/bin/podman-host" ]] || err "$setup vscode-settings wrote no podman-host wrapper"
+
+        HOME="$tmp/home" bash "$setup" status | jq -e '.items == {} and (.agents | length == 4) and (.firstLogin | has("done"))' >/dev/null             || err "$setup status did not print the expected JSON"
+
+        # First-run marker and autostart, for a regular user (needs root and setpriv).
+        if [[ "$(id -u)" == 0 ]] && command -v setpriv >/dev/null; then
+            mkdir -p "$tmp/user" "$tmp/bin"
+            chown 4242:4242 "$tmp/user"
+            printf '#!/bin/sh
+echo "started $*" > "%s/user/cockpit"
+' "$tmp" > "$tmp/bin/agentux-cockpit"
+            chmod 0755 "$tmp/bin/agentux-cockpit"
+            cp "$setup" "$tmp/bin/agentux-setup"
+            chmod 0755 "$tmp/bin/agentux-setup"
+            as() { # uid, live marker, args...
+                local uid=$1 live=$2; shift 2
+                setpriv --reuid="$uid" --regid="$uid" --clear-groups env -i HOME="$tmp/user" PATH="$tmp/bin:/usr/bin:/bin"                     AGENTUX_LIVE_MARKER="$live" "$tmp/bin/agentux-setup" "$@"
+            }
+            as 4242 /nonexistent should-run 2>/dev/null || err "should-run said no for a new regular user"
+            as 968 /nonexistent should-run 2>/dev/null && err "should-run said yes for a system user"
+            as 4242 "$tmp/os-release" should-run 2>/dev/null && err "should-run said yes on the live system"
+            as 4242 /nonexistent autostart
+            [[ "$(cat "$tmp/user/cockpit" 2>/dev/null)" == "started --welcome" ]] || err "autostart did not run agentux-cockpit --welcome"
+            rm -f "$tmp/user/cockpit"
+            as 4242 /nonexistent finish || err "finish failed"
+            [[ -e "$tmp/user/.local/state/agentux/welcome.done" ]] || err "finish wrote no marker"
+            as 4242 /nonexistent should-run 2>/dev/null && err "should-run said yes after finish"
+            as 4242 /nonexistent autostart
+            [[ ! -e "$tmp/user/cockpit" ]] || err "autostart opened the wizard again after finish"
+            as 4242 /nonexistent reset && as 4242 /nonexistent should-run 2>/dev/null || err "should-run said no after reset"
+        else
+            echo "  first-run marker cases skipped (need root and setpriv)"
+        fi
+        unset AGENTUX_SETUP_CATALOG AGENTUX_OS_RELEASE
+        rm -rf "$tmp"
+    else
+        echo "  agentux-setup behaviour skipped (jq not installed)"
+    fi
 fi
 
 if (( fail )); then

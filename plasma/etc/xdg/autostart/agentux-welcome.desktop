@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to AgentUX
+Comment=Set up AgentUX on your first login: agent sign-in, developer tools, SDKs, Git and SSH
+# Opens the cockpit's first-run wizard (agentux-cockpit --welcome) once per
+# user: `agentux-setup autostart` does nothing for system accounts such as
+# plasma-setup, on the live ISO, or once the user finished or skipped the
+# wizard (~/.local/state/agentux/welcome.done). TryExec keeps the entry inert
+# when the cockpit isn't installed.
+Exec=/usr/libexec/agentux-setup autostart
+TryExec=agentux-cockpit
+Icon=agentux-cockpit
+Terminal=false
+StartupNotify=false
+OnlyShowIn=KDE;

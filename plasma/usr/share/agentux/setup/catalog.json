@@ -1,0 +1,755 @@
+{
+  "version": 1,
+  "flatpak": {
+    "remote": "flathub",
+    "remoteFile": "/usr/share/agentux/setup/flathub.flatpakrepo",
+    "sdkBranch": "25.08"
+  },
+  "jetbrainsToolbox": {
+    "releases": "https://data.services.jetbrains.com/products/releases?code=TBA&latest=true&type=release",
+    "dir": ".local/share/JetBrains/Toolbox"
+  },
+  "containers": {
+    "fedora-dev": {
+      "name": "Fedora",
+      "image": "registry.fedoraproject.org/fedora-toolbox:{fedora}",
+      "install": ["sudo", "dnf", "-y", "install"]
+    },
+    "ubuntu-dev": {
+      "name": "Ubuntu",
+      "image": "quay.io/toolbx/ubuntu-toolbox:24.04",
+      "install": ["sudo", "apt-get", "install", "-y"]
+    }
+  },
+  "categories": [
+    { "id": "editors", "name": "Editors & IDEs" },
+    { "id": "sdks", "name": "Languages & SDKs" },
+    { "id": "cloud", "name": "Cloud & Kubernetes" },
+    { "id": "databases", "name": "Databases" },
+    { "id": "api", "name": "API clients" },
+    { "id": "git", "name": "Git & diff" },
+    { "id": "containers", "name": "Containers" },
+    { "id": "browsers", "name": "Browsers" },
+    { "id": "design", "name": "Design" },
+    { "id": "communication", "name": "Communication" },
+    { "id": "utilities", "name": "Utilities" }
+  ],
+  "items": [
+    {
+      "id": "vscode",
+      "name": "Visual Studio Code",
+      "summary": "Microsoft's editor. Its terminal runs on the host, so mise SDKs, podman and the agent CLIs work in it.",
+      "category": "editors",
+      "method": "flatpak",
+      "flatpak": "com.visualstudio.code",
+      "hostIntegration": "vscode",
+      "settingsDir": ".var/app/com.visualstudio.code/config/Code/User"
+    },
+    {
+      "id": "vscodium",
+      "name": "VSCodium",
+      "summary": "VS Code without Microsoft's telemetry and branding, with the same host terminal.",
+      "category": "editors",
+      "method": "flatpak",
+      "flatpak": "com.vscodium.codium",
+      "hostIntegration": "vscode",
+      "settingsDir": ".var/app/com.vscodium.codium/config/VSCodium/User"
+    },
+    {
+      "id": "zed",
+      "name": "Zed",
+      "summary": "A fast, collaborative editor written in Rust.",
+      "category": "editors",
+      "method": "flatpak",
+      "flatpak": "dev.zed.Zed"
+    },
+    {
+      "id": "sublime-text",
+      "name": "Sublime Text",
+      "summary": "A lightweight, fast text editor.",
+      "category": "editors",
+      "method": "flatpak",
+      "flatpak": "com.sublimetext.three",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "jetbrains-toolbox",
+      "name": "JetBrains Toolbox",
+      "summary": "JetBrains' own app to install and update its IDEs, in your home directory, without a sandbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox"
+    },
+    {
+      "id": "intellij-idea",
+      "name": "IntelliJ IDEA",
+      "summary": "The JetBrains IDE for Java and Kotlin. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "IntelliJ IDEA"
+    },
+    {
+      "id": "pycharm",
+      "name": "PyCharm",
+      "summary": "The JetBrains IDE for Python. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "PyCharm"
+    },
+    {
+      "id": "webstorm",
+      "name": "WebStorm",
+      "summary": "The JetBrains IDE for JavaScript and TypeScript. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "WebStorm"
+    },
+    {
+      "id": "goland",
+      "name": "GoLand",
+      "summary": "The JetBrains IDE for Go. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "GoLand"
+    },
+    {
+      "id": "rider",
+      "name": "Rider",
+      "summary": "The JetBrains IDE for .NET and game development. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "Rider"
+    },
+    {
+      "id": "clion",
+      "name": "CLion",
+      "summary": "The JetBrains IDE for C and C++. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "CLion"
+    },
+    {
+      "id": "rustrover",
+      "name": "RustRover",
+      "summary": "The JetBrains IDE for Rust. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "RustRover"
+    },
+    {
+      "id": "phpstorm",
+      "name": "PhpStorm",
+      "summary": "The JetBrains IDE for PHP. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "PhpStorm"
+    },
+    {
+      "id": "rubymine",
+      "name": "RubyMine",
+      "summary": "The JetBrains IDE for Ruby and Rails. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "RubyMine"
+    },
+    {
+      "id": "datagrip",
+      "name": "DataGrip",
+      "summary": "JetBrains' database IDE. Installed from JetBrains Toolbox.",
+      "category": "databases",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "DataGrip"
+    },
+    {
+      "id": "android-studio",
+      "name": "Android Studio",
+      "summary": "Google's IDE for Android, built on IntelliJ. Installed from JetBrains Toolbox.",
+      "category": "editors",
+      "method": "jetbrains-toolbox",
+      "toolboxProduct": "Android Studio"
+    },
+    {
+      "id": "kate",
+      "name": "Kate",
+      "summary": "KDE's advanced text editor, with LSP support.",
+      "category": "editors",
+      "method": "flatpak",
+      "flatpak": "org.kde.kate"
+    },
+
+    {
+      "id": "java",
+      "name": "Java (Temurin JDK)",
+      "summary": "Eclipse Temurin, the OpenJDK build from Adoptium.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "java",
+      "versions": [
+        { "value": "temurin-21", "label": "21 LTS" },
+        { "value": "temurin-17", "label": "17 LTS" },
+        { "value": "temurin-25", "label": "25 LTS" }
+      ],
+      "defaultVersion": "temurin-21",
+      "sdkExtensions": { "temurin-17": "openjdk17", "temurin-21": "openjdk21", "temurin-25": "openjdk25" }
+    },
+    {
+      "id": "kotlin",
+      "name": "Kotlin",
+      "summary": "The Kotlin compiler (kotlinc). Needs Java.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "kotlin",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "gradle",
+      "name": "Gradle",
+      "summary": "Build tool for Java, Kotlin and Android. Needs Java.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "gradle",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "maven",
+      "name": "Maven",
+      "summary": "Apache Maven, the Java build tool. Needs Java.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "maven",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "node",
+      "name": "Node.js",
+      "summary": "The JavaScript runtime, latest LTS, with npm.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "node",
+      "defaultVersion": "lts",
+      "recommended": true,
+      "sdkExtensions": { "lts": "node24" }
+    },
+    {
+      "id": "pnpm",
+      "name": "pnpm",
+      "summary": "Fast, disk-efficient Node.js package manager.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "pnpm",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "yarn",
+      "name": "Yarn",
+      "summary": "The Yarn package manager for Node.js.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "yarn",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "deno",
+      "name": "Deno",
+      "summary": "A secure JavaScript and TypeScript runtime.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "deno",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "python",
+      "name": "Python",
+      "summary": "CPython from python-build-standalone (no compiler needed). uv is already installed.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "python",
+      "defaultVersion": "latest",
+      "recommended": true
+    },
+    {
+      "id": "go",
+      "name": "Go",
+      "summary": "The Go toolchain.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "go",
+      "defaultVersion": "latest",
+      "sdkExtensions": { "latest": "golang" }
+    },
+    {
+      "id": "rust",
+      "name": "Rust",
+      "summary": "rustc and cargo through rustup. Linking native code needs a C toolchain: use a dev container for that.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "rust",
+      "defaultVersion": "stable",
+      "sdkExtensions": { "stable": "rust-stable" }
+    },
+    {
+      "id": "dotnet",
+      "name": ".NET SDK",
+      "summary": "The .NET SDK (C#, F#).",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "dotnet",
+      "defaultVersion": "latest",
+      "sdkExtensions": { "latest": "dotnet10" }
+    },
+    {
+      "id": "ruby",
+      "name": "Ruby",
+      "summary": "CRuby from precompiled binaries where mise has them.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "ruby",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "zig",
+      "name": "Zig",
+      "summary": "The Zig compiler, which is also a drop-in C compiler.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "zig",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "flutter",
+      "name": "Flutter (with Dart)",
+      "summary": "Google's UI toolkit; includes the Dart SDK.",
+      "category": "sdks",
+      "method": "mise",
+      "mise": "flutter",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "php",
+      "name": "PHP and Composer",
+      "summary": "PHP from Fedora's packages, inside the Fedora dev container (mise would compile it from source).",
+      "category": "sdks",
+      "method": "distrobox",
+      "container": "fedora-dev",
+      "packages": ["php-cli", "composer"]
+    },
+    {
+      "id": "elixir",
+      "name": "Elixir and Erlang/OTP",
+      "summary": "From Fedora's packages, inside the Fedora dev container (mise would compile Erlang from source on Fedora).",
+      "category": "sdks",
+      "method": "distrobox",
+      "container": "fedora-dev",
+      "packages": ["elixir", "erlang"]
+    },
+    {
+      "id": "c-toolchain",
+      "name": "C/C++ toolchain",
+      "summary": "gcc, g++, make, cmake and the usual headers, inside the Fedora dev container.",
+      "category": "sdks",
+      "method": "distrobox",
+      "container": "fedora-dev",
+      "packages": ["gcc", "gcc-c++", "make", "cmake", "pkgconf-pkg-config", "openssl-devel"]
+    },
+
+    {
+      "id": "terraform",
+      "name": "Terraform",
+      "summary": "HashiCorp's infrastructure as code CLI.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "terraform",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "opentofu",
+      "name": "OpenTofu",
+      "summary": "The open source Terraform fork (tofu).",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "opentofu",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "kubectl",
+      "name": "kubectl",
+      "summary": "The Kubernetes command line.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "kubectl",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "helm",
+      "name": "Helm",
+      "summary": "The Kubernetes package manager.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "helm",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "k9s",
+      "name": "k9s",
+      "summary": "A terminal UI for Kubernetes clusters.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "k9s",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "kind",
+      "name": "kind",
+      "summary": "Local Kubernetes clusters in containers (works with rootless podman).",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "kind",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "aws-cli",
+      "name": "AWS CLI",
+      "summary": "The AWS command line, v2.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "aws-cli",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "gcloud",
+      "name": "Google Cloud CLI",
+      "summary": "gcloud, gsutil and bq.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "gcloud",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "azure-cli",
+      "name": "Azure CLI",
+      "summary": "az, Microsoft Azure's command line.",
+      "category": "cloud",
+      "method": "mise",
+      "mise": "azure",
+      "defaultVersion": "latest"
+    },
+    {
+      "id": "headlamp",
+      "name": "Headlamp",
+      "summary": "A Kubernetes dashboard for the desktop.",
+      "category": "cloud",
+      "method": "flatpak",
+      "flatpak": "io.kinvolk.Headlamp"
+    },
+
+    {
+      "id": "dbeaver",
+      "name": "DBeaver Community",
+      "summary": "Universal database tool: PostgreSQL, MySQL, SQLite, Oracle and more.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "io.dbeaver.DBeaverCommunity"
+    },
+    {
+      "id": "beekeeper",
+      "name": "Beekeeper Studio",
+      "summary": "A friendly SQL editor and database manager.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "io.beekeeperstudio.Studio"
+    },
+    {
+      "id": "pgadmin",
+      "name": "pgAdmin 4",
+      "summary": "The PostgreSQL administration tool.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "org.pgadmin.pgadmin4",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "mongodb-compass",
+      "name": "MongoDB Compass",
+      "summary": "The GUI for MongoDB.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "com.mongodb.Compass",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "redisinsight",
+      "name": "Redis Insight",
+      "summary": "Browse, debug and visualise Redis data.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "com.redis.RedisInsight"
+    },
+    {
+      "id": "sqlitebrowser",
+      "name": "DB Browser for SQLite",
+      "summary": "Create, design and edit SQLite databases.",
+      "category": "databases",
+      "method": "flatpak",
+      "flatpak": "org.sqlitebrowser.sqlitebrowser"
+    },
+
+    {
+      "id": "postman",
+      "name": "Postman",
+      "summary": "API platform for building and testing APIs.",
+      "category": "api",
+      "method": "flatpak",
+      "flatpak": "com.getpostman.Postman"
+    },
+    {
+      "id": "bruno",
+      "name": "Bruno",
+      "summary": "Offline-first API client that keeps collections in git.",
+      "category": "api",
+      "method": "flatpak",
+      "flatpak": "com.usebruno.Bruno",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "insomnia",
+      "name": "Insomnia",
+      "summary": "REST, GraphQL and gRPC client.",
+      "category": "api",
+      "method": "flatpak",
+      "flatpak": "rest.insomnia.Insomnia",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "httpie",
+      "name": "HTTPie",
+      "summary": "A simple desktop HTTP client.",
+      "category": "api",
+      "method": "flatpak",
+      "flatpak": "io.httpie.Httpie"
+    },
+
+    {
+      "id": "github-desktop",
+      "name": "GitHub Desktop",
+      "summary": "GitHub's Git client (community Linux build).",
+      "category": "git",
+      "method": "flatpak",
+      "flatpak": "io.github.shiftey.Desktop"
+    },
+    {
+      "id": "gitkraken",
+      "name": "GitKraken",
+      "summary": "A visual Git client.",
+      "category": "git",
+      "method": "flatpak",
+      "flatpak": "com.axosoft.GitKraken"
+    },
+    {
+      "id": "sublime-merge",
+      "name": "Sublime Merge",
+      "summary": "A fast Git client from the makers of Sublime Text.",
+      "category": "git",
+      "method": "flatpak",
+      "flatpak": "com.sublimemerge.App"
+    },
+    {
+      "id": "meld",
+      "name": "Meld",
+      "summary": "Visual diff and merge tool.",
+      "category": "git",
+      "method": "flatpak",
+      "flatpak": "org.gnome.meld"
+    },
+    {
+      "id": "kdiff3",
+      "name": "KDiff3",
+      "summary": "Compare and merge up to three files or folders.",
+      "category": "git",
+      "method": "flatpak",
+      "flatpak": "org.kde.kdiff3"
+    },
+
+    {
+      "id": "fedora-dev",
+      "name": "Fedora dev container",
+      "summary": "A mutable Fedora (toolbox image) with dnf, for anything that wants a classic distro. Enter it with: distrobox enter fedora-dev",
+      "category": "containers",
+      "method": "distrobox",
+      "container": "fedora-dev"
+    },
+    {
+      "id": "ubuntu-dev",
+      "name": "Ubuntu dev container",
+      "summary": "A mutable Ubuntu 24.04 with apt. Enter it with: distrobox enter ubuntu-dev",
+      "category": "containers",
+      "method": "distrobox",
+      "container": "ubuntu-dev"
+    },
+    {
+      "id": "podman-desktop",
+      "name": "Podman Desktop",
+      "summary": "Manage containers, images and pods, and local Kubernetes.",
+      "category": "containers",
+      "method": "flatpak",
+      "flatpak": "io.podman_desktop.PodmanDesktop"
+    },
+    {
+      "id": "pods",
+      "name": "Pods",
+      "summary": "A small native podman client.",
+      "category": "containers",
+      "method": "flatpak",
+      "flatpak": "com.github.marhkb.Pods"
+    },
+    {
+      "id": "boxbuddy",
+      "name": "BoxBuddy",
+      "summary": "A GUI for your Distrobox containers.",
+      "category": "containers",
+      "method": "flatpak",
+      "flatpak": "io.github.dvlv.boxbuddyrs"
+    },
+
+    {
+      "id": "chrome",
+      "name": "Google Chrome",
+      "summary": "Google's browser, for testing web apps.",
+      "category": "browsers",
+      "method": "flatpak",
+      "flatpak": "com.google.Chrome"
+    },
+    {
+      "id": "chromium",
+      "name": "Chromium",
+      "summary": "The open source browser behind Chrome.",
+      "category": "browsers",
+      "method": "flatpak",
+      "flatpak": "org.chromium.Chromium"
+    },
+    {
+      "id": "brave",
+      "name": "Brave",
+      "summary": "A Chromium-based browser that blocks ads and trackers.",
+      "category": "browsers",
+      "method": "flatpak",
+      "flatpak": "com.brave.Browser"
+    },
+
+    {
+      "id": "inkscape",
+      "name": "Inkscape",
+      "summary": "Vector graphics editor (SVG).",
+      "category": "design",
+      "method": "flatpak",
+      "flatpak": "org.inkscape.Inkscape"
+    },
+    {
+      "id": "gimp",
+      "name": "GIMP",
+      "summary": "Image editor.",
+      "category": "design",
+      "method": "flatpak",
+      "flatpak": "org.gimp.GIMP"
+    },
+    {
+      "id": "drawio",
+      "name": "draw.io",
+      "summary": "Diagrams: flowcharts, architecture, UML.",
+      "category": "design",
+      "method": "flatpak",
+      "flatpak": "com.jgraph.drawio.desktop"
+    },
+
+    {
+      "id": "slack",
+      "name": "Slack",
+      "summary": "Team chat.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "com.slack.Slack",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "summary": "Voice and text chat for communities.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "com.discordapp.Discord",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "summary": "Video meetings.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "us.zoom.Zoom",
+      "arches": ["x86_64"]
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "summary": "Messaging.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "org.telegram.desktop"
+    },
+    {
+      "id": "element",
+      "name": "Element",
+      "summary": "Matrix chat client.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "im.riot.Riot"
+    },
+    {
+      "id": "mattermost",
+      "name": "Mattermost",
+      "summary": "Open source team chat.",
+      "category": "communication",
+      "method": "flatpak",
+      "flatpak": "com.mattermost.Desktop"
+    },
+
+    {
+      "id": "flatseal",
+      "name": "Flatseal",
+      "summary": "Review and change the permissions of your Flatpak apps.",
+      "category": "utilities",
+      "method": "flatpak",
+      "flatpak": "com.github.tchx84.Flatseal"
+    },
+    {
+      "id": "warehouse",
+      "name": "Warehouse",
+      "summary": "Manage Flatpak apps, their data and versions.",
+      "category": "utilities",
+      "method": "flatpak",
+      "flatpak": "io.github.flattool.Warehouse"
+    },
+    {
+      "id": "obsidian",
+      "name": "Obsidian",
+      "summary": "Markdown notes and knowledge base.",
+      "category": "utilities",
+      "method": "flatpak",
+      "flatpak": "md.obsidian.Obsidian"
+    },
+    {
+      "id": "bitwarden",
+      "name": "Bitwarden",
+      "summary": "Password manager.",
+      "category": "utilities",
+      "method": "flatpak",
+      "flatpak": "com.bitwarden.desktop"
+    },
+    {
+      "id": "wireshark",
+      "name": "Wireshark",
+      "summary": "Network protocol analyser.",
+      "category": "utilities",
+      "method": "flatpak",
+      "flatpak": "org.wireshark.Wireshark"
+    }
+  ]
+}

@@ -1,0 +1,618 @@
+#!/usr/bin/bash
+# AgentUX setup backend: what the "Welcome to AgentUX" wizard in the cockpit
+# runs. Everything is per user and needs no sudo. The wizard only calls this
+# script (through the cockpit's `setup_exec` command), so all of it can be run
+# and tested without a window:
+#
+#   agentux-setup plan ITEM[@VERSION]...    print the commands a batch would run
+#                                           (ITEM<TAB>COMMAND per line), change nothing
+#   agentux-setup install [--dry-run] [--unit NAME] ITEM[@VERSION]...
+#                                           run a batch in the foreground
+#   agentux-setup start ITEM[@VERSION]...   queue a batch and run it in a transient
+#                                           systemd user unit, so it keeps going
+#                                           when the window closes; prints the unit
+#   agentux-setup status [--scan]           JSON: each item's install state, the
+#                                           agent CLIs and first-login; --scan adds
+#                                           what is installed already
+#   agentux-setup retry-first-login         start agentux-first-login.service again
+#   agentux-setup signin VENDOR             open a terminal with VENDOR's sign-in
+#                                           (claude, codex, opencode, antigravity, github)
+#   agentux-setup git [--show | NAME EMAIL BRANCH]
+#   agentux-setup ssh-key [--show | COMMENT]
+#                                           create ~/.ssh/id_ed25519 if missing (the
+#                                           passphrase, possibly empty, on stdin) and
+#                                           print the public key
+#   agentux-setup launch ITEM               start an installed app
+#   agentux-setup open-url URL              open an https:// URL in the browser
+#   agentux-setup should-run                exit 0 if the wizard should open at login
+#   agentux-setup autostart                 the login autostart: open the wizard if
+#                                           should-run says so
+#   agentux-setup finish | reset            write or remove the "wizard done" marker
+#
+# The catalog (/usr/share/agentux/setup/catalog.json, or $AGENTUX_SETUP_CATALOG)
+# lists every item and how it installs: a Flathub Flatpak, the JetBrains
+# Toolbox App, a mise tool, or packages in a Distrobox container. Item state
+# and logs live in ~/.local/state/agentux/setup/.
+set -uo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+catalog="${AGENTUX_SETUP_CATALOG:-/usr/share/agentux/setup/catalog.json}"
+state_root="${XDG_STATE_HOME:-$HOME/.local/state}/agentux"
+setup_dir="$state_root/setup"
+items_dir="$setup_dir/items"
+logs_dir="$setup_dir/logs"
+welcome_marker="$state_root/welcome.done"
+live_marker="${AGENTUX_LIVE_MARKER:-/usr/share/agentux/live/marker}"
+export PATH="$HOME/.local/bin:${XDG_DATA_HOME:-$HOME/.local/share}/mise/shims:$PATH"
+export MISE_YES=1
+
+die() { echo "agentux-setup: $*" >&2; exit 2; }
+need_catalog() { [[ -r "$catalog" ]] || die "catalog not found: $catalog"; }
+# Catalog values end up in commands; allow only plain tokens.
+safe() { [[ "$1" =~ ^[A-Za-z0-9._:/@+=,{}-]+$ ]]; }
+
+cat_item() { jq -ce --arg id "$1" '.items[] | select(.id == $id)' "$catalog"; }
+
+fedora_version() {
+    local v
+    v="$(. "${AGENTUX_OS_RELEASE:-/etc/os-release}" 2>/dev/null && echo "${VERSION_ID:-}")"
+    [[ "$v" =~ ^[0-9]+$ ]] && echo "$v" || echo latest
+}
+
+# plan_item ID VERSION: the item's commands, one per line.
+plan_item() {
+    local id="$1" version="$2" item method
+    item="$(cat_item "$id")" || die "unknown item: $id"
+    method="$(jq -r .method <<<"$item")"
+    case "$method" in
+        flatpak)
+            local app remote remote_file
+            app="$(jq -r .flatpak <<<"$item")"
+            remote="$(jq -r .flatpak.remote "$catalog")"
+            remote_file="$(jq -r .flatpak.remoteFile "$catalog")"
+            echo "flatpak remote-add --user --if-not-exists $remote $remote_file"
+            echo "flatpak install --user --noninteractive --or-update $remote $app"
+            if [[ "$(jq -r '.hostIntegration // ""' <<<"$item")" == vscode ]]; then
+                echo "flatpak override --user --talk-name=org.freedesktop.Flatpak --filesystem=home $app"
+                echo "agentux-setup vscode-settings $app $(jq -r .settingsDir <<<"$item")"
+                echo "agentux-setup vscode-sdks"
+            fi
+            ;;
+        jetbrains-toolbox)
+            echo "agentux-setup jetbrains-toolbox"
+            ;;
+        mise)
+            local tool
+            tool="$(jq -r .mise <<<"$item")"
+            [[ -n "$version" ]] || version="$(jq -r '.defaultVersion // "latest"' <<<"$item")"
+            echo "mise use --global $tool@$version"
+            if jq -e '.sdkExtensions' <<<"$item" >/dev/null; then
+                echo "agentux-setup vscode-sdks"
+            fi
+            ;;
+        distrobox)
+            local name container image
+            name="$(jq -r .container <<<"$item")"
+            container="$(jq -ce --arg c "$name" '.containers[$c]' "$catalog")" || die "$id: unknown container $name"
+            image="$(jq -r .image <<<"$container")"
+            image="${image//\{fedora\}/$(fedora_version)}"
+            echo "agentux-setup distrobox-create $name $image"
+            if jq -e '.packages | length > 0' <<<"$item" >/dev/null; then
+                echo "distrobox enter -T $name -- $(jq -r '.install | join(" ")' <<<"$container") $(jq -r '.packages | join(" ")' <<<"$item")"
+            fi
+            ;;
+        *) die "$id: unknown method $method" ;;
+    esac
+}
+
+# parse_spec ITEM[@VERSION] -> sets spec_id, spec_version
+parse_spec() {
+    spec_id="${1%%@*}"
+    spec_version=""
+    [[ "$1" == *@* ]] && spec_version="${1#*@}"
+    [[ "$spec_id" =~ ^[a-z0-9-]+$ ]] || die "bad item: $1"
+    [[ -z "$spec_version" || "$spec_version" =~ ^[A-Za-z0-9._+-]+$ ]] || die "bad version: $1"
+    cat_item "$spec_id" >/dev/null || die "unknown item: $spec_id"
+}
+
+cmd_plan() {
+    need_catalog
+    (( $# )) || die "plan: no items"
+    local spec line
+    for spec in "$@"; do
+        parse_spec "$spec"
+        while IFS= read -r line; do
+            for tok in $line; do safe "$tok" || die "$spec_id: unsafe catalog value: $tok"; done
+            printf '%s\t%s\n' "$spec_id" "$line"
+        done < <(plan_item "$spec_id" "$spec_version")
+    done
+}
+
+# ---- item state -------------------------------------------------------------
+# items/<id>: STATE<TAB>VERSION<TAB>UNIT<TAB>EPOCH<TAB>MESSAGE
+
+set_state() {
+    local id="$1" state="$2" version="$3" unit="$4" message="${5:-}"
+    mkdir -p "$items_dir"
+    message="${message//$'\t'/ }"
+    message="${message//$'\n'/ }"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$state" "$version" "$unit" "$(date +%s)" "${message:0:300}" \
+        >"$items_dir/$id.tmp" && mv -f "$items_dir/$id.tmp" "$items_dir/$id"
+}
+
+last_line() {
+    [[ -r "$1" ]] || return 0
+    tr '\r' '\n' <"$1" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' | grep -v '^[[:space:]]*$' | tail -n 1
+}
+
+unit_alive() {
+    case "$1" in
+        pid:*) kill -0 "${1#pid:}" 2>/dev/null ;;
+        "" | -) return 1 ;;
+        *) systemctl --user is-active -q "$1" 2>/dev/null || systemctl --user is-activating -q "$1" 2>/dev/null ;;
+    esac
+}
+
+# ---- internal steps (the agentux-setup ... lines of a plan) -------------------
+
+# A plan line `agentux-setup X ...` runs X here.
+agentux-setup() { "$self" "$@"; }
+
+# vscode-settings APP DIR: default settings for a Flatpak VS Code: the
+# integrated terminal is a login shell on the host (flatpak-spawn --host), so
+# mise SDKs, podman and the agent CLIs work there; Dev Containers talks to the
+# host's podman. Keys the user set already win.
+cmd_vscode_settings() {
+    local app="$1" dir="$HOME/$2" file wrapper defaults
+    file="$dir/settings.json"
+    wrapper="${XDG_DATA_HOME:-$HOME/.local/share}/agentux/bin/podman-host"
+    mkdir -p "$dir" "$(dirname "$wrapper")"
+    cat >"$wrapper" <<'EOF'
+#!/bin/sh
+# podman on the host, from inside a Flatpak sandbox or outside it.
+# Written by agentux-setup for VS Code's Dev Containers (dev.containers.dockerPath).
+if [ -e /.flatpak-info ]; then
+    exec flatpak-spawn --host podman "$@"
+fi
+exec podman "$@"
+EOF
+    chmod 0755 "$wrapper"
+    defaults="$(jq -n --arg podman "$wrapper" '{
+        "terminal.integrated.profiles.linux": {
+            "host bash": {
+                "path": "/usr/bin/flatpak-spawn",
+                "args": ["--host", "--env=TERM=xterm-256color", "bash", "-l"],
+                "icon": "terminal-bash",
+                "overrideName": true
+            }
+        },
+        "terminal.integrated.defaultProfile.linux": "host bash",
+        "dev.containers.dockerPath": $podman
+    }')"
+    if [[ ! -s "$file" ]]; then
+        jq . <<<"$defaults" >"$file"
+        echo "wrote $file"
+    elif jq -e . "$file" >/dev/null 2>&1; then
+        jq --argjson d "$defaults" '$d * .' "$file" >"$file.tmp" && mv -f "$file.tmp" "$file"
+        echo "merged AgentUX defaults into $file (your settings kept)"
+    else
+        # settings.json is JSONC; with comments jq can't merge it safely.
+        echo "warning: $file has comments or is not plain JSON; left unchanged." >&2
+        echo "add these settings yourself: $defaults" >&2
+    fi
+    echo "Flatpak $app: integrated terminal runs on the host"
+}
+
+# vscode-sdks: for every installed Flatpak VS Code, install the Flatpak SDK
+# extensions (org.freedesktop.Sdk.Extension.*) matching the mise SDKs this
+# user has set globally, and enable them in the sandbox
+# (FLATPAK_ENABLE_SDK_EXT), so language extensions that run inside the
+# sandbox find a JDK, Node.js, Go, Rust or .NET. The terminal does not need
+# them: it runs on the host.
+cmd_vscode_sdks() {
+    local apps app exts=() branch fallback tool requested ext
+    mapfile -t apps < <(jq -r '.items[] | select(.hostIntegration == "vscode") | .flatpak' "$catalog")
+    fallback="$(jq -r .flatpak.sdkBranch "$catalog")"
+    if command -v mise >/dev/null; then
+        while IFS=$'\t' read -r tool requested; do
+            ext="$(jq -r --arg t "$tool" --arg v "$requested" \
+                '.items[] | select(.method == "mise" and .mise == $t) | .sdkExtensions[$v] // empty' "$catalog")"
+            [[ -n "$ext" ]] && exts+=("$ext")
+        done < <(mise ls --global --json 2>/dev/null \
+            | jq -r 'to_entries[] | .key as $t | .value[] | [$t, (.requested_version // .version)] | @tsv' 2>/dev/null)
+    fi
+    for app in "${apps[@]}"; do
+        flatpak info --user "$app" >/dev/null 2>&1 || continue
+        branch="$(flatpak info --user --show-runtime "$app" 2>/dev/null | awk -F/ '{print $3}')"
+        [[ -n "$branch" ]] || branch="$fallback"
+        local enabled=()
+        for ext in "${exts[@]}"; do
+            if flatpak install --user --noninteractive --or-update flathub "org.freedesktop.Sdk.Extension.$ext//$branch"; then
+                enabled+=("$ext")
+            else
+                echo "warning: org.freedesktop.Sdk.Extension.$ext//$branch did not install" >&2
+            fi
+        done
+        if (( ${#enabled[@]} )); then
+            local IFS=,
+            flatpak override --user --env=FLATPAK_ENABLE_SDK_EXT="${enabled[*]}" "$app"
+            echo "$app: SDK extensions ${enabled[*]}"
+        else
+            echo "$app: no SDK extensions to enable"
+        fi
+    done
+}
+
+# jetbrains-toolbox: the official JetBrains Toolbox App tarball, into
+# ~/.local/share/JetBrains/Toolbox (where Toolbox keeps itself), with a menu
+# entry. Toolbox then installs and updates the IDEs, outside any sandbox.
+cmd_jetbrains_toolbox() {
+    local dir bin api arch key json url sum tmp
+    dir="$HOME/$(jq -r .jetbrainsToolbox.dir "$catalog")"
+    bin="$dir/bin/jetbrains-toolbox"
+    if [[ -x "$bin" ]]; then
+        echo "JetBrains Toolbox is installed: $bin"
+    else
+        api="$(jq -r .jetbrainsToolbox.releases "$catalog")"
+        arch="$(uname -m)"
+        case "$arch" in
+            x86_64) key=linux ;;
+            aarch64) key=linuxARM64 ;;
+            *) echo "unsupported architecture $arch" >&2; return 1 ;;
+        esac
+        mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
+        tmp="$(mktemp -d -p "${XDG_CACHE_HOME:-$HOME/.cache}" agentux-toolbox.XXXXXX)" || return 1
+        local rc=0
+        {
+            json="$(curl -fsSL --retry 3 --connect-timeout 20 "$api")" \
+            && url="$(jq -er --arg k "$key" '.TBA[0].downloads[$k].link' <<<"$json")" \
+            && sum="$(curl -fsSL --retry 3 --connect-timeout 20 "$(jq -er --arg k "$key" '.TBA[0].downloads[$k].checksumLink' <<<"$json")" | awk '{print $1}')" \
+            && [[ "$sum" =~ ^[0-9a-f]{64}$ ]] \
+            && echo "downloading $url" \
+            && curl -fL --retry 3 --connect-timeout 20 --speed-limit 1024 --speed-time 60 -o "$tmp/toolbox.tar.gz" "$url" \
+            && echo "$sum  $tmp/toolbox.tar.gz" | sha256sum --check --strict \
+            && mkdir -p "$dir" \
+            && tar -xzf "$tmp/toolbox.tar.gz" -C "$dir" --strip-components=1 \
+            && test -x "$bin"
+        } || rc=1
+        rm -rf "$tmp"
+        (( rc == 0 )) || { echo "JetBrains Toolbox download failed" >&2; return 1; }
+    fi
+    local apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$apps"
+    if [[ ! -e "$apps/jetbrains-toolbox.desktop" ]]; then
+        cat >"$apps/jetbrains-toolbox.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=JetBrains Toolbox
+Comment=Install and update JetBrains IDEs
+Exec="$bin" %u
+Icon=$dir/bin/toolbox-tray-color.png
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/jetbrains;
+StartupWMClass=jetbrains-toolbox
+EOF
+        echo "menu entry: $apps/jetbrains-toolbox.desktop"
+    fi
+    echo "Open JetBrains Toolbox to install your IDEs."
+}
+
+# distrobox-create NAME IMAGE: a Distrobox container, created and entered once
+# (the first entry sets it up, which takes a while).
+cmd_distrobox_create() {
+    local name="$1" image="$2"
+    command -v distrobox >/dev/null || { echo "distrobox is not installed" >&2; return 1; }
+    if podman container exists "$name" 2>/dev/null; then
+        echo "container $name exists"
+    else
+        distrobox create --yes --name "$name" --image "$image" || return 1
+    fi
+    distrobox enter -T "$name" -- true
+}
+
+# ---- batches -------------------------------------------------------------------
+
+wait_first_login() {
+    local deadline=$(( SECONDS + 2400 ))
+    while systemctl --user is-active -q agentux-first-login.service 2>/dev/null \
+        || systemctl --user is-activating -q agentux-first-login.service 2>/dev/null; do
+        (( SECONDS < deadline )) || return 0
+        sleep 5
+    done
+}
+
+cmd_install() {
+    need_catalog
+    local dry=0 unit="pid:$$"
+    while (( $# )); do
+        case "$1" in
+            --dry-run) dry=1; shift ;;
+            --unit) unit="$2"; shift 2 ;;
+            --) shift; break ;;
+            -*) die "install: unknown option $1" ;;
+            *) break ;;
+        esac
+    done
+    (( $# )) || die "install: no items"
+    if (( dry )); then
+        cmd_plan "$@"
+        return
+    fi
+    local specs=("$@") spec
+    for spec in "${specs[@]}"; do parse_spec "$spec"; done
+    mkdir -p "$items_dir" "$logs_dir"
+    # One batch at a time: flatpak and mise install fine side by side, but
+    # mise's global config is one file.
+    exec 9>"$setup_dir/lock"
+    flock 9
+    local failed=0
+    for spec in "${specs[@]}"; do
+        parse_spec "$spec"
+        local id="$spec_id" version="$spec_version" log="$logs_dir/$spec_id.log" rc=0 line
+        local lines
+        lines="$(cmd_plan "$spec")" || { set_state "$id" failed "$version" "$unit" "bad catalog entry"; failed=1; continue; }
+        : >"$log"
+        if grep -q $'\tmise ' <<<"$lines" && systemctl --user is-active -q agentux-first-login.service 2>/dev/null; then
+            set_state "$id" running "$version" "$unit" "waiting for the first-login install to finish"
+            wait_first_login
+        fi
+        set_state "$id" running "$version" "$unit" "starting"
+        echo "== $id $(date -Is)" >>"$log"
+        while IFS=$'\t' read -r _ line; do
+            echo "\$ $line" >>"$log"
+            set_state "$id" running "$version" "$unit" "$line"
+            timeout --kill-after=30 3600 bash -c "$(declare -f agentux-setup); self=$(printf %q "$self"); export MISE_YES=1; $line" \
+                </dev/null >>"$log" 2>&1 || { rc=$?; break; }
+        done <<<"$lines"
+        if (( rc == 0 )); then
+            set_state "$id" done "$version" "$unit" "$(last_line "$log")"
+        else
+            set_state "$id" failed "$version" "$unit" "$(last_line "$log")"
+            echo "== failed with exit $rc" >>"$log"
+            failed=1
+        fi
+    done
+    return "$failed"
+}
+
+cmd_start() {
+    need_catalog
+    (( $# )) || die "start: no items"
+    local spec ids=()
+    for spec in "$@"; do parse_spec "$spec"; ids+=("$spec_id"); done
+    local unit="agentux-setup-$(date +%s)-$$"
+    if command -v systemd-run >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
+        for spec in "$@"; do parse_spec "$spec"; set_state "$spec_id" queued "$spec_version" "$unit.service"; done
+        systemd-run --user --unit="$unit" --description="AgentUX setup: ${ids[*]}" \
+            --collect --quiet --property=MemoryHigh=1G \
+            -- "$self" install --unit "$unit.service" "$@" \
+            || { for spec in "$@"; do parse_spec "$spec"; set_state "$spec_id" failed "$spec_version" "" "could not start the install unit"; done; return 1; }
+        echo "$unit.service"
+    else
+        # No user manager (a container, a test): a detached process instead.
+        setsid -f "$self" install "$@" </dev/null >/dev/null 2>&1
+        for spec in "$@"; do parse_spec "$spec"; [[ -e "$items_dir/$spec_id" ]] || set_state "$spec_id" queued "$spec_version" ""; done
+        echo "detached"
+    fi
+}
+
+# ---- status ------------------------------------------------------------------
+
+agents_json() {
+    local rows=() id cmd signed
+    for id in claude codex opencode antigravity; do
+        case "$id" in
+            claude) cmd=claude; signed=$([[ -s "$HOME/.claude/.credentials.json" || -n "${ANTHROPIC_API_KEY:-}" ]] && echo true || echo false) ;;
+            codex) cmd=codex; signed=$([[ -s "$HOME/.codex/auth.json" || -n "${OPENAI_API_KEY:-}" ]] && echo true || echo false) ;;
+            opencode) cmd=opencode; signed=$([[ -s "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json" ]] && echo true || echo null) ;;
+            antigravity) cmd=agy; signed=null ;;
+        esac
+        rows+=("$(jq -nc --arg id "$id" --arg cmd "$cmd" --argjson installed "$(command -v "$cmd" >/dev/null && echo true || echo false)" \
+            --argjson signedIn "$signed" '{id: $id, command: $cmd, installed: $installed, signedIn: $signedIn}')")
+    done
+    printf '%s\n' "${rows[@]}" | jq -sc .
+}
+
+first_login_json() {
+    local unit=agentux-first-login.service active result steps="$state_root/first-login.steps"
+    active="$(systemctl --user show -P ActiveState "$unit" 2>/dev/null || true)"
+    result="$(systemctl --user show -P Result "$unit" 2>/dev/null || true)"
+    local steps_json='[]'
+    if [[ -r "$steps" ]]; then
+        steps_json="$(jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {name: .[0], result: .[1], seconds: (.[2] | tonumber? // 0)})' "$steps")"
+    fi
+    jq -nc --arg active "${active:-unknown}" --arg result "${result:-}" \
+        --argjson done "$([[ -e "$state_root/first-login.done" ]] && echo true || echo false)" \
+        --argjson steps "$steps_json" '{active: $active, result: $result, done: $done, steps: $steps}'
+}
+
+items_json() {
+    local f rows=() id state version unit epoch message
+    shopt -s nullglob
+    for f in "$items_dir"/*; do
+        [[ "$f" == *.tmp ]] && continue
+        id="${f##*/}"
+        IFS=$'\t' read -r state version unit epoch message <"$f" || continue
+        if [[ "$state" == queued || "$state" == running ]] && [[ -n "$unit" ]] && ! unit_alive "$unit"; then
+            state=failed
+            message="interrupted: $(last_line "$logs_dir/$id.log")"
+        fi
+        rows+=("$(jq -nc --arg id "$id" --arg state "$state" --arg version "$version" --arg message "$message" \
+            --argjson updated "${epoch:-0}" '{id: $id, state: $state, version: $version, updated: $updated, message: $message}')")
+    done
+    if (( ${#rows[@]} )); then printf '%s\n' "${rows[@]}" | jq -sc 'map({key: .id, value: .}) | from_entries'; else echo '{}'; fi
+}
+
+installed_json() {
+    local ids=() id
+    if command -v flatpak >/dev/null; then
+        local apps
+        apps="$(flatpak list --app --columns=application 2>/dev/null)"
+        while IFS= read -r id; do ids+=("$id"); done < <(
+            jq -r '.items[] | select(.method == "flatpak") | [.id, .flatpak] | @tsv' "$catalog" \
+            | while IFS=$'\t' read -r i app; do grep -qxF "$app" <<<"$apps" && echo "$i"; done)
+    fi
+    if command -v mise >/dev/null; then
+        local tools
+        tools="$(mise ls --global --json 2>/dev/null | jq -r 'keys[]' 2>/dev/null)"
+        while IFS= read -r id; do ids+=("$id"); done < <(
+            jq -r '.items[] | select(.method == "mise") | [.id, .mise] | @tsv' "$catalog" \
+            | while IFS=$'\t' read -r i tool; do grep -qxF "$tool" <<<"$tools" && echo "$i"; done)
+    fi
+    [[ -x "$HOME/$(jq -r .jetbrainsToolbox.dir "$catalog")/bin/jetbrains-toolbox" ]] && ids+=(jetbrains-toolbox)
+    if command -v podman >/dev/null; then
+        local c
+        for c in $(jq -r '.containers | keys[]' "$catalog"); do
+            podman container exists "$c" 2>/dev/null && ids+=("$c")
+        done
+    fi
+    if (( ${#ids[@]} )); then printf '%s\n' "${ids[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique'; else echo '[]'; fi
+}
+
+cmd_status() {
+    need_catalog
+    local scan=0
+    [[ "${1:-}" == --scan ]] && scan=1
+    local installed=null
+    (( scan )) && installed="$(installed_json)"
+    jq -n --argjson items "$(items_json)" --argjson agents "$(agents_json)" \
+        --argjson firstLogin "$(first_login_json)" --argjson installed "$installed" \
+        --arg arch "$(uname -m)" \
+        --argjson flathub "$(flatpak remotes --user --columns=name 2>/dev/null | grep -qx flathub && echo true || echo false)" \
+        '{arch: $arch, flathub: $flathub, items: $items, agents: $agents, firstLogin: $firstLogin}
+         + (if $installed == null then {} else {installed: $installed} end)'
+}
+
+# ---- desktop helpers -------------------------------------------------------------
+
+# run_detached CMD...: start a GUI program and return at once.
+run_detached() { setsid -f "$@" </dev/null >/dev/null 2>&1; }
+
+# terminal COMMAND: a terminal window running COMMAND in a login shell, left
+# open afterwards so its output can be read.
+open_terminal() {
+    local cmd="$1; echo; read -rp 'Press Enter to close this window. ' _"
+    if command -v konsole >/dev/null; then
+        run_detached konsole -e bash -lc "$cmd"
+    elif command -v foot >/dev/null; then
+        run_detached foot bash -lc "$cmd"
+    elif command -v xdg-terminal-exec >/dev/null; then
+        run_detached xdg-terminal-exec bash -lc "$cmd"
+    else
+        echo "no terminal emulator found" >&2; return 1
+    fi
+}
+
+cmd_signin() {
+    local cmd
+    case "${1:-}" in
+        claude) cmd="claude" ;;
+        codex) cmd="codex login" ;;
+        opencode) cmd="opencode auth login" ;;
+        antigravity) cmd="agy" ;;
+        github) cmd="gh auth login --hostname github.com --git-protocol ssh --web" ;;
+        *) die "signin: unknown vendor ${1:-}" ;;
+    esac
+    echo "$cmd"
+    [[ "${2:-}" == --dry-run ]] && return 0
+    open_terminal "$cmd"
+}
+
+cmd_launch() {
+    need_catalog
+    local item method
+    item="$(cat_item "${1:-}")" || die "launch: unknown item ${1:-}"
+    method="$(jq -r .method <<<"$item")"
+    case "$method" in
+        flatpak) run_detached flatpak run "$(jq -r .flatpak <<<"$item")" ;;
+        jetbrains-toolbox) run_detached "$HOME/$(jq -r .jetbrainsToolbox.dir "$catalog")/bin/jetbrains-toolbox" ;;
+        distrobox) open_terminal "distrobox enter $(jq -r .container <<<"$item")" ;;
+        *) die "launch: $1 has nothing to open" ;;
+    esac
+}
+
+cmd_open_url() {
+    [[ "${1:-}" =~ ^https://[A-Za-z0-9._~:/?#@!\$\&\'()*+,\;=%-]+$ ]] || die "open-url: not an https URL: ${1:-}"
+    run_detached xdg-open "$1"
+}
+
+cmd_git() {
+    if [[ "${1:-}" == --show ]]; then
+        jq -nc --arg name "$(git config --global user.name 2>/dev/null)" \
+            --arg email "$(git config --global user.email 2>/dev/null)" \
+            --arg branch "$(git config --global init.defaultBranch 2>/dev/null)" \
+            '{name: $name, email: $email, defaultBranch: $branch}'
+        return
+    fi
+    (( $# == 3 )) || die "usage: git NAME EMAIL BRANCH"
+    [[ -n "$1" && "$2" == *@* ]] || die "git: a name and an e-mail address are needed"
+    git check-ref-format --branch "$3" >/dev/null 2>&1 || die "git: not a valid branch name: $3"
+    git config --global user.name "$1" \
+        && git config --global user.email "$2" \
+        && git config --global init.defaultBranch "$3" \
+        && cmd_git --show
+}
+
+cmd_ssh_key() {
+    local key="$HOME/.ssh/id_ed25519"
+    if [[ "${1:-}" == --show ]]; then
+        [[ -r "$key.pub" ]] || exit 3
+        cat "$key.pub"
+        return
+    fi
+    if [[ ! -e "$key" ]]; then
+        local pass=""
+        [[ -t 0 ]] || IFS= read -r pass || true
+        mkdir -p "$HOME/.ssh" && chmod 0700 "$HOME/.ssh"
+        ssh-keygen -q -t ed25519 -N "$pass" -C "${1:-$(id -un)@$(hostname)}" -f "$key" </dev/null || return 1
+    fi
+    cat "$key.pub"
+}
+
+cmd_should_run() {
+    local uid uid_min
+    uid="$(id -u)"
+    uid_min="$(sed -n 's/^[[:space:]]*UID_MIN[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' /etc/login.defs 2>/dev/null | head -n 1)"
+    [[ "$uid_min" =~ ^[0-9]+$ ]] || uid_min=1000
+    if (( uid < uid_min )); then echo "system user (uid $uid)" >&2; return 1; fi
+    if [[ -e "$live_marker" ]] || grep -qw rd.live.image /proc/cmdline 2>/dev/null; then
+        echo "live session" >&2; return 1
+    fi
+    if [[ -e "$welcome_marker" ]]; then echo "already done ($welcome_marker)" >&2; return 1; fi
+    return 0
+}
+
+cmd_retry_first_login() {
+    systemctl --user reset-failed agentux-first-login.service 2>/dev/null || true
+    systemctl --user start --no-block agentux-first-login.service
+}
+
+main() {
+    local cmd="${1:-}"
+    (( $# )) && shift
+    case "$cmd" in
+        plan) cmd_plan "$@" ;;
+        install) cmd_install "$@" ;;
+        start) cmd_start "$@" ;;
+        status) cmd_status "$@" ;;
+        retry-first-login) cmd_retry_first_login ;;
+        signin) cmd_signin "$@" ;;
+        launch) cmd_launch "$@" ;;
+        open-url) cmd_open_url "$@" ;;
+        git) cmd_git "$@" ;;
+        ssh-key) cmd_ssh_key "$@" ;;
+        should-run) cmd_should_run ;;
+        autostart) cmd_should_run 2>/dev/null || exit 0; exec agentux-cockpit --welcome ;;
+        finish) mkdir -p "$state_root" && touch "$welcome_marker" ;;
+        reset) rm -f "$welcome_marker" ;;
+        vscode-settings) need_catalog; cmd_vscode_settings "$@" ;;
+        vscode-sdks) need_catalog; cmd_vscode_sdks ;;
+        jetbrains-toolbox) need_catalog; cmd_jetbrains_toolbox ;;
+        distrobox-create) cmd_distrobox_create "$@" ;;
+        "" | -h | --help) sed -n '2,/^set -uo/p' "$self" | sed '$d; s/^# \{0,1\}//' ;;
+        *) die "unknown command: $cmd (see --help)" ;;
+    esac
+}
+
+main "$@"
