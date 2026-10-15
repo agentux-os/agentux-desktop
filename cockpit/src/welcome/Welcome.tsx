@@ -49,6 +49,18 @@ function loadTheme(): "dark" | "light" {
   }
 }
 
+function profileLabel(profile: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    workstation: "AgentUX Workstation",
+    node: "AgentUX Node",
+    command: "AgentUX Command Server",
+    executive: "AgentUX Executive",
+    complete: "AgentUX Complete",
+    custom: "Custom profile",
+  };
+  return (profile && labels[profile]) || "Profile not selected";
+}
+
 export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: number }) {
   const { status, installed, error: statusError, refresh } = useSetupStatus(client, pollMs);
   const [step, setStep] = useState(0);
@@ -208,6 +220,21 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
             {activity.busy > 0 && <small className="muted">Keeps going if you close this window</small>}
           </button>
         )}
+
+        <section className="wz-profile" aria-label="AgentUX OS profile" role="region">
+          <div className="wz-profile-kicker">AgentUX OS profile</div>
+          <strong>{profileLabel(status?.profile.requested)}</strong>
+          <span className="muted">
+            {status?.profile.applied.length ? status.profile.applied.join(" · ") : "No capabilities applied"}
+          </span>
+          {(status?.profile.pending.length || status?.profile.failed.length) ? (
+            <small className="err">
+              {status.profile.pending.length ? `${status.profile.pending.length} pending` : ""}
+              {status.profile.pending.length && status.profile.failed.length ? " · " : ""}
+              {status.profile.failed.length ? `${status.profile.failed.length} failed` : ""}
+            </small>
+          ) : null}
+        </section>
 
         <div className="wz-rail-foot">
           <button className="btn btn-quiet" onClick={() => void finish(false)}>
