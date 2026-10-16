@@ -40,7 +40,9 @@ The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the 
 This repository holds two things, and the [AgentUX image](https://github.com/agentux-os/agentux-os) ships both:
 
 - **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Meta+A** brings it up.
-- **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel, shortcuts and cockpit autostart. Every user can override all of it in System Settings.
+- **The shared desktop overlay** (in [`common/`](common)): desktop-independent setup catalog/backend, Welcome launcher, and login launchers for Cockpit and first-run setup.
+- **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel and shortcuts.
+- **The COSMIC overlay** (in [`cosmic/`](cosmic)): AgentUX accent palettes for COSMIC Settings. COSMIC uses the shared launchers through its XDG autostart target; Plasma-only settings are not included.
 
 See the cockpit in a minute, no Rust and no daemon needed (it plays scripted runs from a mock daemon):
 
@@ -82,9 +84,9 @@ On a user's first login the cockpit opens **Welcome to AgentUX** (`agentux-cockp
 
 How it is built:
 
-- **The backend is one script**, [`plasma/usr/libexec/agentux-setup`](plasma/usr/libexec/agentux-setup), shipped in the Plasma overlay. The wizard calls it through a single Tauri command (`setup_exec`, with an allowlist of subcommands); `agentux-setup --help` lists them. `start` runs a batch in a transient systemd user unit (`systemd-run --user`), one batch at a time; item states and logs go to `~/.local/state/agentux/setup/`. `plan` (or `install --dry-run`) prints the commands a batch would run without changing anything.
-- **The catalog is data**, [`plasma/usr/share/agentux/setup/catalog.json`](plasma/usr/share/agentux/setup/catalog.json), read by the script at run time and bundled into the cockpit. Adding an app is adding an entry. The Flathub remote is added per user from the shipped [`flathub.flatpakrepo`](plasma/usr/share/agentux/setup/flathub.flatpakrepo), so it needs no download.
-- **First run:** `/etc/xdg/autostart/agentux-welcome.desktop` runs `agentux-setup autostart`, which opens the wizard unless the user is a system account (`plasma-setup`'s session), the system is the live ISO (`/usr/share/agentux/live/marker` or `rd.live.image`), or `~/.local/state/agentux/welcome.done` exists. Finishing or skipping writes that marker; `agentux-setup reset` removes it.
+- **The backend is one shared script**, [`common/usr/libexec/agentux-setup`](common/usr/libexec/agentux-setup), shipped in the common overlay. The wizard calls it through a single Tauri command (`setup_exec`, with an allowlist of subcommands); `agentux-setup --help` lists them. `start` runs a batch in a transient systemd user unit (`systemd-run --user`), one batch at a time; item states and logs go to `~/.local/state/agentux/setup/`. `plan` (or `install --dry-run`) prints the commands a batch would run without changing anything.
+- **The catalog is data**, [`common/usr/share/agentux/setup/catalog.json`](common/usr/share/agentux/setup/catalog.json), read by the script at run time and bundled into the cockpit. Adding an app is adding an entry. The Flathub remote is added per user from the shipped [`flathub.flatpakrepo`](common/usr/share/agentux/setup/flathub.flatpakrepo), so it needs no download.
+- **First run:** `/etc/xdg/autostart/agentux-welcome.desktop` runs `agentux-setup autostart`, which opens the wizard unless the user is a system account, the system is the live ISO (`/usr/share/agentux/live/marker` or `rd.live.image`), or `~/.local/state/agentux/welcome.done` exists. Finishing or skipping writes that marker; `agentux-setup reset` removes it.
 - **Without a system:** `npm run dev` and open `http://localhost:1420/?view=welcome` for the wizard on a mock backend (`&speed=3` to hurry it, `&fail=dbeaver,first-login` to see failures).
 - **Tests:** vitest checks the catalog (ids, categories, mise tool names, Flatpak id shapes, SDK extensions; `CHECK_FLATHUB=1 npm test` also asks Flathub's API about every Flatpak and its architectures), the command builder, that `agentux-setup plan` prints exactly what the UI shows for every item (where bash and jq exist), and the wizard flow on the mock backend. `plasma/check.sh` checks the script's dry run, the VS Code settings merge, `status` and the first-run marker.
 
@@ -164,7 +166,7 @@ Components only talk to the `DaemonClient` interface; `createDaemonClient()` pic
 sudo dnf install ./agentux-cockpit-<version>-1.$(uname -m).rpm
 ```
 
-The Plasma overlay tarball below is architecture-independent and built once. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
+The common, Plasma, and COSMIC overlay tarballs are architecture-independent and built once. Rust dependencies are pinned by the committed `Cargo.lock` (CI builds with `--locked`).
 
 ### Single instance and window identity
 
@@ -193,7 +195,7 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 
 ## Desktop configuration
 
-KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma), laid out as a filesystem overlay: `plasma/usr/...` lands in `/usr`, `plasma/etc/...` in `/etc`. They are system-wide defaults only. Nothing is written to any home directory or `/etc/skel`; each user's own settings override every key, and System Settings can change or reset all of it.
+KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma); desktop-independent assets are in [`common/`](common), and COSMIC defaults are in [`cosmic/`](cosmic). Each directory is a filesystem overlay (`usr/...` lands in `/usr`, `etc/...` in `/etc`). Install the common overlay and exactly one desktop overlay. Nothing is written to any home directory or `/etc/skel`.
 
 | Overlay path | What it does |
 |---|---|
@@ -205,14 +207,13 @@ KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma
 | `usr/lib/plasmalogin/plasmalogin.conf.d/50-agentux.conf` | Uses the AgentUX wallpaper on the login screen (Plasma Login, Fedora 44's display manager). Plasma Login reads `/etc/plasmalogin.conf.d/*`, then Fedora's `/usr/lib/plasmalogin/defaults.conf` (Fedora wallpaper), then this directory, then `/etc/plasmalogin.conf`, later files winning; so this beats Fedora's default and System Settings > Login Screen still beats this. The greeter takes its colours from the global theme in `/etc/xdg/kdeglobals` |
 | `etc/xdg/kded5rc` | Turns off the kded module `kded_plasma_welcome`, which opens Fedora's Welcome Center ("Welcome to Fedora!") on first login and after Plasma feature upgrades. It has no XDG autostart entry to hide; KF6's kded still reads `kded5rc`. The app stays installed, and users can turn the module back on in System Settings > Background Services. AgentUX's own first run belongs in the cockpit |
 | `usr/share/kglobalaccel/agentux-*-shortcut.desktop` | Global shortcuts: **Meta+A** launches the cockpit, **Meta+Return** opens Konsole (Konsole's own Ctrl+Alt+T stays) |
-| `etc/xdg/autostart/agentux-cockpit.desktop` | Starts the cockpit at login (`TryExec`, so it does nothing if the cockpit isn't installed). Users turn it off in System Settings > Autostart |
-| `etc/xdg/autostart/agentux-welcome.desktop` | Opens the [welcome wizard](#welcome-wizard) on a user's first login through `agentux-setup autostart` (not for system users, not on the live ISO, not once finished or skipped) |
-| `usr/share/applications/agentux-welcome.desktop` | **Welcome to AgentUX** in the app menu: reopens the wizard |
-| `usr/libexec/agentux-setup` | The wizard's backend: plans and runs installs (Flatpak, JetBrains Toolbox, mise, Distrobox) in transient user units, reports status as JSON, sets up Git and SSH, opens sign-in terminals |
-| `usr/share/agentux/setup/` | The wizard's catalog (`catalog.json`) and Flathub's repo file |
-| `usr/libexec/agentux-cockpit-autostart` | What the autostart entry runs: exits for system accounts (UID below `UID_MIN` from `/etc/login.defs`, the same rule as systemd's `ConditionUser=!@system`), otherwise execs `agentux-cockpit`. Fedora's first-boot wizard runs a whole Plasma session as the `plasma-setup` system user (UID 968), and XDG autostart, including ours, runs there too. A wrapper rather than a systemd drop-in for `app-agentux-cockpit@autostart.service` because it also covers Plasma's own autostart when systemd startup is off |
+| `common/etc/xdg/autostart/` | Desktop-neutral launchers for Cockpit and the first-run Welcome wizard |
+| `common/usr/share/applications/agentux-welcome.desktop` | **Welcome to AgentUX** in the app menu: reopens the wizard |
+| `common/usr/libexec/agentux-setup` | The wizard backend: plans and runs developer-tool installs and reports status |
+| `common/usr/share/agentux/setup/` | The wizard catalog and Flathub repo file |
+| `common/usr/libexec/agentux-cockpit-autostart` | Skips system accounts before starting Cockpit; shared by both sessions |
 
-How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kdeglobals`, writes that global theme's defaults into `~/.config/kdedefaults` (a defaults layer, not user settings) and applies the colour scheme with the accent colour. plasmashell runs the theme's layout script only when the user has no desktop layout yet, so existing users keep their panels. On Fedora Kinoite `/etc/xdg` comes before Fedora's own defaults in `/usr/share/kde-settings/kde-profile/default/xdg` in `XDG_CONFIG_DIRS`, so these keys win over Fedora's.
+How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kdeglobals`, writes that global theme's defaults into `~/.config/kdedefaults` (a defaults layer, not user settings) and applies the colour scheme with the accent colour. plasmashell runs the theme's layout script only when the user has no desktop layout yet, so existing users keep their panels. On Fedora Kinoite `/etc/xdg` comes before Fedora's own defaults in `XDG_CONFIG_DIRS`, so these keys win over Fedora's. COSMIC uses the same common XDG launchers; its session target includes the XDG autostart target.
 
 **KWin tiling: not included.** Plasma 6 stores custom tile layouts in `kwinrc` under `[Tiling][<virtual desktop id>][<output uuid>]`, and both ids are created per user and per monitor, so a system-wide default layout can't be written ahead of time. The built-in tiling needs no configuration: drag a window with Shift held, or edit tiles with Meta+T.
 
@@ -228,29 +229,32 @@ How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kd
 <details>
 <summary>The two options: release tarball (recommended) or a pinned git checkout</summary>
 
-The overlay has to land in the image at build time, since `/usr` is read-only on the installed system. Copy only `usr/` and `etc/`; `plasma/check.sh` must not end up in `/`. Two options:
+The overlays have to land in the image at build time, since `/usr` is read-only on the installed system. Copy only `usr/` and `etc/`; check scripts must not end up in `/`. Install the shared overlay with exactly one desktop-specific overlay. Two options:
 
-1. **Release tarball (recommended).** The release workflow also attaches `agentux-plasma-<version>.tar.gz`, built reproducibly from `plasma/usr` and `plasma/etc` only (paths relative to `/`), plus a `.sha256`. The Containerfile pins it next to the cockpit RPM:
+1. **Release tarballs (recommended).** The release workflow attaches `agentux-common-<version>.tar.gz`, `agentux-plasma-<version>.tar.gz`, and `agentux-cosmic-<version>.tar.gz`, each built reproducibly from that overlay's `usr/` and `etc/` paths (relative to `/`), plus a `.sha256` file. The image build pins the common artifact and one matching desktop overlay beside the cockpit RPM:
 
    ```dockerfile
    ARG AGENTUX_DESKTOP_VERSION=0.1.0
-   RUN curl -fsSL "https://github.com/agentux-os/agentux-desktop/releases/download/v${AGENTUX_DESKTOP_VERSION}/agentux-plasma-${AGENTUX_DESKTOP_VERSION}.tar.gz" \
+   RUN curl -fsSL "https://github.com/agentux-os/agentux-desktop/releases/download/v${AGENTUX_DESKTOP_VERSION}/agentux-common-${AGENTUX_DESKTOP_VERSION}.tar.gz" \
+         | tar -xz -C / --no-same-owner \
+       && curl -fsSL "https://github.com/agentux-os/agentux-desktop/releases/download/v${AGENTUX_DESKTOP_VERSION}/agentux-cosmic-${AGENTUX_DESKTOP_VERSION}.tar.gz" \
          | tar -xz -C / --no-same-owner
    ```
 
    One version number covers both the cockpit and its desktop defaults, and the image build doesn't need git.
 
-2. **Git checkout at a pinned ref.** Use a multi-stage build that clones this repo at a tag and copies the two directories:
+2. **Git checkout at a pinned ref.** Use a multi-stage build that clones this repo at a tag and copies `common/` plus exactly one desktop directory:
 
    ```dockerfile
    FROM docker.io/alpine/git AS desktop
    RUN git clone --depth 1 --branch v0.1.0 https://github.com/agentux-os/agentux-desktop /src
    FROM quay.io/fedora/fedora-kinoite:44
-   COPY --from=desktop /src/plasma/usr/ /usr/
-   COPY --from=desktop /src/plasma/etc/ /etc/
+   COPY --from=desktop /src/common/usr/ /usr/
+   COPY --from=desktop /src/common/etc/ /etc/
+   COPY --from=desktop /src/cosmic/usr/ /usr/
    ```
 
-The agentux-os change (and adding the tarball to `release.yml`) is a separate task.
+The agentux-os change to select the matching overlay artifacts is maintained in the OS repository.
 
 </details>
 

@@ -76,8 +76,8 @@ function haveShell(): boolean {
 }
 
 describe.runIf(haveShell())("agentux-setup plan (the script)", () => {
-  const script = fileURLToPath(new URL("../../../plasma/usr/libexec/agentux-setup", import.meta.url));
-  const catalog = fileURLToPath(new URL("../../../plasma/usr/share/agentux/setup/catalog.json", import.meta.url));
+  const script = fileURLToPath(new URL("../../../common/usr/libexec/agentux-setup", import.meta.url));
+  const catalog = fileURLToPath(new URL("../../../common/usr/share/agentux/setup/catalog.json", import.meta.url));
 
   function plan(specs: string[], fedora: string): { item: string; command: string }[] {
     // A fake os-release for the {fedora} image tag.

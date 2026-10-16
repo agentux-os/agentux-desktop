@@ -98,7 +98,7 @@ done < <(find usr/libexec -type f -print0 2>/dev/null)
 #     the cockpit with its arguments for everyone else. A stub agentux-cockpit
 #     on PATH records the call. Run as root with setpriv, both cases are tested;
 #     otherwise only the one that matches the current user.
-wrapper=usr/libexec/agentux-cockpit-autostart
+wrapper=../common/usr/libexec/agentux-cockpit-autostart
 if [[ -f "$wrapper" ]]; then
     echo "behaviour $wrapper"
     tmp=$(mktemp -d)
@@ -225,12 +225,12 @@ fi
 #     VS Code settings merge keeps the user's own keys, `status` prints JSON,
 #     and the first-run marker decides whether the login autostart opens the
 #     wizard (not for system users, not on the live ISO, not twice).
-setup=usr/libexec/agentux-setup
-catalog=usr/share/agentux/setup/catalog.json
+setup=../common/usr/libexec/agentux-setup
+catalog=../common/usr/share/agentux/setup/catalog.json
 if [[ -f "$setup" ]]; then
     echo "behaviour $setup"
     node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$catalog" || err "$catalog is not valid JSON"
-    grep -q '^Url=https://dl.flathub.org/repo/$' usr/share/agentux/setup/flathub.flatpakrepo         && grep -q '^GPGKey=' usr/share/agentux/setup/flathub.flatpakrepo         || err "usr/share/agentux/setup/flathub.flatpakrepo is not Flathub's repo file"
+    grep -q '^Url=https://dl.flathub.org/repo/$' ../common/usr/share/agentux/setup/flathub.flatpakrepo         && grep -q '^GPGKey=' ../common/usr/share/agentux/setup/flathub.flatpakrepo         || err "common Flathub repo file is invalid"
     if command -v jq >/dev/null; then
         tmp=$(mktemp -d)
         chmod 0755 "$tmp"

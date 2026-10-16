@@ -1,0 +1,12 @@
+[
+    // AgentUX light palette: stronger contrasts for bright surfaces.
+    (red: 0.27450980, green: 0.41176471, blue: 0.10196078, alpha: 1.0),
+    (red: 0.36862745, green: 0.49803922, blue: 0.19215686, alpha: 1.0),
+    (red: 0.47058824, green: 0.36862745, blue: 0.72156863, alpha: 1.0),
+    (red: 0.72156863, green: 0.29411765, blue: 0.42745098, alpha: 1.0),
+    (red: 0.72156863, green: 0.25098039, blue: 0.21568627, alpha: 1.0),
+    (red: 0.64705882, green: 0.35294118, blue: 0.08627451, alpha: 1.0),
+    (red: 0.58431373, green: 0.45882353, blue: 0.10196078, alpha: 1.0),
+    (red: 0.22352941, green: 0.48235294, blue: 0.29803922, alpha: 1.0),
+    (red: 0.47843137, green: 0.40784314, blue: 0.34901961, alpha: 1.0)
+]
