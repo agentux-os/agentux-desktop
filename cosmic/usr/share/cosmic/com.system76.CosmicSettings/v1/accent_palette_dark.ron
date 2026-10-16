@@ -1,0 +1,12 @@
+[
+    // AgentUX dark palette: Lime, Moss, and complementary system accents.
+    (red: 0.77647059, green: 0.95294118, blue: 0.41960784, alpha: 1.0),
+    (red: 0.59607843, green: 0.79215686, blue: 0.32941176, alpha: 1.0),
+    (red: 0.75686275, green: 0.70588235, blue: 0.95686275, alpha: 1.0),
+    (red: 0.96862745, green: 0.65098039, blue: 0.76862745, alpha: 1.0),
+    (red: 0.97254902, green: 0.63529412, blue: 0.59607843, alpha: 1.0),
+    (red: 1.0, green: 0.71372549, blue: 0.41960784, alpha: 1.0),
+    (red: 0.94509804, green: 0.81960784, blue: 0.45098039, alpha: 1.0),
+    (red: 0.49019608, green: 0.76078431, blue: 0.55686275, alpha: 1.0),
+    (red: 0.71372549, green: 0.67450980, blue: 0.62352941, alpha: 1.0)
+]

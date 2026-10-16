@@ -2,8 +2,8 @@
 Type=Application
 Name=AgentUX Cockpit
 Comment=Open the AgentUX cockpit when you log in
-# The wrapper skips system accounts such as plasma-setup (the first-boot
-# wizard), then execs agentux-cockpit. TryExec keeps the entry inert when the
+# The wrapper skips system accounts, then execs agentux-cockpit. TryExec keeps the
+# entry inert when the
 # cockpit isn't installed.
 Exec=/usr/libexec/agentux-cockpit-autostart
 TryExec=agentux-cockpit
@@ -11,4 +11,3 @@ Icon=agentux-cockpit
 StartupWMClass=agentux-cockpit
 Terminal=false
 StartupNotify=false
-OnlyShowIn=KDE;

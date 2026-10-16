@@ -4,7 +4,7 @@
  * /usr/share/agentux/setup/catalog.json, where `agentux-setup` reads it; the
  * cockpit bundles the same file for the UI.
  */
-import catalogJson from "../../../plasma/usr/share/agentux/setup/catalog.json";
+import catalogJson from "../../../common/usr/share/agentux/setup/catalog.json";
 
 /** How an item installs. */
 export type InstallMethod = "flatpak" | "jetbrains-toolbox" | "mise" | "distrobox";
