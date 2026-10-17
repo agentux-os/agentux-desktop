@@ -401,5 +401,5 @@ export interface CockpitState {
    * `sessionsPrompt`: the human can prompt a session; `busPost`: the human
    * can post on a run's bus; `terminals`: terminal mode (`terminals.*`).
    */
-  capabilities?: { sessionsPrompt?: boolean; busPost?: boolean; terminals?: boolean };
+  capabilities?: { sessionsPrompt?: boolean; busPost?: boolean; terminals?: boolean; helperAsk?: boolean };
 }

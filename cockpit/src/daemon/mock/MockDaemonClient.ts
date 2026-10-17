@@ -1,4 +1,12 @@
-import type { DaemonClient, StartRunInput, TerminalHandle, TerminalSink, TerminalSize } from "../client";
+import type {
+  DaemonClient,
+  HelperQuestion,
+  HelperReply,
+  StartRunInput,
+  TerminalHandle,
+  TerminalSink,
+  TerminalSize,
+} from "../client";
 import { targetKey, type TerminalTarget } from "../../lib/terminal";
 import { FakeTerminal } from "./fakeTerminal";
 import type {
@@ -215,6 +223,11 @@ export class MockDaemonClient implements DaemonClient {
    * plays queues the message for it; the run channel reaches every session
    * and wakes nobody. A woken session answers "On it." a moment later.
    */
+  /** No agent on mock data: the helper answers from its bundled docs only. */
+  async askHelper(_input: HelperQuestion): Promise<HelperReply> {
+    throw new Error("answers from your agent need agentuxd; the cockpit is showing mock data");
+  }
+
   async postBus(input: BusPostInput): Promise<BusPostResult> {
     this.now = Date.now();
     const run = this.state.runs[input.runId];

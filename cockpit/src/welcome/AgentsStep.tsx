@@ -3,6 +3,7 @@ import { Icon } from "../components/Icon";
 import { VENDOR_INFO } from "../daemon/vendors";
 import type { Vendor } from "../daemon/types";
 import { AGENT_STEP, FIRST_LOGIN_STEPS, type AgentId, type AgentStatus, type SetupClient, type SetupStatus } from "../setup/client";
+import { help } from "../helper/content";
 
 interface AgentGuide {
   vendor: Vendor;
@@ -96,7 +97,7 @@ export function AgentsStep({
 
   return (
     <div className="wz-stack">
-      <section className="wz-card wz-firstlogin" aria-labelledby="fl-title">
+      <section className="wz-card wz-firstlogin" aria-labelledby="fl-title" {...help("wz.agents.firstLogin")}>
         <div className="wz-card-head">
           <div>
             <h2 id="fl-title">Agent CLIs</h2>
@@ -161,7 +162,7 @@ export function AgentsStep({
         ))}
       </div>
 
-      <aside className="wz-callout">
+      <aside className="wz-callout" {...help("wz.agents.privacy")}>
         <Icon name="shield" size={18} />
         <div>
           <strong>Inference stays with the providers.</strong> AgentUX runs each vendor's own CLI. Your prompts and code
@@ -189,7 +190,7 @@ function AgentCard({
   const [showKey, setShowKey] = useState(false);
   const style = { ["--vc" as string]: `var(${info.colorVar})` } as CSSProperties;
   return (
-    <article className="wz-card wz-agent" style={style} aria-label={info.label}>
+    <article className="wz-card wz-agent" style={style} aria-label={info.label} {...help("wz.agents.card")}>
       <div className="wz-agent-top">
         <span className="wz-agent-mono">{info.mono}</span>
         <div className="wz-agent-name">

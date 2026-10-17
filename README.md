@@ -66,7 +66,7 @@ The native window and a real daemon: [Developing the cockpit](#developing-the-co
 
 ## Contents
 
-- **Cockpit:** [Features](#cockpit) · [Welcome wizard](#welcome-wizard) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
+- **Cockpit:** [Features](#cockpit) · [Help mascot](#help-mascot) · [Welcome wizard](#welcome-wizard) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
 - **Desktop:** [Desktop configuration](#desktop-configuration) · [Image bundle contract](#image-bundle-contract) · [Not verified on a running Plasma session](#not-verified-on-a-running-plasma-session)
 - [Relevant ADRs](#relevant-adrs) · [License](#license)
 
@@ -80,6 +80,17 @@ One interface on top of every coding agent CLI (Tauri app, talks only to `agentu
 - **Agent bus feed.** Messages, review requests and handoffs between agents, grouped by exchange with their turn count; questions to you and your answers; turn limits and denied tools as warnings; wakes and sessions joining or leaving as quiet system lines.
 - **Spend.** Tokens and cost per run, project and vendor.
 - **Welcome to AgentUX.** A first-run wizard in its own window (see below).
+- **The penguin helper.** A help mascot in the sidebar's corner: a guided tour on first use, **What's this?** for any element, and **Ask the penguin** for questions about AgentUX (see [Help mascot](#help-mascot)).
+
+## Help mascot
+
+The brand's swimming penguin sits at the foot of the cockpit's sidebar (and of the wizard's rail), in the theme's accent colour, with a small idle, talking, thinking and pointing animation that stops under `prefers-reduced-motion`. It knows AgentUX only: the cockpit, the wizard, `aux`, agentuxd, runs, pipelines, approvals, the agent bus, terminal mode, worktrees, gates, release channels and `agentux-version`. For the desktop itself (COSMIC, Plasma, Hyprland) or Linux in general it says so. Decisions and privacy: [ADR 0016](https://github.com/agentux-os/agentux/blob/main/docs/adr/0016-help-mascot.md).
+
+- **Guided tour.** Offered once, by a speech bubble next to the penguin, on the cockpit's first launch, or as soon as the Welcome wizard closes (the bubble waits while the wizard is open). The wizard's Done step has **Take the tour with the penguin**, which finishes the wizard and starts the tour in the cockpit. It is a spotlight over the real UI: run board, Waiting for you, approvals, agent bus, New run, projects, terminal handoff (it opens a run for that step), the daemon connection in the status bar, and theme. Next, Back and Skip, arrow keys and Escape, focus kept in the card and announced to screen readers; steps whose element is not on screen are skipped. Restart it from the penguin's menu. It works on mock data and with `--fake-agents`.
+- **What's this?** `Shift+F1` or the `?` next to the penguin. Pointing outlines explainable elements, clicking one (or `Enter` on it; `Tab` reaches every one while the mode is on) opens the penguin's explanation next to it: what it is, how it works, what you can do and a **Learn more** link. Clicks do nothing else while the mode is on, so nothing is approved or started by accident; `Escape` closes the explanation, then the mode. Elements opt in with `{...help("key")}` (`data-help="key"`), and the text lives in [`cockpit/src/helper/content.json`](cockpit/src/helper/content.json): 83 entries covering the cockpit and the wizard. A vitest test checks that every key in the UI has an entry and every entry is used.
+- **Ask the penguin.** `F1`. Answers offline: a small BM25 search over the help entries and the AgentUX docs bundled at build time (getting started, the `aux` and daemon READMEs, the agentuxd API, this README's cockpit part, the release-channel and version sections of agentux-os, and the ADRs), shown as the best passages with **Read more** links, and **Show me** when a passage is about something on screen. `node cockpit/scripts/sync-help-docs.mjs` refreshes the bundled copies (`cockpit/src/helper/docs/`) from each repository's `origin/main`.
+- **Ask my agent (optional, off by default).** With agentux-core 0.4.3 or later, the user can let one of their own agent CLIs answer too. The cockpit calls agentuxd's `helper.ask`: a fresh session of that harness, in an empty directory, with no tools, no files and no agent bus. It sends the question, the matching docs passages and a one-line summary of the view (the view, the project, the open run's title, status and step), never file contents, transcripts or secrets. The answer shows which agent wrote it, on the user's own account. Unavailable on mock data and on older daemons, with the reason shown.
+- **Settings.** The penguin's menu turns it off (What's this? and Ask go with it); **Penguin helper** in the sidebar turns it back on. The choice, the tour state and the AI setting are kept in the window's local storage, shared with the wizard.
 
 ## Welcome wizard
 
@@ -160,13 +171,14 @@ How the connection behaves:
 | `cockpit/src/setup/` | The welcome wizard's backend interface: catalog types, the command builder, `TauriSetupClient` (runs `agentux-setup`) and `MockSetupClient` |
 | `cockpit/src/welcome/` | The welcome wizard's steps |
 | `cockpit/src/components/` | Run board, session view, approvals inbox, agent bus feed, status bar |
+| `cockpit/src/helper/` | The penguin helper: help content, tour, What's this?, Ask (offline search and `helper.ask`), and the bundled docs |
 | `cockpit/src-tauri/` | Rust shell: hosts the window; `src/daemon/` is the socket client, the reconnecting event stream and the `daemon_*` commands; `src/setup.rs` is the welcome window, `--welcome` and `setup_exec` |
 
 Components only talk to the `DaemonClient` interface; `createDaemonClient()` picks the implementation.
 
 ### Keyboard
 
-`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode (`Shift+Esc` or `Ctrl+]` leaves the terminal), `N` starts a new run (with a daemon), `[`/`]` cycle projects, `?` lists everything.
+`B` / `I` / `M` switch between run board, approvals inbox and agent bus. `A` approves the focused request (the inbox selection or the open run's pending request), `D` denies, `1`–`9` answers an agent's question, `J`/`K` move through the inbox, `T` toggles terminal mode (`Shift+Esc` or `Ctrl+]` leaves the terminal), `N` starts a new run (with a daemon), `[`/`]` cycle projects, `?` lists everything. `F1` asks the penguin, `Shift+F1` toggles What's this?
 
 ### Packaging
 

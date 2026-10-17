@@ -11,6 +11,7 @@ import { Icon } from "./Icon";
 import { SessionEvents } from "./SessionEvents";
 import { VendorBadge, vendorStyle } from "./VendorBadge";
 import { useDaemon } from "../state/daemon";
+import { help } from "../helper/content";
 
 // xterm.js is loaded with the first terminal, not with the cockpit.
 const LazyTerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
@@ -102,7 +103,7 @@ export function SessionPanel(props: Props) {
   const terminalTarget = session && { command: "harness-tui" as const, sessionId: session.id };
 
   return (
-    <aside className="panel" aria-label={`Run ${run.title}`} ref={panelRef} tabIndex={-1}>
+    <aside className="panel" aria-label={`Run ${run.title}`} ref={panelRef} tabIndex={-1} {...help("panel.run")}>
       <header className="panel-head">
         <div className="panel-title-row">
           <h2 className="panel-title">{run.title}</h2>
@@ -110,7 +111,7 @@ export function SessionPanel(props: Props) {
             <Icon name="x" />
           </button>
         </div>
-        <div className="panel-meta">
+        <div className="panel-meta" {...help("panel.meta")}>
           <span className="mono">{runRef(run)}</span>
           <span>
             <Icon name="folder" size={13} /> {project?.name}
@@ -122,6 +123,7 @@ export function SessionPanel(props: Props) {
           )}
           <span>{formatDuration((run.finishedAt ?? now) - run.startedAt)}</span>
           <span
+            {...help("panel.cost")}
             className={run.budgetUsd != null && run.costUsd > run.budgetUsd ? "is-over-budget" : undefined}
             title="Run cost: the sum of what its sessions reported (harnesses that do not report cost count as $0)"
           >
@@ -139,6 +141,7 @@ export function SessionPanel(props: Props) {
         {runActive(run) && (
           <div className="panel-actions">
             <button
+              {...help("panel.shell")}
               className="btn btn-quiet"
               disabled={!!terminalDisabled || (props.mode === "daemon" && !run.worktree)}
               onClick={() => {
@@ -153,7 +156,7 @@ export function SessionPanel(props: Props) {
               <Icon name="terminal" size={14} /> Shell in worktree
             </button>
             {onCancel && runActive(run) && (
-              <button className="btn btn-quiet" onClick={onCancel}>
+              <button className="btn btn-quiet" onClick={onCancel} {...help("panel.cancel")}>
                 <Icon name="x" size={14} /> Cancel run
               </button>
             )}
@@ -161,7 +164,7 @@ export function SessionPanel(props: Props) {
         )}
       </header>
 
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" {...help("panel.sessions")}>
         {sessions.map((s) => (
           <button
             key={s.id}
@@ -185,6 +188,7 @@ export function SessionPanel(props: Props) {
         <button
           role="tab"
           aria-selected={busTab}
+          {...help("panel.busTab")}
           className={`tab tab-bus ${busTab ? "is-active" : ""}`}
           onClick={() => setView("bus")}
           title="The run's agent bus: read it and post to its agents"
@@ -209,7 +213,7 @@ export function SessionPanel(props: Props) {
         )}
         <span className="tabs-spacer" />
         {session && view === "session" && (
-          <div className="seg" role="group" aria-label="Session view mode">
+          <div className="seg" role="group" aria-label="Session view mode" {...help("panel.mode")}>
             <button className={!terminal ? "is-on" : ""} onClick={() => onTerminal(false)} title="Structured view (T)">
               Structured
             </button>
@@ -237,7 +241,7 @@ export function SessionPanel(props: Props) {
         />
       ) : session ? (
         <>
-          <div className="session-bar">
+          <div className="session-bar" {...help("session.bar")}>
             <VendorBadge vendor={session.vendor} harness={session.harness} />
             {session.state === "attached" && (
               <span className="chip chip-attached" title="Open in its harness's TUI: turns for it wait until the terminal closes">
@@ -325,7 +329,7 @@ function SessionUsageView({ session }: { session: Session }) {
   const { usedTokens, contextTokens, costUsd } = session.usage;
   const pct = contextTokens > 0 ? Math.round((usedTokens / contextTokens) * 100) : undefined;
   return (
-    <span className="session-usage" title="Tokens in the context window / its size, and the session's cost as reported by the harness">
+    <span {...help("session.usage")} className="session-usage" title="Tokens in the context window / its size, and the session's cost as reported by the harness">
       {contextTokens > 0 ? (
         <>
           {formatTokens(usedTokens)} / {formatTokens(contextTokens)} ctx <span className="muted">({pct}%)</span>
@@ -355,6 +359,7 @@ function EventScroller({ session, state, now, onApprove, onDeny }: Props & { ses
 
   return (
     <div
+      {...help("session.events")}
       className="scroller"
       ref={ref}
       onScroll={(e) => {
@@ -372,7 +377,7 @@ function Pipeline({ run }: { run: Run }) {
   const current = run.steps?.length && run.stepIndex != null ? run.stepIndex : steps.indexOf(run.step);
   const done = run.status === "done";
   return (
-    <ol className="pipeline">
+    <ol className="pipeline" {...help("panel.pipeline")}>
       {steps.map((step, i) => {
         const state = done || i < current ? "done" : i === current ? (run.status === "waiting" ? "waiting" : "current") : "todo";
         let extra = "";
@@ -384,7 +389,7 @@ function Pipeline({ run }: { run: Run }) {
             <span className="pipe-label">{STEP_LABEL[step]}</span>
             {extra && <span className="pipe-extra">{extra}</span>}
             {step === "gate" && run.gateAttempt > 0 && (
-              <span className="checks">
+              <span className="checks" {...help("panel.checks")}>
                 {run.checks.map((c) => (
                   <span key={c.name} className={`check check-${c.status}`} title={`${c.command}: ${c.status}`}>
                     {c.name}
@@ -418,6 +423,7 @@ function Composer({
   };
   return (
     <form
+      {...help("session.composer")}
       className="composer"
       onSubmit={(e) => {
         e.preventDefault();

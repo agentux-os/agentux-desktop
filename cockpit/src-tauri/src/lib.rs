@@ -84,6 +84,7 @@ pub fn run() {
             daemon::daemon_capabilities,
             daemon::daemon_send_prompt,
             daemon::daemon_bus_post,
+            daemon::daemon_helper_ask,
             daemon::terminal_open,
             daemon::terminal_attach,
             daemon::terminal_write,

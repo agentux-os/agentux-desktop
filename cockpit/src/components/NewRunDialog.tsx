@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { StartRunInput } from "../daemon/client";
 import type { Project } from "../daemon/types";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 interface Props {
   projects: Project[];
@@ -56,7 +57,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit }: Props
           </button>
         </header>
         <div className="form-body">
-          <label className="field">
+          <label className="field" {...help("newRun.path")}>
             <span>Project directory</span>
             <input
               className="mono"
@@ -76,7 +77,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit }: Props
             </datalist>
             <small className="muted">Any directory inside a git repository. New projects are registered automatically.</small>
           </label>
-          <label className="field">
+          <label className="field" {...help("newRun.prompt")}>
             <span>Prompt</span>
             <textarea
               value={prompt}
@@ -87,7 +88,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit }: Props
               required
             />
           </label>
-          <label className="field">
+          <label className="field" {...help("newRun.title")}>
             <span>
               Title <span className="muted">(optional, defaults to the prompt's first line)</span>
             </span>

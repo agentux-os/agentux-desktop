@@ -4,6 +4,15 @@ import { REQUEST_LABEL, STEP_LABEL, roleLabel, runRef } from "../lib/labels";
 import { formatAgo, formatUsd } from "../lib/format";
 import { Icon, type IconName } from "./Icon";
 import { VendorBadge } from "./VendorBadge";
+import { help } from "../helper/content";
+
+const KIND_HELP: Record<PermissionRequest["kind"], ReturnType<typeof help>> = {
+  plan: help("request.plan"),
+  step: help("request.step"),
+  permission: help("request.permission"),
+  budget: help("request.budget"),
+  question: help("request.question"),
+};
 
 const KIND_ICON: Record<PermissionRequest["kind"], IconName> = {
   plan: "plan",
@@ -64,6 +73,7 @@ export function RequestCard({ request: r, run, session, now, selected, inline, s
   const actions = ACTIONS[r.kind];
   return (
     <article
+      {...KIND_HELP[r.kind]}
       className={`req req-${r.kind} ${pending ? "is-pending" : "is-resolved"} ${selected ? "is-selected" : ""}`}
       aria-current={selected || undefined}
     >

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Icon } from "../components/Icon";
 import type { GitConfig, SetupClient } from "../setup/client";
+import { help } from "../helper/content";
 
 export const GITHUB_SSH_URL = "https://github.com/settings/ssh/new";
 
@@ -65,7 +66,7 @@ export function GitStep({ client, onError }: { client: SetupClient; onError: (me
 
   return (
     <div className="wz-two">
-      <form className="wz-card" onSubmit={(e) => void save(e)} aria-labelledby="git-title">
+      <form className="wz-card" onSubmit={(e) => void save(e)} aria-labelledby="git-title" {...help("wz.git.identity")}>
         <h2 id="git-title">Git identity</h2>
         <p className="muted">Written to your global Git config (~/.gitconfig) and used for every commit you make.</p>
         <div className="wz-fields">
@@ -106,7 +107,7 @@ export function GitStep({ client, onError }: { client: SetupClient; onError: (me
         </div>
       </form>
 
-      <section className="wz-card" aria-labelledby="ssh-title">
+      <section className="wz-card" aria-labelledby="ssh-title" {...help("wz.git.ssh")}>
         <h2 id="ssh-title">SSH key</h2>
         {key ? (
           <>

@@ -7,6 +7,10 @@ import { DoneStep } from "./DoneStep";
 import { GitStep } from "./GitStep";
 import { ToolsStep, isBusy, type Selection } from "./ToolsStep";
 import { useSetupStatus } from "./useSetupStatus";
+import { help } from "../helper/content";
+import { HelperProvider, type HelperHost } from "../helper/HelperProvider";
+import { Mascot } from "../helper/Mascot";
+import { markWelcomeOpen, requestTour } from "../helper/settings";
 
 type StepId = "agents" | "tools" | "git" | "done";
 
@@ -49,6 +53,16 @@ const STEPS: { id: StepId; title: string; sub: string; heading: string; lead: st
     lead: "Here is where things stand. Installs keep going in the background, so you can close this window now.",
   },
 ];
+
+/** The penguin in the wizard: What's this? and Ask; the tour belongs to the cockpit. */
+const WELCOME_HOST: HelperHost = {
+  surface: "welcome",
+  describeView: () => "The user is in the Welcome to AgentUX wizard.",
+  ai: {
+    unavailable: "answers from your agent are in the cockpit's Ask",
+    ask: () => Promise.reject(new Error("not available in the wizard")),
+  },
+};
 
 function loadTheme(): "dark" | "light" {
   try {
@@ -172,7 +186,23 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
       CATALOG.items.filter((i) => selection.has(i.id) && !installed.has(i.id) && !isBusy(status?.items[i.id])),
     );
 
-  const finish = async (openCockpit: boolean) => {
+  // Tell the cockpit the wizard is open, so its penguin does not offer the
+  // tour over it; "Take the tour" asks the cockpit to start it.
+  useEffect(() => {
+    markWelcomeOpen(true);
+    const beat = window.setInterval(() => markWelcomeOpen(true), 30_000);
+    const gone = () => markWelcomeOpen(false);
+    window.addEventListener("pagehide", gone);
+    return () => {
+      window.clearInterval(beat);
+      window.removeEventListener("pagehide", gone);
+      markWelcomeOpen(false);
+    };
+  }, []);
+
+  const finish = async (openCockpit: boolean, tour = false) => {
+    if (tour) requestTour();
+    markWelcomeOpen(false);
     try {
       await client.finish();
       await client.close(openCockpit);
@@ -202,7 +232,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   }
 
   const s = STEPS[step];
-  return (
+  const page = (
     <div className="welcome">
       <aside className="wz-rail">
         <div className="wz-brand">
@@ -212,7 +242,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
             <div className="wz-brand-sub">first-run setup</div>
           </div>
         </div>
-        <nav aria-label="Setup steps">
+        <nav aria-label="Setup steps" {...help("wz.steps")}>
           <ol className="wz-steps">
             {STEPS.map((st, i) => (
               <li key={st.id}>
@@ -233,7 +263,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
         </nav>
 
         {activity.total + activity.failed > 0 && (
-          <button className="wz-activity" onClick={() => go(1)} aria-label="Install progress, show tools">
+          <button className="wz-activity" {...help("wz.activity")} onClick={() => go(1)} aria-label="Install progress, show tools">
             <div className="wz-activity-top">
               {activity.busy ? <span className="wz-spin" aria-hidden="true" /> : <Icon name="check" size={13} className="ok" />}
               <span>
@@ -248,7 +278,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
           </button>
         )}
 
-        <section className="wz-profile" aria-label="AgentUX OS profile" role="region">
+        <section className="wz-profile" aria-label="AgentUX OS profile" role="region" {...help("wz.profile")}>
           <div className="wz-profile-kicker">AgentUX OS profile</div>
           <strong>{profileLabel(status?.profile.requested)}</strong>
           <span className="muted">
@@ -263,8 +293,9 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
           ) : null}
         </section>
 
+        <Mascot />
         <div className="wz-rail-foot">
-          <button className="btn btn-quiet" onClick={() => void finish(false)}>
+          <button className="btn btn-quiet" onClick={() => void finish(false)} {...help("wz.skip")}>
             Skip setup
           </button>
           <span className="muted wz-small">
@@ -299,7 +330,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
         <div className={`wz-body ${s.id === "tools" ? "is-tools" : ""}`}>
           {s.id === "agents" && (
             <>
-              <section className="wz-panel" aria-labelledby="profile-selection-heading">
+              <section className="wz-panel" aria-labelledby="profile-selection-heading" {...help("wz.profile.choose")}>
                 <div className="wz-panel-head">
                   <div>
                     <h2 id="profile-selection-heading">Choose this machine's role</h2>
@@ -344,12 +375,13 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
               status={status}
               installed={installed}
               onOpenCockpit={() => void finish(true)}
+              onTour={() => void finish(true, true)}
               onError={fail}
             />
           )}
         </div>
 
-        <footer className="wz-nav">
+        <footer className="wz-nav" {...help("wz.nav")}>
           <button className="btn" onClick={() => go(step - 1)} disabled={step === 0}>
             Back
           </button>
@@ -377,4 +409,5 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
       </main>
     </div>
   );
+  return <HelperProvider host={WELCOME_HOST}>{page}</HelperProvider>;
 }

@@ -33,6 +33,9 @@ pub const STATUS_CHANNEL: &str = "daemon://status";
 
 /// How long a command may wait for the daemon before giving up.
 const CALL_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a helper answer may take: agentuxd gives the harness 180 s,
+/// harness start included.
+const HELPER_TIMEOUT: Duration = Duration::from_secs(200);
 /// How long the startup probe waits; the UI shows mock data meanwhile.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 
@@ -362,6 +365,9 @@ pub struct Capabilities {
     pub bus_post: bool,
     /// `terminals.*` (agentux-core #11): terminal mode.
     pub terminals: bool,
+    /// `helper.ask` (agentux-core 0.4.3): answers from the user's agent for
+    /// the helper.
+    pub helper_ask: bool,
 }
 
 #[tauri::command]
@@ -377,6 +383,8 @@ pub async fn daemon_capabilities(
             // `terminals.list` with no filter is valid: any answer but
             // -32601 means terminal mode is served.
             terminals: c.serves(method::TERMINALS_LIST).await?,
+            // Empty params are -32602 before any harness starts.
+            helper_ask: c.serves(method::HELPER_ASK).await?,
         })
     })
     .await
@@ -416,6 +424,28 @@ pub async fn daemon_bus_post(
         method::BUS_POST,
         client::bus_post_params(&run_id, to, &body, subject.as_deref(), in_reply_to),
     )
+    .await
+}
+
+/// Asks the user's harness one read-only question for the helper
+/// (`helper.ask`), on a connection of its own, since an answer takes a while.
+/// Returns `{ harness, answer }`.
+#[tauri::command]
+pub async fn daemon_helper_ask(
+    state: State<'_, DaemonState>,
+    harness: String,
+    question: String,
+    context: String,
+    model: Option<String>,
+) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    let params = client::helper_ask_params(&harness, &question, &context, model.as_deref());
+    timed(HELPER_TIMEOUT, async {
+        Client::connect(socket)
+            .await?
+            .call(method::HELPER_ASK, params)
+            .await
+    })
     .await
 }
 

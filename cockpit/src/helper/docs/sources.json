@@ -1,0 +1,146 @@
+[
+  {
+    "id": "getting-started",
+    "title": "Getting started",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md",
+    "repo": "agentux",
+    "path": "docs/getting-started.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "cockpit",
+    "title": "The cockpit (agentux-desktop README)",
+    "url": "https://github.com/agentux-os/agentux-desktop/blob/main/README.md",
+    "repo": "agentux-desktop",
+    "path": "README.md",
+    "commit": "0dab70f"
+  },
+  {
+    "id": "core",
+    "title": "agentuxd and aux (agentux-core README)",
+    "url": "https://github.com/agentux-os/agentux-core/blob/main/README.md",
+    "repo": "agentux-core",
+    "path": "README.md",
+    "commit": "c45a790"
+  },
+  {
+    "id": "api",
+    "title": "agentuxd API",
+    "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md",
+    "repo": "agentux-core",
+    "path": "docs/api.md",
+    "commit": "c45a790"
+  },
+  {
+    "id": "os",
+    "title": "Release channels and versions (agentux-os README)",
+    "url": "https://github.com/agentux-os/agentux-os/blob/main/README.md",
+    "repo": "agentux-os",
+    "path": "README.md",
+    "commit": "58b9a12"
+  },
+  {
+    "id": "adr-0001",
+    "title": "ADR 0001: AgentUX is a Linux distribution on Fedora Atomic",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0001-linux-distribution-on-fedora-atomic.md",
+    "repo": "agentux",
+    "path": "docs/adr/0001-linux-distribution-on-fedora-atomic.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0002",
+    "title": "ADR 0002: Harness integration via ACP",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0002-harness-integration-via-acp.md",
+    "repo": "agentux",
+    "path": "docs/adr/0002-harness-integration-via-acp.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0003",
+    "title": "ADR 0003: Workflow engine",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0003-workflow-engine.md",
+    "repo": "agentux",
+    "path": "docs/adr/0003-workflow-engine.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0004",
+    "title": "ADR 0004: Unified interface and agent bus",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0004-unified-interface-and-agent-bus.md",
+    "repo": "agentux",
+    "path": "docs/adr/0004-unified-interface-and-agent-bus.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0005",
+    "title": "ADR 0005: Pipelines in agentux.yaml",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0005-agentux-yaml.md",
+    "repo": "agentux",
+    "path": "docs/adr/0005-agentux-yaml.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0007",
+    "title": "ADR 0007: Terminal mode is a session handoff",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0007-terminal-mode-is-a-session-handoff.md",
+    "repo": "agentux",
+    "path": "docs/adr/0007-terminal-mode-is-a-session-handoff.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0008",
+    "title": "ADR 0008: Releases and image pinning",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0008-releases-and-image-pinning.md",
+    "repo": "agentux",
+    "path": "docs/adr/0008-releases-and-image-pinning.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0009",
+    "title": "ADR 0009: Container isolation for checks",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0009-container-isolation-for-checks.md",
+    "repo": "agentux",
+    "path": "docs/adr/0009-container-isolation-for-checks.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0010",
+    "title": "ADR 0010: Image variants and system identity",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0010-image-variants-and-system-identity.md",
+    "repo": "agentux",
+    "path": "docs/adr/0010-image-variants-and-system-identity.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0011",
+    "title": "ADR 0011: Release channels and ISO distribution",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0011-release-channels-and-iso-distribution.md",
+    "repo": "agentux",
+    "path": "docs/adr/0011-release-channels-and-iso-distribution.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0012",
+    "title": "ADR 0012: System version and release identity",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0012-system-version-and-release-identity.md",
+    "repo": "agentux",
+    "path": "docs/adr/0012-system-version-and-release-identity.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0013",
+    "title": "ADR 0013: First-run wizard",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0013-first-run-wizard.md",
+    "repo": "agentux",
+    "path": "docs/adr/0013-first-run-wizard.md",
+    "commit": "60b6f31"
+  },
+  {
+    "id": "adr-0014",
+    "title": "ADR 0014: Installation profiles and platform services",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md",
+    "repo": "agentux",
+    "path": "docs/adr/0014-installation-profiles-and-platform-services.md",
+    "commit": "60b6f31"
+  }
+]

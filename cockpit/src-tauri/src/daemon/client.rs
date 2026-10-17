@@ -51,6 +51,9 @@ pub mod method {
     pub const TERMINALS_RESIZE: &str = "terminals.resize";
     pub const TERMINALS_CLOSE: &str = "terminals.close";
     pub const TERMINALS_LIST: &str = "terminals.list";
+    /// One read-only question for the cockpit's helper, answered by the
+    /// user's own harness (agentux-core 0.4.3); probed like `bus.post`.
+    pub const HELPER_ASK: &str = "helper.ask";
     /// Server-to-client notification: `{ terminalId, data }`, data base64.
     pub const TERMINAL_OUTPUT: &str = "terminal_output";
     /// Server-to-client notification, a terminal's last: `{ terminalId, code }`.
@@ -113,6 +116,23 @@ fn run_events_params(run_id: &str, since_seq: Option<i64>, limit: u32) -> Value 
     let mut params = json!({ "runId": run_id, "limit": limit });
     if let Some(since) = since_seq {
         params["sinceSeq"] = since.into();
+    }
+    params
+}
+
+/// `helper.ask` params: blank `context` and `model` are left out.
+pub fn helper_ask_params(
+    harness: &str,
+    question: &str,
+    context: &str,
+    model: Option<&str>,
+) -> Value {
+    let mut params = json!({ "harness": harness, "question": question });
+    if !context.trim().is_empty() {
+        params["context"] = json!(context);
+    }
+    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+        params["model"] = json!(model);
     }
     params
 }
@@ -549,6 +569,18 @@ mod tests {
         assert_eq!(
             run_events_params("r1", Some(11), 10),
             json!({"runId": "r1", "limit": 10, "sinceSeq": 11})
+        );
+    }
+
+    #[test]
+    fn helper_ask_params_leave_out_blank_context_and_model() {
+        assert_eq!(
+            helper_ask_params("codex", "What is a gate?", "  ", Some(" ")),
+            json!({"harness": "codex", "question": "What is a gate?"})
+        );
+        assert_eq!(
+            helper_ask_params("claude-code", "q", "docs", Some("opus")),
+            json!({"harness": "claude-code", "question": "q", "context": "docs", "model": "opus"})
         );
     }
 

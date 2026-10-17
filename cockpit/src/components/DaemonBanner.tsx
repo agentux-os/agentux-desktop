@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { retryDaemon } from "../daemon/client";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 /**
  * Shown inside Tauri when agentuxd could not be reached at startup and the
@@ -21,7 +22,7 @@ export function DaemonBanner({ reason }: { reason: string }) {
   };
 
   return (
-    <div className="banner" role="status">
+    <div className="banner" role="status" {...help("banner.daemon")}>
       <Icon name="info" size={15} />
       <div className="banner-text">
         <strong>agentuxd is not running</strong> — showing mock data. Start it with <code>aux daemon</code> (or{" "}

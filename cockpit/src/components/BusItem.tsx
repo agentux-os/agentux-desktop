@@ -6,6 +6,7 @@ import { formatClock } from "../lib/format";
 import { renderInline } from "../lib/inline";
 import { Icon } from "./Icon";
 import { VendorBadge } from "./VendorBadge";
+import { help } from "../helper/content";
 
 /** Who sent or received a bus entry. */
 export function BusEndpointLabel({ ep }: { ep: BusEndpoint }) {
@@ -64,7 +65,7 @@ export function BusItem({
 }) {
   if (isSystemEntry(msg)) {
     return (
-      <div className={`bus-line kind-${msg.kind}`} title={msg.kind === "wake" ? msg.body : undefined}>
+      <div {...help("bus.message")} className={`bus-line kind-${msg.kind}`} title={msg.kind === "wake" ? msg.body : undefined}>
         <Icon name={msg.kind === "wake" ? "bell" : msg.kind === "joined" ? "plus" : "minus"} size={12} />
         <span className="bus-line-text">{msg.subject}</span>
         {!inExchange && run && (
@@ -78,7 +79,7 @@ export function BusItem({
   }
   const warning = isWarningEntry(msg);
   return (
-    <article className={`bus-item kind-${msg.kind} ${warning ? "is-warning" : ""} ${compact ? "is-compact" : ""}`}>
+    <article {...help("bus.message")} className={`bus-item kind-${msg.kind} ${warning ? "is-warning" : ""} ${compact ? "is-compact" : ""}`}>
       <header className="bus-head">
         {warning && <Icon name="alert" size={13} className="bus-warn-icon" />}
         <BusEndpointLabel ep={msg.from} />

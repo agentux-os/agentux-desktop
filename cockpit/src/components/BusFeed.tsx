@@ -6,6 +6,7 @@ import { runRef } from "../lib/labels";
 import { BusComposer } from "./BusComposer";
 import { BusItem } from "./BusItem";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 const FILTERS: { id: BusFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -51,11 +52,11 @@ export function BusFeed({
   return (
     <div className="page">
       <div className="page-intro">
-        <p>
+        <p {...help("bus.page")}>
           Agents talk through the <code>agentux</code> MCP server. The daemon routes every message, wakes the target session,
           and stops an exchange at <code>max_turns_per_exchange</code>.
         </p>
-        <div className="filters" role="group" aria-label="Filter the bus log">
+        <div className="filters" role="group" aria-label="Filter the bus log" {...help("bus.filters")}>
           {FILTERS.map((f) => (
             <button key={f.id} className={`chip-btn ${filter === f.id ? "is-on" : ""}`} onClick={() => setFilter(f.id)}>
               {f.label}
@@ -108,7 +109,7 @@ export function BusGroupView({
     return <BusItem msg={m} run={open ? run : undefined} inExchange={!open} onOpen={open} onReply={onReply} />;
   }
   return (
-    <section className={`bus-group ${g.limited ? "is-limited" : ""}`}>
+    <section className={`bus-group ${g.limited ? "is-limited" : ""}`} {...help("bus.exchange")}>
       <header className="bus-group-head">
         <Icon name={g.kind === "question" ? "question" : "bus"} size={13} />
         <strong>{g.kind === "question" ? `Question ${g.questionId}` : `Exchange ${g.exchange}`}</strong>

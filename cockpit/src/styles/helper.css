@@ -1,0 +1,588 @@
+/* The penguin helper: mascot, What's this?, the tour and Ask. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- the penguin ---------------------------------------------------------- */
+.penguin {
+  display: block;
+  color: var(--accent);
+  overflow: visible;
+}
+.penguin .pg-body,
+.penguin .pg-flipper,
+.penguin .pg-bubbles circle {
+  fill: currentColor;
+  transform-box: fill-box;
+}
+.penguin .pg-body {
+  transform-origin: 50% 60%;
+  animation: pg-bob 3.6s ease-in-out infinite;
+}
+.penguin .pg-bubbles circle {
+  opacity: 0;
+}
+.penguin .pg-flipper {
+  transform-origin: 85% 15%;
+}
+.penguin.is-talking .pg-body {
+  animation-duration: 1.4s;
+}
+.penguin.is-talking .pg-flipper {
+  animation: pg-stroke 0.7s ease-in-out infinite;
+}
+.penguin.is-thinking .pg-body {
+  animation: pg-bob 2.4s ease-in-out infinite;
+}
+.penguin.is-thinking .pg-bubbles circle {
+  animation: pg-bubble 1.8s ease-in infinite;
+}
+.penguin.is-thinking .pg-bubbles circle:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.penguin.is-thinking .pg-bubbles circle:nth-child(3) {
+  animation-delay: 0.9s;
+}
+.penguin.is-pointing .pg-body {
+  animation: pg-point 1.6s ease-in-out infinite;
+}
+@keyframes pg-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-1.6px) rotate(-2deg);
+  }
+}
+@keyframes pg-stroke {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+@keyframes pg-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  30% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes pg-point {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateX(2px) rotate(-10deg);
+  }
+}
+.penguin-full {
+  display: block;
+  margin: 2px auto 10px;
+  color: var(--accent);
+}
+.penguin-full svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- the mascot in its corner -------------------------------------------- */
+.mascot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.mascot-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 8px 2px 4px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+.mascot-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.mascot-label {
+  font-size: 12.5px;
+}
+.mascot-wt {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+}
+.mascot-wt:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.mascot-wt.is-on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: transparent;
+}
+.mascot.is-compact {
+  flex-direction: column;
+}
+.mascot-menu,
+.mascot-bubble {
+  position: fixed;
+  z-index: 60;
+  width: 250px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.mascot-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+}
+.mascot-menu button:hover,
+.mascot-menu button:focus-visible {
+  background: var(--hover);
+}
+.mascot-menu kbd {
+  margin-left: auto;
+}
+.mascot-menu hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px 2px;
+}
+.mascot-menu [aria-checked="true"] svg {
+  color: var(--accent);
+}
+.mascot-bubble {
+  width: 280px;
+  padding: 12px 14px;
+  animation: bubble-in 0.25s ease-out;
+}
+.mascot-bubble::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  bottom: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  transform: rotate(45deg);
+}
+.mascot-bubble p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+.mascot-bubble-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.helper-off {
+  color: var(--text-faint);
+}
+
+/* ---- What's this? --------------------------------------------------------- */
+body.helper-wt,
+body.helper-wt * {
+  cursor: help !important;
+}
+/* Disabled controls get no clicks: let them fall through to their parent,
+   which finds them under the pointer. */
+body.helper-wt :disabled {
+  pointer-events: none;
+}
+body.helper-wt [data-helper-ui],
+body.helper-wt [data-helper-ui] * {
+  cursor: auto !important;
+}
+body.helper-wt [data-helper-ui] button {
+  cursor: pointer !important;
+}
+.wt-hover {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  transition: all 0.08s ease-out;
+}
+.wt-badge {
+  position: fixed;
+  z-index: 75;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.wt-badge > svg {
+  color: var(--accent);
+}
+.explain,
+.coach {
+  position: fixed;
+  z-index: 90;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  animation: bubble-in 0.18s ease-out;
+}
+.explain-head,
+.coach-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.explain h2,
+.coach h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.explain h3 {
+  margin: 10px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.explain p,
+.coach p {
+  margin: 0;
+  line-height: 1.5;
+}
+.explain ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.explain li {
+  line-height: 1.5;
+}
+.explain-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+/* ---- the tour ------------------------------------------------------------- */
+.spot-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+}
+.spot-hole {
+  position: fixed;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 9999px rgba(5, 7, 10, 0.55);
+  transition: all 0.25s ease-out;
+  pointer-events: none;
+}
+:root[data-theme="light"] .spot-hole {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 9999px rgba(20, 25, 35, 0.35);
+}
+.spot-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 10, 0.55);
+}
+:root[data-theme="light"] .spot-dim {
+  background: rgba(20, 25, 35, 0.35);
+}
+.coach {
+  width: min(340px, calc(100vw - 24px));
+  transition:
+    top 0.25s ease-out,
+    left 0.25s ease-out;
+}
+.coach.is-intro {
+  width: min(400px, calc(100vw - 24px));
+  text-align: center;
+}
+.coach.is-intro .coach-head {
+  justify-content: center;
+}
+.coach-count {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.coach-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.coach-spacer {
+  flex: 1;
+}
+
+/* ---- Ask the penguin ------------------------------------------------------ */
+.ask {
+  position: fixed;
+  z-index: 80;
+  left: calc(var(--sidebar-w) + 12px);
+  bottom: calc(var(--statusbar-h) + 12px);
+  width: min(440px, calc(100vw - var(--sidebar-w) - 24px));
+  height: min(600px, calc(100vh - var(--statusbar-h) - 24px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  animation: bubble-in 0.2s ease-out;
+}
+.welcome .ask,
+.ask.in-welcome {
+  left: 24px;
+  bottom: 24px;
+  width: min(440px, calc(100vw - 48px));
+  height: min(600px, calc(100vh - 48px));
+}
+.ask-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.ask-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ask-scope {
+  flex: 1;
+  font-size: 11.5px;
+}
+.ask-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ask-intro p {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.ask-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ask-you {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 7px 11px;
+  border-radius: var(--radius) var(--radius) 4px var(--radius);
+  background: var(--accent-soft);
+  white-space: pre-wrap;
+}
+.ask-msg {
+  line-height: 1.5;
+}
+.ask-lead {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+}
+.ask-hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ask-hit {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.ask-hit p {
+  margin: 4px 0;
+}
+.ask-hit-actions {
+  display: flex;
+  gap: 12px;
+}
+.ask-hit-actions .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.ask-agent {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+.ask-agent-text {
+  white-space: pre-wrap;
+}
+.ask-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.ask-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+.ask-error {
+  color: var(--err);
+}
+.ask-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.ask-form textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.ask-ai {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.ask-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ask-ai select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+}
+.ask-note {
+  flex-basis: 100%;
+  margin: 0;
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .penguin *,
+  .mascot-bubble,
+  .explain,
+  .coach,
+  .ask,
+  .spot-hole,
+  .wt-hover {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .mascot-label {
+    display: none;
+  }
+  .mascot {
+    flex-direction: column;
+  }
+}
+
+/* The wizard's Done step: the tour next to Open the cockpit. */
+.wz-finale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.wz-finale-actions .penguin {
+  margin: -4px 0;
+}
+.wz-rail .mascot {
+  margin: 8px 0 4px;
+}
