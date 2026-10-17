@@ -96,6 +96,17 @@ jobs:
       - name: Check plasma overlay
         run: plasma/check.sh
 
+      - name: Check shared desktop overlay
+        run: |
+          node common/check.mjs
+          bash -n common/usr/libexec/agentux-setup
+          sh -n common/usr/libexec/agentux-cockpit-autostart
+          desktop-file-validate common/usr/share/applications/agentux-welcome.desktop
+          desktop-file-validate common/etc/xdg/autostart/agentux-welcome.desktop common/etc/xdg/autostart/agentux-cockpit.desktop
+
+      - name: Check COSMIC overlay
+        run: node cosmic/check.mjs
+
       # The overlay hooks into files and plugin ids of Fedora 44 packages
       # (plasma-welcome's kded module, Plasma Login's drop-in directory). Fail
       # if a package update moves them, and make sure no overlay file replaces

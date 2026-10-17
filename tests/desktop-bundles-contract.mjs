@@ -13,7 +13,9 @@ const required = [
   'common/etc/xdg/autostart/agentux-welcome.desktop',
   'plasma/check.sh',
   'common/check.sh',
+  'common/check.mjs',
   'cosmic/check.sh',
+  'cosmic/check.mjs',
   'cosmic/usr/share/cosmic/com.system76.CosmicSettings/v1/accent_palette_dark.ron',
 ];
 
@@ -24,12 +26,12 @@ for (const path of required) {
 for (const root of roots) {
   const topLevel = await readdir(root);
   for (const entry of topLevel) {
-    assert.ok(['usr', 'etc', 'check.sh'].includes(entry), `${root}/${entry} is not an install root or validator`);
+    assert.ok(['usr', 'etc', 'check.sh', 'check.mjs'].includes(entry), `${root}/${entry} is not an install root or validator`);
   }
   const visit = async (path) => {
     for (const entry of await readdir(path, { withFileTypes: true })) {
       const child = join(path, entry.name);
-      if (child === join(root, 'check.sh')) continue;
+      if (child === join(root, 'check.sh') || child === join(root, 'check.mjs')) continue;
       const relative = child.slice(root.length + 1).replaceAll('\\', '/');
       assert.match(relative, /^(usr|etc)(\/|$)/, `${child} is outside install roots`);
       assert.doesNotMatch(relative, /(^|\/)(build|test|tests)(\/|$)/i, `${child} is a build/test file`);

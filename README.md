@@ -7,6 +7,11 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/agentux-os/agentux-desktop/releases/latest"><img alt="RPM downloads" src="https://img.shields.io/github/downloads/agentux-os/agentux-desktop/total?label=RPM%20downloads&logo=linux&labelColor=0b0d10&color=c6f36b"></a>
+  <a href="https://github.com/agentux-os/agentux-desktop/releases/latest"><img alt="Latest desktop release" src="https://img.shields.io/github/v/release/agentux-os/agentux-desktop?include_prereleases&label=latest%20desktop&labelColor=0b0d10&color=4f7d0b"></a>
+</p>
+
 <h3 align="center">agentux-desktop: the AgentUX cockpit and the desktop it lives in</h3>
 
 <p align="center">
@@ -34,6 +39,13 @@ The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the 
 </p>
 
 > **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included), the agent bus and terminal mode (a session's harness TUI, or a shell in a run's worktree) come from the daemon. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
+
+## Releases and packages
+
+Every `v*` release builds and verifies the cockpit RPMs for `x86_64` and `aarch64`, plus the architecture-independent Plasma overlay tarball. The artifacts are attached automatically to the newest release, so this README never needs a version edit.
+
+- [Latest release and RPMs](https://github.com/agentux-os/agentux-desktop/releases/latest)
+- [Release workflow](https://github.com/agentux-os/agentux-desktop/actions/workflows/release.yml)
 
 ## At a glance
 
