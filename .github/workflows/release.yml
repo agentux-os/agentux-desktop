@@ -4,21 +4,21 @@ name: release
 # The build runs inside a Fedora 44 container so the binary links against the
 # same webkit2gtk4.1 / gtk3 / glibc the image ships, not Ubuntu's.
 #
-# The same job packs the Plasma defaults overlay (plasma/usr and plasma/etc)
-# into agentux-plasma-<version>.tar.gz, paths relative to /, so the image build
-# can `tar -xz -C /` it next to the RPM under one version number.
+# The x86_64 job also packs common, Plasma, and COSMIC install roots into
+# deterministic, checksummed build-input archives. The RPM identity remains
+# agentux-cockpit; desktop composition is represented by the archive names.
 #
 # The RPM is built for x86_64 and aarch64, each natively on a runner of that
 # architecture (GitHub's arm64 runners are free for public repositories), from
 # the same multi-arch fedora:44 image, and each is install-checked in a fresh
-# container of its arch. The plasma tarball is arch-independent, so only the
-# x86_64 leg builds it.
+# container of its arch. The desktop bundles are architecture-independent, so
+# only the x86_64 leg builds them.
 #
-# - push of a `v*` tag: build and attach both .rpm files and the plasma tarball
-#   (+ .sha256) to a GitHub release for that tag
+# - push of a `v*` tag: build and attach both .rpm files and all three bundles
+#   (+ .sha256 sidecars) to a GitHub release for that tag
 # - workflow_dispatch: build and upload them as workflow artifacts only
 #   (agentux-cockpit-rpm-x86_64, agentux-cockpit-rpm-aarch64,
-#   agentux-plasma-tarball)
+#   agentux-desktop-bundles)
 
 on:
   push:
@@ -41,10 +41,10 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-24.04
-            plasma: true
+            bundles: true
           - arch: aarch64
             runner: ubuntu-24.04-arm
-            plasma: false
+            bundles: false
     runs-on: ${{ matrix.runner }}
     container:
       image: registry.fedoraproject.org/fedora:44
@@ -72,45 +72,63 @@ jobs:
             exit 1
           fi
 
-      - name: Check plasma overlay
-        if: matrix.plasma
+      - name: Check common bundle
+        if: matrix.bundles
+        run: common/check.sh
+
+      - name: Check Plasma overlay
+        if: matrix.bundles
         run: plasma/check.sh
+
+      - name: Check COSMIC overlay
+        if: matrix.bundles
+        run: cosmic/check.sh
 
       # Deterministic: sorted entries, root ownership, file times from the commit
       # and a gzip header without name/timestamp, so a rebuild of the same commit
       # gives the same bytes.
-      - name: Build plasma tarball
-        if: matrix.plasma
-        id: plasma
+      - name: Build desktop bundles
+        if: matrix.bundles
+        id: bundles
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           version=$(node -p "require('./cockpit/src-tauri/tauri.conf.json').version")
           commit_time=$(git log -1 --format=%ct)
           mkdir -p dist
-          tarball="dist/agentux-plasma-${version}.tar.gz"
-          tar -C plasma --sort=name --owner=0 --group=0 --numeric-owner \
-            --mtime="@${commit_time}" --mode='u+rwX,go+rX,go-w' \
-            -cf - usr etc | gzip -9n > "${tarball}"
-          (cd dist && sha256sum "$(basename "${tarball}")" > "$(basename "${tarball}").sha256")
-          echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
-          echo "sha256=${tarball}.sha256" >> "$GITHUB_OUTPUT"
+          for bundle in common plasma cosmic; do
+            archive="dist/agentux-desktop-${bundle}-${version}.tar.gz"
+            tar -C "$bundle" --sort=name --owner=0 --group=0 --numeric-owner \
+              --mtime="@${commit_time}" --mode='u+rwX,go+rX,go-w' \
+              -cf - usr etc | gzip -9n > "$archive"
+            (cd dist && sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256")
+            if tar -tzf "$archive" | grep -vE '^(usr|etc)(/|$)'; then
+              echo "::error::unexpected paths in $archive"
+              exit 1
+            fi
+            echo "built $archive"
+          done
+          for overlay in plasma cosmic; do
+            collision=$(comm -12 \
+              <(tar -tzf "dist/agentux-desktop-common-${version}.tar.gz" | sed '/\/$/d' | LC_ALL=C sort) \
+              <(tar -tzf "dist/agentux-desktop-${overlay}-${version}.tar.gz" | sed '/\/$/d' | LC_ALL=C sort))
+            if [[ -n "$collision" ]]; then
+              echo "::error::common/${overlay} bundle path collision: $collision"
+              exit 1
+            fi
+          done
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
           {
-            echo '### Plasma overlay tarball'
+            echo '### Desktop configuration bundles'
             echo '```'
             ls -l dist
-            cat "${tarball}.sha256"
-            echo
-            tar -tvzf "${tarball}"
+            for archive in dist/agentux-desktop-*.tar.gz; do
+              cat "${archive}.sha256"
+              tar -tvzf "$archive"
+            done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          # Only usr/ and etc/ may be in it (no check.sh, nothing under a home).
-          if tar -tzf "${tarball}" | grep -vE '^(usr|etc)(/|$)'; then
-            echo "::error::unexpected paths in ${tarball}"
-            exit 1
-          fi
-          # The cockpit autostart wrapper must stay executable.
-          if ! tar -tvzf "${tarball}" | grep -qE '^-rwxr-xr-x .* usr/libexec/agentux-cockpit-autostart$'; then
-            echo "::error::usr/libexec/agentux-cockpit-autostart is not executable in ${tarball}"
+          if ! tar -tvzf "dist/agentux-desktop-common-${version}.tar.gz" | grep -qE '^-rwxr-xr-x .* usr/libexec/agentux-cockpit-autostart$'; then
+            echo "::error::common autostart wrapper is not executable in its bundle"
             exit 1
           fi
 
@@ -152,14 +170,12 @@ jobs:
           path: ${{ steps.rpm.outputs.path }}
           if-no-files-found: error
 
-      - name: Upload plasma tarball artifact
-        if: matrix.plasma
+      - name: Upload desktop bundle artifacts
+        if: matrix.bundles
         uses: actions/upload-artifact@v4
         with:
-          name: agentux-plasma-tarball
-          path: |
-            ${{ steps.plasma.outputs.tarball }}
-            ${{ steps.plasma.outputs.sha256 }}
+          name: agentux-desktop-bundles
+          path: dist/agentux-desktop-*.tar.gz*
           if-no-files-found: error
 
   # Installs each RPM with dnf in a fresh fedora:44 container of its own arch
@@ -228,7 +244,11 @@ jobs:
           files: |
             agentux-cockpit-*.x86_64.rpm
             agentux-cockpit-*.aarch64.rpm
-            agentux-plasma-*.tar.gz
-            agentux-plasma-*.tar.gz.sha256
+            agentux-desktop-common-*.tar.gz
+            agentux-desktop-common-*.tar.gz.sha256
+            agentux-desktop-plasma-*.tar.gz
+            agentux-desktop-plasma-*.tar.gz.sha256
+            agentux-desktop-cosmic-*.tar.gz
+            agentux-desktop-cosmic-*.tar.gz.sha256
           prerelease: ${{ contains(github.ref_name, '-') && 'true' || '' }}
           fail_on_unmatched_files: true

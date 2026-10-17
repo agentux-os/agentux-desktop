@@ -22,6 +22,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check desktop bundle layout
+        working-directory: .
+        run: node tests/desktop-bundles-contract.mjs
+
+      - name: Check release artifact contract
+        working-directory: .
+        run: node tests/release-contract.mjs
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -117,3 +125,27 @@ jobs:
             fi
           done < <(cd plasma && find usr etc -type f | sort)
           [ "$ok" = 1 ]
+
+  common:
+    name: common bundle
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install check tools
+        run: dnf -y install --setopt=install_weak_deps=False nodejs desktop-file-utils
+      - name: Check common bundle
+        run: common/check.sh
+
+  cosmic:
+    name: COSMIC overlay
+    runs-on: ubuntu-latest
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install check tools
+        run: dnf -y install --setopt=install_weak_deps=False nodejs
+      - name: Check COSMIC overlay
+        run: cosmic/check.sh
