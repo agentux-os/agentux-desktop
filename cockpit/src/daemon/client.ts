@@ -79,6 +79,28 @@ export interface DaemonClient {
    * kind): a harness TUI hands its session back to ACP when it closes.
    */
   closeTerminals(filter: { runId: string; command?: TerminalTarget["command"] }): Promise<void>;
+
+  /**
+   * One read-only question for the helper (the penguin), answered by the
+   * user's own harness through agentuxd (`helper.ask`): a fresh session with
+   * no tools, no files and no agent bus. Needs `capabilities.helperAsk`;
+   * rejects otherwise (and always on mock data).
+   */
+  askHelper(input: HelperQuestion): Promise<HelperReply>;
+}
+
+export interface HelperQuestion {
+  /** The harness that answers: `claude-code`, `codex`, `opencode`, `antigravity`. */
+  harness: string;
+  question: string;
+  /** Reference material: docs excerpts and a summary of the current view. */
+  context: string;
+}
+
+export interface HelperReply {
+  /** The harness that answered. */
+  harness: string;
+  answer: string;
 }
 
 export interface StartRunInput {

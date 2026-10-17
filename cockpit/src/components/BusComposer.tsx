@@ -4,6 +4,7 @@ import { busPostBlocked, busPostInput, busTargets } from "../lib/busPost";
 import { runRef } from "../lib/labels";
 import { BusEndpointLabel } from "./BusItem";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 interface Props {
   state: CockpitState;
@@ -58,6 +59,7 @@ export function BusComposer({ state, mode, runs, replyTo, onCancelReply, onPost 
 
   return (
     <form
+      {...help("bus.composer")}
       className={`bus-composer ${blocked ? "is-blocked" : ""}`}
       aria-label="Post on the agent bus"
       onSubmit={(e) => {

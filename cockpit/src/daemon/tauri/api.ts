@@ -267,6 +267,8 @@ export interface ApiCapabilities {
   busPost: boolean;
   /** `terminals.*` (absent from backends before 0.4.0). */
   terminals?: boolean;
+  /** `helper.ask` (absent from backends before 0.6.0). */
+  helperAsk?: boolean;
 }
 
 /** `daemon://status`, from the backend's event stream (`stream.rs`). */

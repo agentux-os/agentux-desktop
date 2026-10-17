@@ -1,6 +1,7 @@
 import type { CockpitState, PermissionRequest } from "../daemon/types";
 import { Icon } from "./Icon";
 import { RequestCard } from "./RequestCard";
+import { help } from "../helper/content";
 
 interface Props {
   state: CockpitState;
@@ -22,7 +23,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
 
   return (
     <div className="page">
-      <div className="page-intro">
+      <div className="page-intro" {...help("inbox.page")}>
         <p>
           Plan and step approvals, agents asking before a tool call or asking you a question, and runs over budget land
           here, oldest first.
@@ -59,7 +60,9 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
       )}
       {resolved.length > 0 && (
         <>
-          <h3 className="section-title">Recently resolved</h3>
+          <h3 className="section-title" {...help("inbox.resolved")}>
+            Recently resolved
+          </h3>
           <div className="req-list">
             {resolved.map((r) => (
               <RequestCard

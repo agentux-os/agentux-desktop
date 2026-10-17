@@ -238,7 +238,7 @@ describe("TauriDaemonClient", () => {
     const client = new TauriDaemonClient(t);
     await client.connect();
     await tick();
-    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: false, terminals: false });
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: false, terminals: false, helperAsk: false });
     client.watchBus(["r1"]);
     await tick();
     client.watchBus(["r1"]);
@@ -274,7 +274,7 @@ describe("TauriDaemonClient", () => {
     t.emit(STATUS_CHANNEL, { ...t.status, state: "connected" });
     await tick();
     await tick();
-    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: true, terminals: false });
+    expect(client.getState().capabilities).toEqual({ sessionsPrompt: true, busPost: true, terminals: false, helperAsk: false });
     const posted = await client.postBus({
       runId: "r1",
       to: { kind: "role", role: "reviewer" },
@@ -292,6 +292,32 @@ describe("TauriDaemonClient", () => {
     await expect(client.postBus({ runId: "r1", to: { kind: "run" }, body: "  " })).rejects.toThrow(/empty/);
     await expect(client.postBus({ runId: "r1", body: "x" })).rejects.toThrow(/choose/);
     expect(t.calls.filter((c) => c.command === "daemon_bus_post")).toHaveLength(2);
+  });
+
+  it("asks the helper's agent only on daemons that serve helper.ask", async () => {
+    const t = new FakeTransport();
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: true };
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+    await tick();
+    const q = { harness: "codex", question: " What is a gate? ", context: "docs" };
+    await expect(client.askHelper(q)).rejects.toThrow(/helper.ask/);
+    expect(t.calls.some((c) => c.command === "daemon_helper_ask")).toBe(false);
+
+    t.results.daemon_capabilities = { sessionsPrompt: true, busPost: true, helperAsk: true };
+    t.results.daemon_helper_ask = { harness: "codex", answer: "It runs the checks." };
+    t.status = { ...t.status, state: "disconnected" };
+    t.emit(STATUS_CHANNEL, t.status);
+    t.emit(STATUS_CHANNEL, { ...t.status, state: "connected" });
+    await tick();
+    await tick();
+    expect(client.getState().capabilities?.helperAsk).toBe(true);
+    expect(await client.askHelper(q)).toEqual({ harness: "codex", answer: "It runs the checks." });
+    expect(t.calls[t.calls.length - 1]).toEqual({
+      command: "daemon_helper_ask",
+      args: { harness: "codex", question: "What is a gate?", context: "docs" },
+    });
+    await expect(client.askHelper({ ...q, question: "  " })).rejects.toThrow(/empty/);
   });
 
   it("answers a question with approve and declines it with deny", async () => {

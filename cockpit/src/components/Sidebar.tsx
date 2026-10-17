@@ -1,6 +1,9 @@
 import type { CockpitState } from "../daemon/types";
 import { openWelcome } from "../setup/open";
 import { Icon, Logo, type IconName } from "./Icon";
+import { help } from "../helper/content";
+import { useOptionalHelper } from "../helper/context";
+import { Mascot } from "../helper/Mascot";
 
 export type View = "board" | "inbox" | "bus";
 
@@ -15,12 +18,13 @@ interface Props {
 }
 
 export function Sidebar({ state, view, onView, projectId, onProject, theme, onToggleTheme }: Props) {
+  const helper = useOptionalHelper();
   const runs = Object.values(state.runs);
   const pending = Object.values(state.requests).filter((r) => r.status === "pending");
-  const views: { id: View; label: string; icon: IconName; key: string; count?: number }[] = [
-    { id: "board", label: "Run board", icon: "board", key: "B" },
-    { id: "inbox", label: "Approvals", icon: "inbox", key: "I", count: pending.length },
-    { id: "bus", label: "Agent bus", icon: "bus", key: "M" },
+  const views: { id: View; label: string; icon: IconName; key: string; count?: number; help: ReturnType<typeof help> }[] = [
+    { id: "board", label: "Run board", icon: "board", key: "B", help: help("nav.board") },
+    { id: "inbox", label: "Approvals", icon: "inbox", key: "I", count: pending.length, help: help("nav.inbox") },
+    { id: "bus", label: "Agent bus", icon: "bus", key: "M", help: help("nav.bus") },
   ];
 
   const projectStats = (id: string | null) => {
@@ -43,7 +47,7 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
 
       <div className="nav-group">
         {views.map((v) => (
-          <button key={v.id} className={`nav-item ${view === v.id ? "is-active" : ""}`} onClick={() => onView(v.id)}>
+          <button key={v.id} {...v.help} className={`nav-item ${view === v.id ? "is-active" : ""}`} onClick={() => onView(v.id)}>
             <Icon name={v.icon} />
             <span className="nav-label">{v.label}</span>
             {v.count ? <span className="nav-count attention">{v.count}</span> : <kbd>{v.key}</kbd>}
@@ -52,7 +56,7 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
       </div>
 
       <div className="nav-heading">Projects</div>
-      <div className="nav-group">
+      <div className="nav-group" {...help("nav.projects")}>
         {[{ id: null, name: "All projects", path: "", language: undefined }, ...state.projects].map((p) => {
           const s = projectStats(p.id);
           return (
@@ -72,11 +76,25 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
       </div>
 
       <div className="sidebar-foot">
-        <button className="ghost-btn" onClick={() => void openWelcome()} title="Agents sign-in, developer tools, SDKs, Git and SSH">
+        {helper &&
+          (helper.settings.enabled ? (
+            <Mascot />
+          ) : (
+            <button
+              className="ghost-btn helper-off"
+              {...help("sidebar.helper")}
+              onClick={() => helper.update({ enabled: true })}
+              title="Turn the penguin helper back on"
+            >
+              <Icon name="question" />
+              Penguin helper
+            </button>
+          ))}
+        <button className="ghost-btn" {...help("sidebar.welcome")} onClick={() => void openWelcome()} title="Agents sign-in, developer tools, SDKs, Git and SSH">
           <Icon name="plus" />
           Welcome &amp; setup
         </button>
-        <button className="ghost-btn" onClick={onToggleTheme} title="Toggle theme">
+        <button className="ghost-btn" {...help("sidebar.theme")} onClick={onToggleTheme} title="Toggle theme">
           <Icon name={theme === "dark" ? "sun" : "moon"} />
           {theme === "dark" ? "Light" : "Dark"} theme
         </button>

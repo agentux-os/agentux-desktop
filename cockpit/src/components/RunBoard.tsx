@@ -4,10 +4,22 @@ import { formatDuration, formatUsd } from "../lib/format";
 import { REQUEST_LABEL, STEP_LABEL, runRef } from "../lib/labels";
 import { Icon } from "./Icon";
 import { VendorBadge } from "./VendorBadge";
+import { help } from "../helper/content";
 
 type ColumnId = StepKind | "waiting" | "done";
 
 // "Waiting for you" leads: it is the only column that needs the human.
+const COLUMN_HELP: Record<ColumnId, ReturnType<typeof help>> = {
+  waiting: help("board.col.waiting"),
+  plan: help("board.col.plan"),
+  implement: help("board.col.implement"),
+  gate: help("board.col.gate"),
+  review: help("board.col.review"),
+  pull_request: help("board.col.pull_request"),
+  custom: help("board.col.implement"),
+  done: help("board.col.done"),
+};
+
 const COLUMNS: { id: ColumnId; label: string }[] = [
   { id: "waiting", label: "Waiting for you" },
   ...STEPS.map((s) => ({ id: s as ColumnId, label: STEP_LABEL[s] })),
@@ -39,7 +51,7 @@ export function RunBoard({ state, projectId, selectedRunId, now, onSelectRun }: 
   }
 
   return (
-    <div className="board" role="list">
+    <div className="board" role="list" {...help("board")}>
       {COLUMNS.map((col) => {
         let items = runs.filter((r) => columnOf(r) === col.id);
         items =
@@ -49,7 +61,7 @@ export function RunBoard({ state, projectId, selectedRunId, now, onSelectRun }: 
         const hidden = col.id === "done" ? Math.max(0, items.length - DONE_LIMIT) : 0;
         if (hidden) items = items.slice(0, DONE_LIMIT);
         return (
-          <section key={col.id} className={`col col-${col.id}`} role="listitem" aria-label={col.label}>
+          <section key={col.id} className={`col col-${col.id}`} role="listitem" aria-label={col.label} {...COLUMN_HELP[col.id]}>
             <header className="col-head">
               <span className="col-title">{col.label}</span>
               <span className="col-count">{items.length + hidden}</span>
@@ -95,7 +107,7 @@ function RunCard({
   const elapsed = (run.finishedAt ?? now) - run.startedAt;
   const failedCheck = run.checks.find((c) => c.status === "failed");
   return (
-    <button className={`card status-${run.status} ${selected ? "is-selected" : ""}`} onClick={onClick}>
+    <button {...help("board.card")} className={`card status-${run.status} ${selected ? "is-selected" : ""}`} onClick={onClick}>
       <div className="card-top">
         <span className="mono muted">{runRef(run)}</span>
         {showProject && <span className="card-project">{run.projectId}</span>}

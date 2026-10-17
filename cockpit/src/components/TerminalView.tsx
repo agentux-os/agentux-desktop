@@ -7,6 +7,7 @@ import type { Terminal } from "../daemon/types";
 import { LEAVE_HINT, documentTerminalTheme, isLeaveChord, targetKey, terminalFor, type TerminalTarget } from "../lib/terminal";
 import { useCockpit, useDaemon } from "../state/daemon";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 type Phase =
   | { kind: "connecting" }
@@ -155,7 +156,7 @@ export function TerminalView({ target, title, cwd, autoFocus = true, onLeave }: 
   const ended = phase.kind === "exited" || phase.kind === "lost" || phase.kind === "error";
 
   return (
-    <div className={`term ${focused ? "is-focused" : ""}`}>
+    <div {...help("terminal.view")} className={`term ${focused ? "is-focused" : ""}`}>
       <div className="term-bar">
         <Icon name="terminal" size={13} />
         <span className="term-title">{info?.fallback ? "Shell" : title}</span>

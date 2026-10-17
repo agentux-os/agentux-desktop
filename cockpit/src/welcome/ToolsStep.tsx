@@ -11,6 +11,7 @@ import {
 } from "../setup/catalog";
 import { itemCommands } from "../setup/commands";
 import type { ItemStatus, SetupStatus } from "../setup/client";
+import { help } from "../helper/content";
 
 /** Selected items and the version picked for each (undefined: the default). */
 export type Selection = Map<string, string | undefined>;
@@ -62,7 +63,7 @@ export const ToolsStep = forwardRef<HTMLInputElement, Props>(function ToolsStep(
 
   return (
     <div className="wz-tools">
-      <p className="wz-legend">
+      <p className="wz-legend" {...help("wz.tools.legend")}>
         {(Object.keys(METHOD_LABEL) as InstallMethod[]).map((m) => (
           <span key={m} title={METHOD_HINT[m]}>
             <span className={`wz-method m-${m}`}>{METHOD_LABEL[m]}</span> {METHOD_SHORT[m]}
@@ -70,7 +71,7 @@ export const ToolsStep = forwardRef<HTMLInputElement, Props>(function ToolsStep(
         ))}
       </p>
 
-      <div className="wz-filter">
+      <div className="wz-filter" {...help("wz.tools.search")}>
         <label className="wz-search">
           <Icon name="search" size={15} />
           <input
@@ -142,7 +143,7 @@ export const ToolsStep = forwardRef<HTMLInputElement, Props>(function ToolsStep(
             <span className="muted">Tick what you want. Installs run in the background; you can close this window.</span>
           )}
         </div>
-        <button className="btn btn-primary" disabled={!pending.length} onClick={onInstall}>
+        <button className="btn btn-primary" disabled={!pending.length} onClick={onInstall} {...help("wz.tools.install")}>
           <Icon name="arrowRight" size={14} />
           Install{pending.length ? ` ${pending.length}` : ""}
         </button>
@@ -183,7 +184,7 @@ function ItemRow({
   const checked = done || busy || selected;
 
   return (
-    <li className={`wz-item ${checked ? "is-on" : ""} ${!available ? "is-off" : ""} ${failed ? "is-failed" : ""}`}>
+    <li {...help("wz.tools.item")} className={`wz-item ${checked ? "is-on" : ""} ${!available ? "is-off" : ""} ${failed ? "is-failed" : ""}`}>
       <input
         id={id}
         type="checkbox"

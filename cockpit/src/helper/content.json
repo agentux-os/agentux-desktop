@@ -1,0 +1,666 @@
+{
+  "helper.penguin": {
+    "title": "The AgentUX penguin",
+    "what": "Your helper in the cockpit. It knows AgentUX: the cockpit, the Welcome wizard, aux, agentuxd, agents, runs, pipelines and the agent bus. It does not cover the desktop itself (COSMIC, KDE Plasma, Hyprland) or Linux in general.",
+    "how": "Click it for its menu. It only speaks up on its own once, to offer the tour; after that it waits to be asked.",
+    "do": [
+      "Take the guided tour again",
+      "Turn on What's this? (Shift+F1) and click anything to learn what it is",
+      "Ask a question (F1); answers come from the AgentUX docs bundled with the cockpit",
+      "Turn the helper off from its menu; it stays off until you turn it on in the sidebar"
+    ],
+    "docs": {
+      "label": "ADR 0017: the help mascot",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0017-help-mascot.md"
+    }
+  },
+  "helper.whatsThis": {
+    "title": "What's this?",
+    "what": "A mode where clicking explains instead of acting.",
+    "how": "While it is on, things the penguin can explain are outlined as you point at them. Clicking one, or pressing Enter on it, shows what it is and how it works. Nothing else happens on click, so you can explore without approving or starting anything.",
+    "do": [
+      "Toggle with Shift+F1 or this button",
+      "Escape closes the explanation, then leaves the mode"
+    ]
+  },
+  "helper.ask": {
+    "title": "Ask the penguin",
+    "what": "Questions about AgentUX, answered from the AgentUX documentation that ships with the cockpit.",
+    "how": "The answer is a local search over the cockpit's help and the AgentUX docs (getting started, aux, agentux.yaml, the API and the design decisions): no network needed. When an answer is about something on screen, Show me points at it. Optionally, your own agent can answer too, through agentuxd.",
+    "do": [
+      "Open with F1 or from the penguin's menu",
+      "Turn on Ask my agent for answers written by your agent (off by default; it uses your own agent account)"
+    ],
+    "docs": {
+      "label": "Helper questions in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#helper-questions"
+    }
+  },
+  "helper.ai": {
+    "title": "Ask my agent",
+    "what": "Optional answers written by one of your own agent CLIs (Claude Code, Codex, OpenCode or Antigravity), through agentuxd's helper.ask.",
+    "how": "Off by default. When on, your question goes to the agent you pick, in a fresh session that belongs to no run: it starts in an empty directory, gets no tools, no files and no agent bus, and any tool call cancels it. Its prompt has the AgentUX docs passages that match your question and a summary of what you are looking at (the view, the project, and the open run's title, status and step), never file contents or secrets. It runs on your agent account, so the provider bills and sees it as any other prompt.",
+    "do": [
+      "Pick which agent answers",
+      "Turn it off again here; offline answers keep working"
+    ],
+    "docs": {
+      "label": "Helper questions in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#helper-questions"
+    }
+  },
+  "nav.board": {
+    "title": "Run board",
+    "what": "Every run of the selected project as a card, in one column per pipeline stage.",
+    "how": "Cards move as agentuxd reports each run's step. A run paused on an approval sits in Waiting for you, the first column.",
+    "do": [
+      "Open it with B",
+      "Click a card to open its session panel",
+      "Pick a project in the sidebar to narrow the board"
+    ],
+    "docs": {
+      "label": "Getting started: cockpit tour",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#3-cockpit-tour"
+    }
+  },
+  "nav.inbox": {
+    "title": "Approvals",
+    "what": "One queue for everything that waits for you, from every run: plan and step approvals, agents asking before a tool call, budget overruns and agents' questions.",
+    "how": "The badge counts pending requests. The same requests show on the board's rail and in each run's session panel; deciding in one place decides everywhere, and aux ps lists them too.",
+    "do": [
+      "Open it with I",
+      "J and K move, A approves, D denies, 1 to 9 picks an answer"
+    ],
+    "docs": {
+      "label": "Getting started: cockpit tour",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#3-cockpit-tour"
+    }
+  },
+  "nav.bus": {
+    "title": "Agent bus",
+    "what": "What agents say to each other, and to you, over the agent bus: messages, review requests, handoffs and questions.",
+    "how": "Every session gets the agentux MCP server. agentuxd routes each message, wakes the session it is for, and stops an exchange at its turn limit.",
+    "do": [
+      "Open it with M",
+      "Filter the log",
+      "Post as yourself to a role, a session or the whole run"
+    ],
+    "docs": {
+      "label": "Agent bus in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#agent-bus"
+    }
+  },
+  "nav.projects": {
+    "title": "Projects",
+    "what": "The git repositories agentuxd knows. A project is registered the first time a run starts in a directory inside it.",
+    "how": "The number is the project's active runs; a dot means something there waits for you. All projects shows every run together.",
+    "do": [
+      "[ and ] cycle through projects",
+      "New run registers a new project automatically"
+    ]
+  },
+  "sidebar.welcome": {
+    "title": "Welcome & setup",
+    "what": "Reopens Welcome to AgentUX, the first-run wizard, in its own window.",
+    "how": "The wizard signs your agent CLIs in, installs developer tools and SDKs, and sets up Git and SSH. It is also in the app menu, and agentux-cockpit --welcome opens it.",
+    "do": [
+      "Sign in to an agent you skipped",
+      "Install more tools"
+    ],
+    "docs": {
+      "label": "Getting started: first login",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#2-first-login"
+    }
+  },
+  "sidebar.theme": {
+    "title": "Theme",
+    "what": "Switches the cockpit between its dark and light theme.",
+    "how": "The choice is remembered, and the Welcome wizard uses it too. It changes the cockpit only, not the desktop.",
+    "do": [
+      "Toggle dark and light"
+    ]
+  },
+  "sidebar.helper": {
+    "title": "Penguin helper",
+    "what": "Turns the penguin helper back on after it was turned off.",
+    "how": "The setting is remembered for this user. While the helper is off, What's this? and Ask are off too.",
+    "do": [
+      "Turn the helper on"
+    ]
+  },
+  "topbar.title": {
+    "title": "Where you are",
+    "what": "The current view (run board, approvals or agent bus) and the project it shows.",
+    "how": "Change the view in the sidebar or with B, I and M; change the project in the sidebar or with [ and ]."
+  },
+  "topbar.path": {
+    "title": "Project directory",
+    "what": "Where the selected project's repository is on this machine.",
+    "how": "Runs never touch it directly: each run works in its own worktree, <repository>.worktrees/<run-id>, on the branch aux/<run-id>."
+  },
+  "topbar.waiting": {
+    "title": "Waiting for you",
+    "what": "How many requests wait for your decision across all runs.",
+    "how": "Click it to open the approvals inbox.",
+    "do": [
+      "Open the inbox (I)"
+    ]
+  },
+  "topbar.newRun": {
+    "title": "New run",
+    "what": "Starts a run: agents take your prompt through the project's pipeline, by default plan, implement, gate, review and pull request.",
+    "how": "Give a directory inside a git repository and a prompt. agentuxd registers the project if needed, creates the branch aux/<run-id> and its worktree from the project's HEAD, and follows the pipeline in the project's agentux.yaml (or the built-in default). It needs agentuxd, so it is disabled on mock data. aux run <dir> --prompt \"...\" does the same.",
+    "do": [
+      "Press N",
+      "Watch the run on the board",
+      "Approve its plan when it asks"
+    ],
+    "docs": {
+      "label": "Getting started: aux quick reference",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#4-aux-quick-reference"
+    }
+  },
+  "banner.daemon": {
+    "title": "agentuxd is not running",
+    "what": "The cockpit could not reach agentuxd, so it shows scripted mock data.",
+    "how": "On AgentUX the daemon runs as a systemd user service. The cockpit reloads by itself once the daemon answers; Retry checks right away.",
+    "do": [
+      "Check it: systemctl --user status agentuxd.service",
+      "Start a demo daemon without real agents: aux daemon --fake-agents"
+    ],
+    "docs": {
+      "label": "Getting started: troubleshooting",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#6-troubleshooting"
+    }
+  },
+  "board": {
+    "title": "Run board",
+    "what": "The runs of the project in view, one column per stage of the default pipeline, plus Waiting for you and Done.",
+    "how": "A run is one prompt going through the pipeline in its own git worktree. Its card moves to the column of the step it is in; custom steps show under Implement.",
+    "do": [
+      "Click a card to see its sessions, steps and approvals"
+    ],
+    "docs": {
+      "label": "Run lifecycle in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#run-lifecycle"
+    }
+  },
+  "board.col.waiting": {
+    "title": "Waiting for you",
+    "what": "Runs paused on something only you can decide: a plan or step approval, an agent asking before a tool call, or a budget overrun.",
+    "how": "The run stays paused until you approve or deny, from the card's panel, the rail or the inbox. Agents' questions do not pause a run; they wait in the inbox.",
+    "do": [
+      "Open a card to decide",
+      "Or press I for the inbox"
+    ]
+  },
+  "board.col.plan": {
+    "title": "Plan",
+    "what": "Runs in the plan step: the planner's agent reads the code and writes an implementation plan, without changing files.",
+    "how": "With approve: true on the step (as in the default pipeline), the run then waits for you to approve the plan; rejecting it fails the run.",
+    "docs": {
+      "label": "Getting started: agentux.yaml",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#5-agentuxyaml"
+    }
+  },
+  "board.col.implement": {
+    "title": "Implement",
+    "what": "Runs in the implement step: the implementer's agent edits files in the run's worktree. Custom steps show here too.",
+    "how": "Agents edit but do not commit: after each implement or custom step, agentuxd commits whatever changed. A failing gate or a review that requests changes sends the run back here with the feedback.",
+    "docs": {
+      "label": "Run lifecycle in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#run-lifecycle"
+    }
+  },
+  "board.col.gate": {
+    "title": "Gate",
+    "what": "Runs whose checks are running: the commands listed under checks in agentux.yaml, such as lint and test.",
+    "how": "Each check runs with sh -c in the worktree, on the host or, with isolation.mode: podman, in a rootless container. All checks run. If one fails, the run goes back to the gate's on_fail step with the output, up to max_attempts times in a row; the card shows the attempt, such as gate 2/3.",
+    "docs": {
+      "label": "Getting started: agentux.yaml",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#5-agentuxyaml"
+    }
+  },
+  "board.col.review": {
+    "title": "Review",
+    "what": "Runs being reviewed by the reviewer's agent, by default a different vendor than the implementer.",
+    "how": "The reviewer ends with a verdict, APPROVE or CHANGES_REQUESTED. Changes requested send the run back to on_changes_requested with the comments, up to max_rounds reviews; the card shows the round.",
+    "docs": {
+      "label": "Getting started: agentux.yaml",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#5-agentuxyaml"
+    }
+  },
+  "board.col.pull_request": {
+    "title": "Pull request",
+    "what": "Runs opening their pull request.",
+    "how": "agentuxd pushes the branch aux/<run-id> and opens a pull request with gh, or reuses the one already open, when origin is on GitHub and gh is logged in. Otherwise the step records PR skipped with the reason, and the branch stays."
+  },
+  "board.col.done": {
+    "title": "Done",
+    "what": "Finished runs: done, failed or cancelled.",
+    "how": "The newest six show; the rest are counted. A done run shows its pull request, a failed one its error. Worktrees and branches stay after a run ends."
+  },
+  "board.card": {
+    "title": "Run card",
+    "what": "One run: its id (or issue number), project, elapsed time and title, then what is happening now or what it waits for.",
+    "how": "The foot shows which agents implement and review, the gate attempt or review round when a loop started, and the cost so far.",
+    "do": [
+      "Click it to open the session panel"
+    ]
+  },
+  "rail.waiting": {
+    "title": "Waiting for you",
+    "what": "The oldest requests that wait for you in the project in view, with their buttons right here.",
+    "how": "Only two show; the rest are in the inbox.",
+    "do": [
+      "Approve or deny without leaving the board",
+      "Inbox opens the whole queue (I)"
+    ]
+  },
+  "rail.bus": {
+    "title": "Agent bus, live",
+    "what": "The latest messages agents sent each other in the project in view.",
+    "how": "Wakes and sessions joining or leaving are left to the bus page. Click an entry to open its run.",
+    "do": [
+      "All opens the bus page (M)"
+    ]
+  },
+  "inbox.page": {
+    "title": "Approvals inbox",
+    "what": "Every pending request from every run, oldest first.",
+    "how": "Plan and step approvals continue a run or fail it; permission requests let one tool call run or tell the agent no; budget requests extend the budget or stop the run; questions take an answer.",
+    "do": [
+      "J and K move",
+      "A approves, D denies",
+      "1 to 9 picks a suggested answer",
+      "Enter opens the run"
+    ],
+    "docs": {
+      "label": "Run lifecycle in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#run-lifecycle"
+    }
+  },
+  "inbox.resolved": {
+    "title": "Recently resolved",
+    "what": "The last requests that were decided, with the outcome and any answer.",
+    "how": "A request that nobody needs any more, because the agent's turn ended, the run was cancelled or the daemon restarted, shows as no longer asked."
+  },
+  "request.plan": {
+    "title": "Plan approval",
+    "what": "The planner's plan, waiting for you before anyone writes code.",
+    "how": "Approve plan continues the run; Reject fails it. aux approve <request-id> and aux deny do the same from a terminal.",
+    "do": [
+      "Read the plan in the run's session panel",
+      "Approve (A) or reject (D)"
+    ]
+  },
+  "request.step": {
+    "title": "Step approval",
+    "what": "A step with approve: true finished, or the pull_request step waits before opening the pull request.",
+    "how": "Approve continues the run; Reject fails it."
+  },
+  "request.permission": {
+    "title": "Permission request",
+    "what": "An agent asks before a tool call: running a command, editing or deleting a file, fetching a URL.",
+    "how": "The run waits while the agent waits. Allow lets this one call run; Deny tells the agent no and the step goes on. A request still pending when the agent's turn ends, the run is cancelled or the daemon restarts is withdrawn.",
+    "do": [
+      "Allow (A) or deny (D)"
+    ],
+    "docs": {
+      "label": "Run lifecycle in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#run-lifecycle"
+    }
+  },
+  "request.budget": {
+    "title": "Budget exceeded",
+    "what": "The run has cost more than budget.max_usd_per_run, checked before each agent step.",
+    "how": "Extend budget raises the budget by another max_usd_per_run and the run goes on; Stop run fails it. Cost is what the harnesses report; one step can overshoot."
+  },
+  "request.question": {
+    "title": "An agent's question",
+    "what": "An agent asked you something through the bus (ask_human).",
+    "how": "Pick a suggested answer, type your own, or decline. The run does not pause for it. The agent waits up to two minutes; a later answer reaches it as a message. aux answer <request-id> <answer> works too.",
+    "do": [
+      "Press 1 to 9 for a suggested answer",
+      "Type an answer",
+      "Decline (D)"
+    ]
+  },
+  "bus.page": {
+    "title": "Agent bus",
+    "what": "The audit log of the agent bus: everything agents said to each other and to you, grouped by exchange.",
+    "how": "Agents call the agentux MCP server's tools: post_message, request_review, handoff, get_run_state, ask_human and read_messages. A message to a session or a role wakes it; a role nobody plays yet gets a session started.",
+    "docs": {
+      "label": "Agent bus in the agentuxd API",
+      "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md#agent-bus"
+    }
+  },
+  "bus.filters": {
+    "title": "Bus filters",
+    "what": "Narrows the log to messages, questions or warnings (turn limits reached, tools denied).",
+    "how": "System lines shows or hides wakes and sessions joining or leaving."
+  },
+  "bus.composer": {
+    "title": "Post on the bus",
+    "what": "Your voice on a run's bus: a message to a role, one session or the whole run.",
+    "how": "A message to a role or a session wakes it after its current turn; to the run, nobody is woken. Reply answers a message's sender in its exchange. Turn limits never cut you off. It is disabled on finished runs. aux bus <run-id> --post role:reviewer <text> does the same.",
+    "do": [
+      "Pick the run and the recipient",
+      "Type and press Enter"
+    ]
+  },
+  "bus.exchange": {
+    "title": "Exchange",
+    "what": "One message and its replies, with the turns used out of bus.max_turns_per_exchange.",
+    "how": "Once an exchange reaches the limit, further posts in it from agents are refused, so two agents cannot ping-pong forever. A question group is an ask_human and its answer."
+  },
+  "bus.message": {
+    "title": "Bus entry",
+    "what": "One entry of the bus log: who sent it to whom, its kind and its text.",
+    "how": "Kinds: message, review request, handoff, question and answer, wake (the daemon prompting a session for new mail), turn limit and tool denied (refusals), joined and left.",
+    "do": [
+      "Reply to answer its sender"
+    ]
+  },
+  "panel.run": {
+    "title": "Session panel",
+    "what": "The open run: its details, pipeline, actions and one tab per agent session.",
+    "how": "Each role (planner, implementer, reviewer, custom roles) gets one harness session in the run's worktree, started when the run first reaches it and reused by its later steps.",
+    "do": [
+      "Esc closes the panel"
+    ]
+  },
+  "panel.meta": {
+    "title": "Run details",
+    "what": "The run's id, project, branch, elapsed time, cost and, once opened, its pull request.",
+    "how": "The branch is aux/<run-id>, checked out in its own worktree next to the repository.",
+    "do": [
+      "Click the pull request to open it"
+    ]
+  },
+  "panel.cost": {
+    "title": "Run cost",
+    "what": "What the run has cost so far, and its budget when agentux.yaml sets one.",
+    "how": "The sum of what the run's sessions reported. Harnesses that do not report cost count as $0. Over budget, the run pauses with a budget request before its next agent step."
+  },
+  "panel.pipeline": {
+    "title": "Pipeline",
+    "what": "The run's steps, as agentux.yaml declared them when the run started; editing the file later does not change a run in progress.",
+    "how": "Done steps are ticked, the current step is highlighted, and a step waiting for you shows that. The gate shows its attempt and each check; the review shows its round.",
+    "docs": {
+      "label": "Getting started: agentux.yaml",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#5-agentuxyaml"
+    }
+  },
+  "panel.checks": {
+    "title": "Gate checks",
+    "what": "Each check of the current gate and its state: pending, running, passed or failed.",
+    "how": "Point at one to see its command. A check that runs longer than its timeout (30 minutes by default) fails, and everything it started is killed."
+  },
+  "panel.shell": {
+    "title": "Shell in worktree",
+    "what": "Opens a shell in the run's worktree, in a Shell tab.",
+    "how": "The shell runs on a terminal agentuxd manages. It closes when you close the tab or the panel, or when the run ends. aux attach <session-id> --shell does the same from a terminal.",
+    "do": [
+      "Look at what the agents changed",
+      "Run something by hand"
+    ]
+  },
+  "panel.cancel": {
+    "title": "Cancel run",
+    "what": "Stops the run.",
+    "how": "A running check is killed with everything it started. The worktree and the branch are kept. aux cancel <run-id> does the same."
+  },
+  "panel.sessions": {
+    "title": "Sessions",
+    "what": "One tab per agent session of the run, by role, with its harness and a state dot.",
+    "how": "States: active (in a turn), idle, waiting (on a permission request), attached (open in its own TUI) and ended.",
+    "do": [
+      "Click a tab to see that session"
+    ]
+  },
+  "panel.busTab": {
+    "title": "Run's bus",
+    "what": "This run's agent bus log, and a composer to post on it.",
+    "how": "Same as the bus page, for one run."
+  },
+  "panel.mode": {
+    "title": "Structured or terminal",
+    "what": "Shows the session either as the cockpit's structured view or in its harness's own TUI: claude --resume, codex resume or opencode --session, on the same conversation.",
+    "how": "Terminal hands the session over: agentuxd lets the turn in progress finish, stops the agent's ACP adapter and marks the session attached, so its turns wait. When you leave the terminal, the daemon reopens the session over ACP and the agent keeps what was said in the TUI. A harness that cannot resume (Antigravity) gets a shell with a banner saying why.",
+    "do": [
+      "Press T to toggle",
+      "Shift+Esc or Ctrl+] gives the keyboard back to the cockpit"
+    ],
+    "docs": {
+      "label": "ADR 0007: terminal mode is a session handoff",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0007-terminal-mode-is-a-session-handoff.md"
+    }
+  },
+  "session.bar": {
+    "title": "Session",
+    "what": "The session's harness, model and working directory, which is the run's worktree.",
+    "how": "Attached means the session is open in its TUI: turns for it wait until the terminal closes."
+  },
+  "session.usage": {
+    "title": "Context and cost",
+    "what": "Tokens in the session's context window out of its size, and the session's cost.",
+    "how": "Harnesses report these over ACP. ACP has no input and output token counts, and some harnesses do not report cost."
+  },
+  "session.events": {
+    "title": "Session timeline",
+    "what": "What happened in the session: your prompts, the agent's messages, tool calls, file diffs, plans and permission requests.",
+    "how": "Every vendor's session looks the same here. A permission request can be decided inline."
+  },
+  "session.composer": {
+    "title": "Message the agent",
+    "what": "Sends your message into this live session.",
+    "how": "It runs as an extra turn after the turn in progress and shows as your message. While the session is attached to its TUI, it waits until the terminal closes. aux say <session-id> <text> does the same.",
+    "do": [
+      "Type and press Enter; Shift+Enter for a new line"
+    ]
+  },
+  "terminal.view": {
+    "title": "Terminal",
+    "what": "A harness TUI or a shell, running on a terminal that agentuxd manages, drawn by the cockpit.",
+    "how": "While the terminal has the keyboard, the cockpit's own shortcuts are off, Escape included. A terminal does not survive a reload of the window.",
+    "do": [
+      "Shift+Esc or Ctrl+] gives the keyboard back"
+    ]
+  },
+  "status.connection": {
+    "title": "Daemon connection",
+    "what": "Whether the cockpit is connected to agentuxd, and over which socket.",
+    "how": "The cockpit keeps one event stream open. If the daemon stops, it retries with growing pauses (up to 15 seconds) and resumes from the last event it saw, so nothing is lost. The socket is $XDG_RUNTIME_DIR/agentux/agentuxd.sock unless AGENTUX_SOCKET says otherwise.",
+    "do": [
+      "Point at it for details",
+      "If it stays down: systemctl --user status agentuxd.service"
+    ],
+    "docs": {
+      "label": "Getting started: troubleshooting",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#6-troubleshooting"
+    }
+  },
+  "status.mock": {
+    "title": "Mock data",
+    "what": "The cockpit is playing scripted demo runs, not talking to a real agentuxd.",
+    "how": "You can look around and approve demo requests; starting runs needs the daemon. Inside the app, the cockpit switches to the real daemon by itself once it answers."
+  },
+  "status.runs": {
+    "title": "Active runs",
+    "what": "How many runs are running or waiting for you, across all projects."
+  },
+  "status.waiting": {
+    "title": "Waiting for you",
+    "what": "How many requests wait for your decision.",
+    "do": [
+      "Press I for the inbox"
+    ]
+  },
+  "status.spend": {
+    "title": "Spend",
+    "what": "Cost and context tokens per vendor, and the total across runs.",
+    "how": "Figures are what the harnesses report; harnesses that do not report cost count as $0. On mock data the prices are illustrative."
+  },
+  "status.shortcuts": {
+    "title": "Keyboard shortcuts",
+    "what": "Lists the cockpit's keys.",
+    "do": [
+      "Press ? anywhere outside a text field"
+    ]
+  },
+  "newRun.path": {
+    "title": "Project directory",
+    "what": "Any directory inside a git repository.",
+    "how": "A new repository is registered as a project. The run works in its own worktree on the branch aux/<run-id>, created from the project's HEAD, so your checkout is not touched."
+  },
+  "newRun.prompt": {
+    "title": "Prompt",
+    "what": "What the agents should do.",
+    "how": "Every step's prompt includes it, with the plan and any feedback from gates or reviews."
+  },
+  "newRun.title": {
+    "title": "Title",
+    "what": "The run's name on the board. Optional: the prompt's first line by default."
+  },
+  "wz.steps": {
+    "title": "Setup steps",
+    "what": "The wizard's four steps: Agents, Tools & SDKs, Git & SSH, and Done.",
+    "how": "Every step can be skipped, and you can come back to any of them. The wizard can be reopened later from the app menu, the cockpit's sidebar or agentux-cockpit --welcome.",
+    "do": [
+      "Alt+Left and Alt+Right move between steps"
+    ],
+    "docs": {
+      "label": "Getting started: first login",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#2-first-login"
+    }
+  },
+  "wz.activity": {
+    "title": "Install progress",
+    "what": "How the tools you picked are installing.",
+    "how": "Installs run in the background as a transient systemd user unit, one batch at a time, and keep going when the window closes.",
+    "do": [
+      "Click to see the tools"
+    ]
+  },
+  "wz.skip": {
+    "title": "Skip setup",
+    "what": "Closes the wizard and marks it done, so it does not open at your next login.",
+    "how": "Nothing is undone. /usr/libexec/agentux-setup reset makes it open again at the next login."
+  },
+  "wz.agents.firstLogin": {
+    "title": "Agent CLIs",
+    "what": "The agent CLIs and dev tools that install for you on your first login: Claude Code, OpenCode, Antigravity CLI, Codex, mise dev tools and the ACP adapters.",
+    "how": "A user service, agentux-first-login.service, installs them into your home so each CLI can update itself. It needs the network and retries on its own; Retry now runs it again.",
+    "do": [
+      "Follow it: journalctl --user -u agentux-first-login.service -f"
+    ],
+    "docs": {
+      "label": "Getting started: first login",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#2-first-login"
+    }
+  },
+  "wz.agents.card": {
+    "title": "Agent CLI",
+    "what": "One agent CLI: whether it is installed, the command that signs it in, and whether it is signed in.",
+    "how": "Sign in opens a terminal with the CLI's own login. AgentUX never handles credentials: each harness uses the login or API key you set up for it, and the provider bills inference.",
+    "do": [
+      "Sign in to the agents your pipeline uses",
+      "Use an API key instead"
+    ]
+  },
+  "wz.agents.privacy": {
+    "title": "Inference stays with the providers",
+    "what": "AgentUX runs each vendor's own CLI and runs no model itself.",
+    "how": "Your prompts and code go to the provider you sign in to, under its terms, as they would on any other system."
+  },
+  "wz.tools.legend": {
+    "title": "Install methods",
+    "what": "The four ways a tool installs, each for you only and without sudo.",
+    "how": "Flatpak: apps from Flathub, sandboxed. JetBrains Toolbox: JetBrains IDEs, unsandboxed so they see your SDKs. mise: languages and CLIs, with mise use --global. Distrobox: a mutable Fedora or Ubuntu container for anything else.",
+    "docs": {
+      "label": "ADR 0013: the first-run wizard",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0013-first-run-wizard.md"
+    }
+  },
+  "wz.tools.search": {
+    "title": "Search and categories",
+    "what": "Finds tools by name or kind, or narrows the catalog to a category.",
+    "do": [
+      "Press / to search",
+      "Selected only shows what you ticked"
+    ]
+  },
+  "wz.tools.item": {
+    "title": "Catalog item",
+    "what": "One tool you can install, with its install method.",
+    "how": "Tick it to select it. Some have a version to pick. The method button shows the exact commands, which work in a terminal too. Failed items show the error and a Retry.",
+    "do": [
+      "Space ticks the focused item"
+    ]
+  },
+  "wz.tools.install": {
+    "title": "Install",
+    "what": "Installs everything you ticked, in the background.",
+    "how": "The batch runs in a transient systemd user unit; you can close the window. Logs go to ~/.local/state/agentux/setup/logs/."
+  },
+  "wz.git.identity": {
+    "title": "Git identity",
+    "what": "Your name, e-mail and default branch, written to ~/.gitconfig.",
+    "how": "Git uses them for your commits; agentuxd commits as you too when your identity is set."
+  },
+  "wz.git.ssh": {
+    "title": "SSH key",
+    "what": "An ed25519 key at ~/.ssh/id_ed25519 for GitHub or any other forge.",
+    "how": "The passphrase is optional. Copy the public key, or add it on GitHub's SSH keys page; Sign in with gh runs gh auth login, which can upload it for you. agentuxd uses gh to open pull requests."
+  },
+  "wz.done.summary": {
+    "title": "Summary",
+    "what": "How many agent CLIs are ready, and how many tools installed, are still installing or failed."
+  },
+  "wz.done.toolbox": {
+    "title": "Finish in JetBrains Toolbox",
+    "what": "JetBrains IDEs install from JetBrains Toolbox, which the wizard installed.",
+    "do": [
+      "Open Toolbox and install the IDEs listed"
+    ]
+  },
+  "wz.done.links": {
+    "title": "Next reads",
+    "what": "The getting-started guide (your first run, the agent bus, terminal mode) and agentuxos.org."
+  },
+  "wz.done.tour": {
+    "title": "Take the tour",
+    "what": "Finishes the wizard, opens the cockpit and starts the penguin's guided tour.",
+    "how": "The tour points at the run board, the approvals inbox, the agent bus, new runs, projects, terminal mode, the status bar and the theme. You can restart it any time from the penguin's menu."
+  },
+  "wz.done.open": {
+    "title": "Open the cockpit",
+    "what": "Finishes the wizard and brings the cockpit forward.",
+    "do": [
+      "Reopen it any time from the app launcher (AgentUX Cockpit); Meta+A in Plasma, Super+A in Hyprland"
+    ]
+  },
+  "wz.nav": {
+    "title": "Back and Next",
+    "what": "Moves between the wizard's steps; Finish on the last one closes the wizard and opens the cockpit."
+  },
+  "wz.profile": {
+    "title": "AgentUX OS profile",
+    "what": "The role this computer was given, and the capabilities applied for it so far.",
+    "how": "Profiles come from one signed image: the selection is recorded in /var/lib/agentux/profile.json and the first-boot setup applies it. Pending or failed capabilities are counted here.",
+    "docs": {
+      "label": "ADR 0014: installation profiles",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md"
+    }
+  },
+  "wz.profile.choose": {
+    "title": "Choose this machine's role",
+    "what": "Picks how this computer takes part in AgentUX: Workstation (the local node and the cockpit), Node, Command Server, Executive, Complete or Custom.",
+    "how": "Saving writes a local profile intent and downloads nothing; the system applies it on first boot, and you can come back and change it. Command services need their own image and configuration.",
+    "docs": {
+      "label": "ADR 0014: installation profiles",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { Welcome } from "./welcome/Welcome";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import "./styles/welcome.css";
+import "./styles/helper.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 

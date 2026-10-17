@@ -1,4 +1,12 @@
-import type { DaemonClient, StartRunInput, TerminalHandle, TerminalSink, TerminalSize } from "../client";
+import type {
+  DaemonClient,
+  HelperQuestion,
+  HelperReply,
+  StartRunInput,
+  TerminalHandle,
+  TerminalSink,
+  TerminalSize,
+} from "../client";
 import type { BusPostInput, BusPostResult, CockpitState, Run } from "../types";
 import {
   base64ToBytes,
@@ -250,6 +258,20 @@ export class TauriDaemonClient implements DaemonClient {
       throw new Error("this agentuxd does not accept prompts into sessions (no sessions.prompt)");
     }
     await this.transport.invoke("daemon_send_prompt", { sessionId, text });
+  }
+
+  async askHelper(input: HelperQuestion): Promise<HelperReply> {
+    if (!this.state.capabilities?.helperAsk) {
+      throw new Error("this agentuxd cannot ask your agent (no helper.ask; it needs agentux-core 0.4.3)");
+    }
+    const question = input.question.trim();
+    if (!question) throw new Error("the question is empty");
+    const r = await this.transport.invoke<{ harness?: string; answer?: string }>("daemon_helper_ask", {
+      harness: input.harness,
+      question,
+      context: input.context,
+    });
+    return { harness: r.harness ?? input.harness, answer: r.answer ?? "" };
   }
 
   async postBus(input: BusPostInput): Promise<BusPostResult> {
@@ -552,11 +574,13 @@ export class TauriDaemonClient implements DaemonClient {
         sessionsPrompt: caps.sessionsPrompt === true,
         busPost: caps.busPost === true,
         terminals: caps.terminals === true,
+        helperAsk: caps.helperAsk === true,
       };
       this.update((s) =>
         s.capabilities?.sessionsPrompt === capabilities.sessionsPrompt &&
         s.capabilities?.busPost === capabilities.busPost &&
-        s.capabilities?.terminals === capabilities.terminals
+        s.capabilities?.terminals === capabilities.terminals &&
+        s.capabilities?.helperAsk === capabilities.helperAsk
           ? s
           : { ...s, capabilities },
       );

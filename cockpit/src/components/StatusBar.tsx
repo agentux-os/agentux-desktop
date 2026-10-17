@@ -4,6 +4,7 @@ import { VENDOR_INFO } from "../daemon/vendors";
 import { formatTokens, formatUsd } from "../lib/format";
 import { vendorStyle } from "./VendorBadge";
 import { Icon } from "./Icon";
+import { help } from "../helper/content";
 
 /**
  * Spend per vendor, from what the sessions report: cost (`usage.costUsd`,
@@ -37,22 +38,23 @@ export function StatusBar({ state, onHelp }: { state: CockpitState; onHelp: () =
 
   return (
     <footer className="statusbar">
-      <span className={`conn conn-${status}`} title={detail}>
+      <span className={`conn conn-${status}`} title={detail} {...help("status.connection")}>
         <span className="conn-dot" />
         agentuxd <span className="muted">({daemon})</span> · {status}
       </span>
       {mock && (
-        <span className="mock-badge" title="The cockpit is showing scripted mock data, not a real agentuxd">
+        <span {...help("status.mock")} className="mock-badge" title="The cockpit is showing scripted mock data, not a real agentuxd">
           Mock data
         </span>
       )}
-      <span className="sb-item">
+      <span className="sb-item" {...help("status.runs")}>
         {active} active run{active === 1 ? "" : "s"}
       </span>
-      {waiting > 0 && <span className="sb-item sb-attention">{waiting} waiting for you</span>}
+      {waiting > 0 && <span className="sb-item sb-attention" {...help("status.waiting")}>{waiting} waiting for you</span>}
       <span className="sb-spacer" />
       {(vendors.length > 0 || totalUsd > 0) && (
         <span
+          {...help("status.spend")}
           className="sb-spend"
           title={
             "Cost per vendor as the harnesses report it, and tokens currently in their sessions' context windows" +
@@ -75,7 +77,7 @@ export function StatusBar({ state, onHelp }: { state: CockpitState; onHelp: () =
           </span>
         </span>
       )}
-      <button className="sb-help" onClick={onHelp} title="Keyboard shortcuts (?)">
+      <button {...help("status.shortcuts")} className="sb-help" onClick={onHelp} title="Keyboard shortcuts (?)">
         <Icon name="keyboard" size={14} />
       </button>
     </footer>

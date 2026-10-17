@@ -3,6 +3,7 @@ import { BUS_SYSTEM_KINDS } from "../daemon/types";
 import { BusItem } from "./BusItem";
 import { Icon } from "./Icon";
 import { RequestCard } from "./RequestCard";
+import { help } from "../helper/content";
 
 /** Right-hand rail on the board: what needs you, and what agents are saying. */
 export function LiveRail({
@@ -34,7 +35,7 @@ export function LiveRail({
     .reverse();
   return (
     <aside className="rail">
-      <section className="rail-section">
+      <section className="rail-section" {...help("rail.waiting")}>
         <header className="rail-head">
           <Icon name="inbox" size={14} />
           Waiting for you
@@ -62,7 +63,7 @@ export function LiveRail({
           </button>
         )}
       </section>
-      <section className="rail-section rail-bus">
+      <section className="rail-section rail-bus" {...help("rail.bus")}>
         <header className="rail-head">
           <Icon name="bus" size={14} />
           Agent bus

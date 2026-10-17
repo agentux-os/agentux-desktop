@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BusPostInput, BusPostResult, PermissionRequest, Run, Session } from "./daemon/types";
 import { harnessInfo } from "./daemon/vendors";
 import { recentRunIds } from "./lib/bus";
-import { REQUEST_LABEL, runRef } from "./lib/labels";
+import { REQUEST_LABEL, STEP_LABEL, runRef } from "./lib/labels";
 import { useNow } from "./lib/useNow";
 import { useCockpit, useDaemon } from "./state/daemon";
 import type { StartRunInput } from "./daemon/client";
@@ -16,6 +16,9 @@ import { RunBoard } from "./components/RunBoard";
 import { SessionPanel } from "./components/SessionPanel";
 import { Sidebar, type View } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { help } from "./helper/content";
+import { HelperProvider, type HelperHost } from "./helper/HelperProvider";
+import { COCKPIT_TOUR } from "./helper/Tour";
 
 type Theme = "dark" | "light";
 
@@ -40,7 +43,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
   const [inboxSel, setInboxSel] = useState<string | null>(null);
-  const [help, setHelp] = useState(false);
+  const [showKeys, setShowKeys] = useState(false);
   const [newRun, setNewRun] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
@@ -187,10 +190,10 @@ export default function App() {
     const focused = focusedRequest();
     switch (key) {
       case "?":
-        setHelp((h) => !h);
+        setShowKeys((h) => !h);
         break;
       case "escape":
-        if (help) setHelp(false);
+        if (showKeys) setShowKeys(false);
         else if (runId) setRunId(null);
         break;
       case "b":
@@ -284,7 +287,48 @@ export default function App() {
   const project = state.projects.find((p) => p.id === projectId);
   const panelOpen = !!run;
 
-  return (
+  // What the helper may tell the user's agent about the screen: the view, the
+  // project and the open run's summary; never files, transcripts or secrets.
+  const viewRef = useRef("");
+  viewRef.current = describeView(VIEW_TITLE[view], project?.name, run, pending.length);
+  const runsRef = useRef(state.runs);
+  runsRef.current = state.runs;
+  const runIdRef = useRef(runId);
+  runIdRef.current = runId;
+  const helperAsk = client.mode === "daemon" && state.capabilities?.helperAsk === true;
+  const helperHost = useMemo<HelperHost>(
+    () => ({
+      surface: "cockpit",
+      tour: COCKPIT_TOUR,
+      describeView: () => viewRef.current,
+      openSomeRun: () => {
+        if (runIdRef.current) return;
+        const runs = Object.values(runsRef.current);
+        const pick = runs.find((r) => r.status === "running" || r.status === "waiting") ?? runs[0];
+        if (!pick) return;
+        openRun(pick.id);
+        return () => setRunId(null);
+      },
+      ai: {
+        unavailable:
+          client.mode === "mock"
+            ? "the cockpit is showing mock data, without agentuxd"
+            : helperAsk
+              ? undefined
+              : "this agentuxd cannot ask agents yet (helper.ask needs agentux-core 0.4.3 or later)",
+        ask: (input) => client.askHelper(input),
+        agents: async () => {
+          const { createSetupClient } = await import("./setup/client");
+          const status = await (await createSetupClient()).status();
+          const harness: Record<string, string> = { claude: "claude-code", codex: "codex", opencode: "opencode", antigravity: "antigravity" };
+          return status.agents.map((a) => ({ harness: harness[a.id] ?? a.id, installed: a.installed, signedIn: a.signedIn }));
+        },
+      },
+    }),
+    [client, helperAsk, openRun],
+  );
+
+  const page = (
     <div className="app">
       <Sidebar
         state={state}
@@ -297,18 +341,23 @@ export default function App() {
       />
       <main className="main">
         <header className="topbar">
-          <h1 className="topbar-title">
+          <h1 className="topbar-title" {...help("topbar.title")}>
             {VIEW_TITLE[view]}
             <span className="muted"> · {project ? project.name : "All projects"}</span>
           </h1>
-          {project && <span className="mono muted topbar-path">{project.path}</span>}
+          {project && (
+            <span className="mono muted topbar-path" {...help("topbar.path")}>
+              {project.path}
+            </span>
+          )}
           <span className="topbar-spacer" />
           {pending.length > 0 && view !== "inbox" && (
-            <button className="btn btn-attention" onClick={() => setView("inbox")}>
+            <button className="btn btn-attention" onClick={() => setView("inbox")} {...help("topbar.waiting")}>
               <Icon name="inbox" size={14} /> {pending.length} waiting for you
             </button>
           )}
           <button
+            {...help("topbar.newRun")}
             className="btn"
             disabled={!canStartRuns}
             onClick={() => setNewRun(true)}
@@ -390,13 +439,13 @@ export default function App() {
           )}
         </div>
       </main>
-      <StatusBar state={state} onHelp={() => setHelp(true)} />
+      <StatusBar state={state} onHelp={() => setShowKeys(true)} />
       {toast && (
         <div className="toast" key={toast.id} role="status">
           <Icon name="check" size={14} /> {toast.text}
         </div>
       )}
-      {help && <ShortcutHelp onClose={() => setHelp(false)} />}
+      {showKeys && <ShortcutHelp onClose={() => setShowKeys(false)} />}
       {newRun && (
         <NewRunDialog
           projects={state.projects}
@@ -407,6 +456,21 @@ export default function App() {
       )}
     </div>
   );
+  return <HelperProvider host={helperHost}>{page}</HelperProvider>;
+}
+
+/** "Run board · project ledger-api. Open run 3f9a0c12 “Fix login”: waiting, step Plan." */
+function describeView(title: string, project: string | undefined, run: Run | undefined, waiting: number): string {
+  let out = `The user is on the ${title} view of the AgentUX cockpit, ${project ? `project ${project}` : "all projects"}.`;
+  if (waiting) out += ` ${waiting} request${waiting === 1 ? "" : "s"} wait for the user.`;
+  if (run) {
+    out += ` Open run ${runRef(run)} "${run.title}": status ${run.status}, step ${STEP_LABEL[run.step] ?? run.step}`;
+    if (run.gateAttempt > 0) out += `, gate attempt ${run.gateAttempt}/${run.gateMaxAttempts}`;
+    if (run.reviewRound > 0) out += `, review round ${run.reviewRound}/${run.reviewMaxRounds}`;
+    out += ".";
+    if (run.error) out += ` Its error: ${run.error.slice(0, 300)}`;
+  }
+  return out;
 }
 
 /** Focuses the answer field of the selected question card (inbox), else the first one shown. */
@@ -472,6 +536,8 @@ const SHORTCUTS: [string, string][] = [
   ["[ / ]", "Previous / next project"],
   ["Esc", "Close the session panel"],
   ["?", "Show this help"],
+  ["F1", "Ask the penguin about AgentUX"],
+  ["Shift+F1", "What's this? Click anything to learn what it is"],
 ];
 
 function ShortcutHelp({ onClose }: { onClose: () => void }) {

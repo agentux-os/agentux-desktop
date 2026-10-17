@@ -1,6 +1,8 @@
 import { Icon } from "../components/Icon";
 import { CATALOG, type CatalogItem } from "../setup/catalog";
 import type { SetupClient, SetupStatus } from "../setup/client";
+import { help } from "../helper/content";
+import { Penguin } from "../helper/Penguin";
 
 export const LINKS = {
   site: "https://agentuxos.org",
@@ -12,12 +14,15 @@ export function DoneStep({
   status,
   installed,
   onOpenCockpit,
+  onTour,
   onError,
 }: {
   client: SetupClient;
   status: SetupStatus | null;
   installed: Set<string>;
   onOpenCockpit: () => void;
+  /** Finishes, opens the cockpit and starts the penguin's tour there. */
+  onTour?: () => void;
   onError: (message: string) => void;
 }) {
   const items = Object.values(status?.items ?? {});
@@ -37,7 +42,7 @@ export function DoneStep({
 
   return (
     <div className="wz-stack">
-      <div className="wz-summary">
+      <div className="wz-summary" {...help("wz.done.summary")}>
         <Summary label="Agent CLIs ready" value={`${agentsReady}/4`} tone={agentsReady === 4 ? "ok" : undefined} />
         <Summary label="Installed" value={String(done.length)} tone={done.length ? "ok" : undefined} />
         <Summary label="Installing" value={String(running.length)} tone={running.length ? "attention" : undefined} />
@@ -57,7 +62,7 @@ export function DoneStep({
         </p>
       )}
       {toolbox.length > 0 && (
-        <div className="wz-card wz-row">
+        <div className="wz-card wz-row" {...help("wz.done.toolbox")}>
           <div>
             <strong>Finish in JetBrains Toolbox</strong>
             <p className="muted">
@@ -70,7 +75,7 @@ export function DoneStep({
         </div>
       )}
 
-      <div className="wz-links">
+      <div className="wz-links" {...help("wz.done.links")}>
         <button className="wz-link-card" onClick={() => open(LINKS.gettingStarted)}>
           <Icon name="file" size={18} />
           <span>
@@ -97,10 +102,18 @@ export function DoneStep({
             AgentUX” and in the cockpit's sidebar.
           </p>
         </div>
-        <button className="btn btn-primary wz-big" onClick={onOpenCockpit}>
-          Open the cockpit
-          <Icon name="arrowRight" size={15} />
-        </button>
+        <div className="wz-finale-actions">
+          {onTour && (
+            <button className="btn wz-big" onClick={onTour} {...help("wz.done.tour")}>
+              <Penguin size={22} mood="talking" />
+              Take the tour with the penguin
+            </button>
+          )}
+          <button className="btn btn-primary wz-big" onClick={onOpenCockpit} {...help("wz.done.open")}>
+            Open the cockpit
+            <Icon name="arrowRight" size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );
