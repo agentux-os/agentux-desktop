@@ -2,7 +2,7 @@
 //!
 //! The wizard is a second window (`welcome`) on the same frontend
 //! (`index.html?view=welcome`). All of its work is done by
-//! `/usr/libexec/agentux-setup` (shipped by the Plasma overlay), which this
+//! `/usr/libexec/agentux-setup` (shipped by the common desktop bundle), which this
 //! module runs with an allowlisted subcommand: installs run in transient
 //! systemd user units started by that script, so they keep going when the
 //! window closes, and the script can be tested without a window.
