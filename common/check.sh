@@ -10,7 +10,7 @@ for tool in desktop-file-validate node; do
 done
 
 for entry in *; do
-    case "$entry" in usr|etc|check.sh) ;;
+    case "$entry" in usr|etc|check.sh|check.mjs) ;;
         *) err "unexpected common-bundle entry: $entry" ;;
     esac
 done

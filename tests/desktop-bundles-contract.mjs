@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 const roots = ['common', 'plasma', 'cosmic'];
 const required = [
@@ -22,6 +23,9 @@ const required = [
 for (const path of required) {
   await stat(path);
 }
+
+const commonValidator = await readFile('common/check.sh', 'utf8');
+assert.match(commonValidator, /usr\|etc\|check\.sh\|check\.mjs/, 'common validator must allow its source validators');
 
 for (const root of roots) {
   const topLevel = await readdir(root);
