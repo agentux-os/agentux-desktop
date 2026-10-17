@@ -10,8 +10,8 @@
       "Turn the helper off from its menu; it stays off until you turn it on in the sidebar"
     ],
     "docs": {
-      "label": "ADR 0016: the help mascot",
-      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0016-help-mascot.md"
+      "label": "ADR 0017: the help mascot",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0017-help-mascot.md"
     }
   },
   "helper.whatsThis": {
