@@ -1,6 +1,6 @@
 /**
  * The setup catalog: every tool the welcome wizard offers and how it installs.
- * The data file ships in the Plasma overlay as
+ * The data file ships in the common desktop bundle as
  * /usr/share/agentux/setup/catalog.json, where `agentux-setup` reads it; the
  * cockpit bundles the same file for the UI.
  */
