@@ -1,7 +1,7 @@
 {
   "helper.penguin": {
     "title": "The AgentUX penguin",
-    "what": "Your helper in the cockpit. It knows AgentUX: the cockpit, the Welcome wizard, aux, agentuxd, agents, runs, pipelines and the agent bus. It does not cover the desktop itself (COSMIC, KDE Plasma, Hyprland) or Linux in general.",
+    "what": "Your helper in the cockpit. It knows AgentUX: the cockpit, the Welcome wizard, aux, agentuxd, agents, runs, pipelines and the agent bus. It does not cover the desktop itself (COSMIC, KDE Plasma) or Linux in general.",
     "how": "Click it for its menu. It only speaks up on its own once, to offer the tour; after that it waits to be asked.",
     "do": [
       "Take the guided tour again",
@@ -638,7 +638,7 @@
     "title": "Open the cockpit",
     "what": "Finishes the wizard and brings the cockpit forward.",
     "do": [
-      "Reopen it any time from the app launcher (AgentUX Cockpit); Meta+A in Plasma, Super+A in Hyprland"
+      "Reopen it any time from the app launcher (AgentUX Cockpit), or with Meta+A in Plasma"
     ]
   },
   "wz.nav": {

@@ -255,7 +255,7 @@ function PenguinAnswer({ answer: a, onShow }: { answer: Answer; onShow: (key: st
     return (
       <div className="ask-msg">
         I only know AgentUX: the cockpit, <code>aux</code>, agentuxd, runs and agents. For the desktop itself (COSMIC,
-        KDE Plasma, Hyprland) or Linux in general, its own help is the place to look.
+        KDE Plasma) or Linux in general, its own help is the place to look.
       </div>
     );
   }
