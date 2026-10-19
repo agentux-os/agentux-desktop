@@ -30,7 +30,7 @@ pub(crate) fn reveal_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 pub fn run() {
     let builder = tauri::Builder::default();
 
-    // Must be the first plugin: a second `agentux-cockpit` process (Meta+A,
+    // Must be the first plugin: a second `agentux-cockpit` process (Meta+C,
     // autostart, the launcher) hands over to the running one in this plugin's
     // setup and exits before anything else is initialised.
     // `agentux-cockpit --welcome` (the first-login autostart, the "Welcome to

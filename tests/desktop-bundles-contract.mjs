@@ -20,6 +20,10 @@ const required = [
   'cosmic/usr/share/cosmic/com.system76.CosmicSettings/v1/accent_palette_dark.ron',
   'cosmic/usr/share/cosmic/com.system76.CosmicBackground/v1/all',
   'cosmic/usr/share/backgrounds/agentux/agentux-dark.png',
+  'cosmic/usr/share/cosmic/com.system76.CosmicAppList/v1/favorites',
+  'cosmic/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark.Builder/v1/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light.Builder/v1/accent',
 ];
 
 for (const path of required) {

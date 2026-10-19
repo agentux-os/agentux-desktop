@@ -51,7 +51,7 @@ Every `v*` release builds and verifies the cockpit RPMs for `x86_64` and `aarch6
 
 This repository holds two things, and the [AgentUX image](https://github.com/agentux-os/agentux-os) ships both:
 
-- **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Meta+A** brings it up.
+- **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Super+C** (Meta+C) brings it up, on Plasma and COSMIC.
 - **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel, shortcuts and cockpit autostart. Every user can override all of it in System Settings.
 
 See the cockpit in a minute, no Rust and no daemon needed (it plays scripted runs from a mock daemon):
@@ -192,7 +192,7 @@ The Plasma overlay tarball below is architecture-independent and built once. Rus
 
 ### Single instance and window identity
 
-The cockpit runs once per user session. Meta+A, the login autostart and the launcher all run `agentux-cockpit`; when one is already running, the new process hands over to it through [`tauri-plugin-single-instance`](https://v2.tauri.app/plugin/single-instance/) (a D-Bus name `os.agentux.cockpit.SingleInstance` on the session bus) and exits. The running cockpit then unminimizes, shows and focuses its `main` window.
+The cockpit runs once per user session. Meta+C, the login autostart and the launcher all run `agentux-cockpit`; when one is already running, the new process hands over to it through [`tauri-plugin-single-instance`](https://v2.tauri.app/plugin/single-instance/) (a D-Bus name `os.agentux.cockpit.SingleInstance` on the session bus) and exits. The running cockpit then unminimizes, shows and focuses its `main` window.
 
 On Wayland the window's `app_id` is `agentux-cockpit`: Tauri leaves `app.enableGTKAppId` off, so GTK uses the program name (the basename of `argv[0]`, i.e. the binary `/usr/bin/agentux-cockpit`). That matches the installed `/usr/share/applications/agentux-cockpit.desktop`, which is how KDE picks the task manager entry and icon. Keep `enableGTKAppId` off: turning it on would make the `app_id` `os.agentux.cockpit` (no such desktop file) and register a `GApplication` with that id. The desktop entries also set `StartupWMClass=agentux-cockpit` for X11/XWayland sessions.
 
@@ -228,7 +228,7 @@ KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma
 | `etc/xdg/kscreenlockerrc` | Uses the AgentUX wallpaper on the lock screen |
 | `usr/lib/plasmalogin/plasmalogin.conf.d/50-agentux.conf` | Uses the AgentUX wallpaper on the login screen (Plasma Login, Fedora 44's display manager). Plasma Login reads `/etc/plasmalogin.conf.d/*`, then Fedora's `/usr/lib/plasmalogin/defaults.conf` (Fedora wallpaper), then this directory, then `/etc/plasmalogin.conf`, later files winning; so this beats Fedora's default and System Settings > Login Screen still beats this. The greeter takes its colours from the global theme in `/etc/xdg/kdeglobals` |
 | `etc/xdg/kded5rc` | Turns off the kded module `kded_plasma_welcome`, which opens Fedora's Welcome Center ("Welcome to Fedora!") on first login and after Plasma feature upgrades. It has no XDG autostart entry to hide; KF6's kded still reads `kded5rc`. The app stays installed, and users can turn the module back on in System Settings > Background Services. AgentUX's own first run belongs in the cockpit |
-| `usr/share/kglobalaccel/agentux-*-shortcut.desktop` | Global shortcuts: **Meta+A** launches the cockpit, **Meta+Return** opens Konsole (Konsole's own Ctrl+Alt+T stays) |
+| `usr/share/kglobalaccel/agentux-*-shortcut.desktop` | Global shortcuts: **Meta+C** launches the cockpit, **Meta+Return** opens Konsole (Konsole's own Ctrl+Alt+T stays) |
 | `common/etc/xdg/autostart/agentux-cockpit.desktop` | Starts the cockpit at login (`TryExec`, so it does nothing if the cockpit isn't installed). Users turn it off in System Settings > Autostart |
 | `common/etc/xdg/autostart/agentux-welcome.desktop` | Opens the [welcome wizard](#welcome-wizard) on a user's first login through `agentux-setup autostart` (not for system users, not on the live ISO, not once finished or skipped) |
 | `common/usr/share/applications/agentux-welcome.desktop` | **Welcome to AgentUX** in the app menu: reopens the wizard |
@@ -239,6 +239,21 @@ KDE Plasma 6 (Wayland) defaults for the AgentUX image live in [`plasma/`](plasma
 How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kdeglobals`, writes that global theme's defaults into `~/.config/kdedefaults` (a defaults layer, not user settings) and applies the colour scheme with the accent colour. plasmashell runs the theme's layout script only when the user has no desktop layout yet, so existing users keep their panels. On Fedora Kinoite `/etc/xdg` comes before Fedora's own defaults in `/usr/share/kde-settings/kde-profile/default/xdg` in `XDG_CONFIG_DIRS`, so these keys win over Fedora's.
 
 **KWin tiling: not included.** Plasma 6 stores custom tile layouts in `kwinrc` under `[Tiling][<virtual desktop id>][<output uuid>]`, and both ids are created per user and per monitor, so a system-wide default layout can't be written ahead of time. The built-in tiling needs no configuration: drag a window with Shift held, or edit tiles with Meta+T.
+
+**COSMIC** defaults live in [`cosmic/`](cosmic), the same kind of overlay:
+
+| Bundle path | What it does |
+|---|---|
+| `usr/share/backgrounds/agentux/` | The AgentUX wallpaper, dark and light, at 3840x2160 (the Plasma package's images). COSMIC Settings lists both under Wallpaper |
+| `usr/share/cosmic/com.system76.CosmicBackground/v1/all` | Makes the dark wallpaper cosmic-bg's default, on the desktop and the lock screen |
+| `usr/share/cosmic/com.system76.CosmicAppList/v1/favorites` | Pins AgentUX Cockpit, COSMIC Terminal and Firefox first in the dock, then COSMIC's own defaults |
+| `usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom` | **Super+C** opens the cockpit, **Super+Return** a terminal. COSMIC's Super+A (App Library) and Super+T (terminal) stay |
+| `usr/share/cosmic/com.system76.CosmicSettings/v1/accent_palette_{dark,light}.ron` | The accent colours offered in COSMIC Settings: AgentUX Lime and Moss first |
+| `usr/share/cosmic/com.system76.CosmicTheme.{Dark,Light}.Builder/v1/accent` | The active accent: Lime `#c6f36b` in the dark theme, the light palette's darker green in the light one |
+
+COSMIC reads a component's system defaults from the first data directory that has it, not key by key, so AgentUX's files replace the ones Fedora's COSMIC packages install for those components. CI lists every replaced file (cosmic-bg's background, cosmic-applets' dock favourites, cosmic-settings' accents) and fails when a new one appears or a listed one stops being packaged. Users' own settings override all of it, as on Plasma.
+
+**The login screen before the first login is not covered.** cosmic-greeter draws each user's last wallpaper, from their cosmic-bg state. A user who has never logged in has none, and cosmic-greeter falls back to an image compiled into it, which no setting replaces. From the second login on, it shows the AgentUX wallpaper.
 
 <details>
 <summary>What <code>plasma/check.sh</code> and CI check</summary>
@@ -253,7 +268,7 @@ The immutable bootc image is the deployment and rollback unit. The release workf
 
 - `agentux-desktop-common-<version>.tar.gz` — shared AgentUX launchers, setup backend, catalog, and generic integration.
 - `agentux-desktop-plasma-<version>.tar.gz` — Plasma defaults and integration.
-- `agentux-desktop-cosmic-<version>.tar.gz` — COSMIC-specific settings, including the AgentUX Lime accent palette.
+- `agentux-desktop-cosmic-<version>.tar.gz` — COSMIC defaults: wallpaper, dock, shortcuts and the AgentUX Lime accent.
 
 The image verifies all pinned checksums, extracts `common` first, then exactly one desktop bundle. The Plasma image uses the Plasma bundle. The COSMIC image uses the COSMIC bundle and must not receive Plasma settings. The architecture-specific application package remains `agentux-cockpit`; overlays are build inputs baked into the image, not separately layered runtime RPMs.
 
@@ -264,14 +279,14 @@ The image verifies all pinned checksums, extracts `common` first, then exactly o
 These files follow the Plasma 6 sources (plasma-workspace `startplasma`, `KLookAndFeelManager`, `shellcorona`, kglobalacceld) and the layout of shipping downstreams such as Aurora, but none of it has been booted yet. To check in a VM with a fresh user:
 
 - the panel, pinned launchers and wallpaper appear on first login, and the accent colour shows up (selection, focus rings);
-- Meta+A and Meta+Return appear in System Settings > Keyboard > Shortcuts and work, with no conflict with other default shortcuts;
+- Meta+C and Meta+Return appear in System Settings > Keyboard > Shortcuts and work, with no conflict with other default shortcuts;
 - the cockpit starts at login and appears in System Settings > Autostart;
 - the AgentUX splash, not the Plasma logo, shows between the login screen and the desktop, and it lines up with the Plymouth boot splash;
 - the dark wallpaper variant (`images_dark/`) is used on the desktop, lock screen and login screen with Breeze Dark, and the light one after switching to a light colour scheme.
 
 Known limits:
 
-- **Meta+A on a running cockpit brings its window forward instead of opening a second one** (the cockpit is single-instance, see [Single instance and window identity](#single-instance-and-window-identity)). Whether KWin actually raises and focuses it, rather than only marking it as demanding attention, has not been checked on Plasma 6 Wayland.
+- **Meta+C on a running cockpit brings its window forward instead of opening a second one** (the cockpit is single-instance, see [Single instance and window identity](#single-instance-and-window-identity)). Whether KWin actually raises and focuses it, rather than only marking it as demanding attention, has not been checked on Plasma 6 Wayland.
 - **First-boot wizard (`plasma-setup`) branding: only partly themed, and the rest can't be from this overlay.** It runs on the first boot of a bootc disk image even when a user already exists (it then skips account creation). Its background is AgentUX art, but not thanks to this overlay: a Fedora patch makes the wizard load `wallpapers/Default/contents/images{,_dark}/<size>.jxl`, `Default` is a symlink owned by Fedora's background packages, and replacing package-owned files from the overlay is off limits (CI checks it). The agentux-os image does it instead ([agentux-os#17](https://github.com/agentux-os/agentux-os/pull/17)): it renders an `AgentUX-Default` wallpaper package and points `Default` at it (see its README's "Default wallpaper" section). What remains: the landing page hard-codes "Welcome to Plasma Desktop", and prints "Powered by <NAME>" from `os-release`. Changing that line means changing `NAME` in the image's `/usr/lib/os-release`, an agentux-os decision with wider effects (tools that match on the distro name). The heading needs a patched `plasma-setup`, as Aurora does.
 - If `plasma-setup` creates the account and the user flips its light/dark switch, it applies Fedora's `org.fedoraproject.fedora(dark).desktop` global theme (a Fedora patch) and copies the wizard's `kdeglobals` into the new home, so that user starts on Fedora's theme (and its Breeze splash) instead of AgentUX's. Left alone, the switch changes nothing (it starts on "dark" because our colour scheme is Breeze Dark). Same fix as above: a patched `plasma-setup`.
 - Login screen: only the wallpaper is ours. Plasma Login shows no distribution logo.

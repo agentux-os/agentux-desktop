@@ -638,7 +638,7 @@
     "title": "Open the cockpit",
     "what": "Finishes the wizard and brings the cockpit forward.",
     "do": [
-      "Reopen it any time from the app launcher (AgentUX Cockpit), or with Meta+A in Plasma"
+      "Reopen it any time from the app launcher (AgentUX Cockpit), or with Super+C (Meta+C)"
     ]
   },
   "wz.nav": {
