@@ -13,7 +13,7 @@ Every `v*` release builds and verifies the cockpit RPMs for `x86_64` and `aarch6
 
 This repository holds two things, and the [AgentUX image](https://github.com/agentux-os/agentux-os) ships both:
 
-- **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Meta+A** brings it up.
+- **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Super+C** (Meta+C) brings it up, on Plasma and COSMIC.
 - **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel, shortcuts and cockpit autostart. Every user can override all of it in System Settings.
 
 See the cockpit in a minute, no Rust and no daemon needed (it plays scripted runs from a mock daemon):
@@ -149,7 +149,7 @@ The Plasma overlay tarball below is architecture-independent and built once. Rus
 
 ### Single instance and window identity
 
-The cockpit runs once per user session. Meta+A, the login autostart and the launcher all run `agentux-cockpit`; when one is already running, the new process hands over to it through [`tauri-plugin-single-instance`](https://v2.tauri.app/plugin/single-instance/) (a D-Bus name `os.agentux.cockpit.SingleInstance` on the session bus) and exits. The running cockpit then unminimizes, shows and focuses its `main` window.
+The cockpit runs once per user session. Meta+C, the login autostart and the launcher all run `agentux-cockpit`; when one is already running, the new process hands over to it through [`tauri-plugin-single-instance`](https://v2.tauri.app/plugin/single-instance/) (a D-Bus name `os.agentux.cockpit.SingleInstance` on the session bus) and exits. The running cockpit then unminimizes, shows and focuses its `main` window.
 
 On Wayland the window's `app_id` is `agentux-cockpit`: Tauri leaves `app.enableGTKAppId` off, so GTK uses the program name (the basename of `argv[0]`, i.e. the binary `/usr/bin/agentux-cockpit`). That matches the installed `/usr/share/applications/agentux-cockpit.desktop`, which is how KDE picks the task manager entry and icon. Keep `enableGTKAppId` off: turning it on would make the `app_id` `os.agentux.cockpit` (no such desktop file) and register a `GApplication` with that id. The desktop entries also set `StartupWMClass=agentux-cockpit` for X11/XWayland sessions.
 
