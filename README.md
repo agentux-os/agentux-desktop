@@ -251,7 +251,7 @@ How it takes effect: on login, `startplasma` reads `LookAndFeelPackage` from `kd
 | `usr/share/cosmic/com.system76.CosmicSettings/v1/accent_palette_{dark,light}.ron` | The accent colours offered in COSMIC Settings: AgentUX Lime and Moss first |
 | `usr/share/cosmic/com.system76.CosmicTheme.{Dark,Light}.Builder/v1/accent` | The active accent: Lime `#c6f36b` in the dark theme, the light palette's darker green in the light one |
 
-COSMIC reads a component's system defaults from the first data directory that has it, not key by key, so AgentUX's files replace the ones Fedora's COSMIC packages install for those components. CI lists every replaced file and fails when a new one appears or a listed one stops being packaged. Users' own settings override all of it, as on Plasma.
+COSMIC reads a component's system defaults from the first data directory that has it, not key by key, so AgentUX's files replace the ones Fedora's COSMIC packages install for those components. CI lists every replaced file (cosmic-bg's background, cosmic-applets' dock favourites, cosmic-settings' accents) and fails when a new one appears or a listed one stops being packaged. Users' own settings override all of it, as on Plasma.
 
 **The login screen before the first login is not covered.** cosmic-greeter draws each user's last wallpaper, from their cosmic-bg state. A user who has never logged in has none, and cosmic-greeter falls back to an image compiled into it, which no setting replaces. From the second login on, it shows the AgentUX wallpaper.
 
