@@ -517,13 +517,14 @@ cmd_profile() {
 run_detached() { setsid -f "$@" </dev/null >/dev/null 2>&1; }
 
 # terminal COMMAND: a terminal window running COMMAND in a login shell, left
-# open afterwards so its output can be read.
+# open afterwards so its output can be read. The desktop's own terminal
+# first: Konsole on Plasma, COSMIC Terminal on COSMIC.
 open_terminal() {
     local cmd="$1; echo; read -rp 'Press Enter to close this window. ' _"
     if command -v konsole >/dev/null; then
         run_detached konsole -e bash -lc "$cmd"
-    elif command -v foot >/dev/null; then
-        run_detached foot bash -lc "$cmd"
+    elif command -v cosmic-term >/dev/null; then
+        run_detached cosmic-term -e bash -lc "$cmd"
     elif command -v xdg-terminal-exec >/dev/null; then
         run_detached xdg-terminal-exec bash -lc "$cmd"
     else
