@@ -61,6 +61,8 @@ const PAGES = [
     ["0012-system-version-and-release-identity", "ADR 0012: System version and release identity"],
     ["0013-first-run-wizard", "ADR 0013: First-run wizard"],
     ["0014-installation-profiles-and-platform-services", "ADR 0014: Installation profiles and platform services"],
+    ["0015-organization-command-office-contract", "ADR 0015: Organization definitions are versioned domain contracts"],
+    ["0017-help-mascot", "ADR 0017: A help mascot that knows AgentUX, offline first"],
   ].map(([file, title]) => ({ id: `adr-${file.slice(0, 4)}`, title, repo: "agentux", path: `docs/adr/${file}.md` })),
 ];
 

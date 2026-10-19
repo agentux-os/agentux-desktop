@@ -1,6 +1,6 @@
 # 0010. Image variants and system identity
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0018](0018-retire-the-hyprland-variant.md) (the Hyprland variant is retired)
 - **Date:** 2026-10-12
 
 ## Context

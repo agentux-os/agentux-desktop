@@ -9,7 +9,7 @@ Each image repository has two channels, and an installed system follows exactly 
 | `:latest` | **Nightly** (testing): `main`, rebuilt daily for Fedora's updates | Every day, and on every merge to `main` |
 | `:<YYYYMMDD>` | One nightly build | Never |
 
-Stable and nightly channels exist for Plasma and Hyprland. COSMIC is nightly-only (`:latest`) and receives no `:stable` promotion until its launch gates pass. All three repositories are multi-arch and require the same AgentUX image signature ([Verifying the image](#verifying-the-image)).
+Stable and nightly channels exist for both images. Both repositories are multi-arch and require the same AgentUX image signature ([Verifying the image](#verifying-the-image)).
 
 **Which channel a system follows** is the image reference in its origin, shown by `sudo bootc status`, and `bootc upgrade` pulls whatever that tag points at:
 
@@ -24,7 +24,7 @@ sudo bootc switch ghcr.io/agentux-os/agentux:latest   # nightly builds
 systemctl reboot
 ```
 
-(`agentux-hyprland` for the Hyprland variant.) Going from `:latest` to `:stable` usually moves to an older image, since a release is a nightly build from some days or weeks earlier; that is fine on an image-based system, and `sudo bootc rollback` returns to the previous deployment. Until the first release is approved there is no `:stable` (`bootc switch` to it fails with "manifest unknown"), so stay on `:latest` until then; the ISO workflows fall back to `:latest` too if asked for `:stable` before it exists.
+Going from `:latest` to `:stable` usually moves to an older image, since a release is a nightly build from some days or weeks earlier; that is fine on an image-based system, and `sudo bootc rollback` returns to the previous deployment. Until the first release is approved there is no `:stable` (`bootc switch` to it fails with "manifest unknown"), so stay on `:latest` until then; the ISO workflows fall back to `:latest` too if asked for `:stable` before it exists.
 
 ### How a release reaches `:stable`
 
@@ -89,4 +89,4 @@ The AgentUX components are installed from their GitHub releases, pinned in one p
 | `AGENTUX_PLASMA_SHA256` | SHA-256 pin for `agentux-desktop-plasma-<version>.tar.gz` |
 | `AGENTUX_COSMIC_SHA256` | SHA-256 pin for `agentux-desktop-cosmic-<version>.tar.gz` |
 
-`<arch>` is the build's `uname -m`, `x86_64` or `aarch64`; any other architecture fails the build. Each variant installs the common archive first, verifies it against its pinned SHA-256, and extracts exactly one desktop bundle: Plasma for the Plasma and Hyprland images, COSMIC for the COSMIC image. The archives contain only `usr/` and `etc/`; configuration is baked into the immutable image rather than layered as runtime RPMs. `just bump-agentux` (needs an authenticated `gh`) checks both architecture RPMs and all three archives plus their checksum sidecars before updating any pin, and leaves `Containerfile` unchanged if a required release asset is missing or malformed. If a release ever changes the RPM's release number or Fedora tag (`-1.fc44`), update the file name in the `Containerfile` by hand.
+`<arch>` is the build's `uname -m`, `x86_64` or `aarch64`; any other architecture fails the build. Each variant installs the common archive first, verifies it against its pinned SHA-256, and extracts exactly one desktop bundle: Plasma for the Plasma image, COSMIC for the COSMIC image. The archives contain only `usr/` and `etc/`; configuration is baked into the immutable image rather than layered as runtime RPMs. `just bump-agentux` (needs an authenticated `gh`) checks both architecture RPMs and all three archives plus their checksum sidecars before updating any pin, and leaves `Containerfile` unchanged if a required release asset is missing or malformed. If a release ever changes the RPM's release number or Fedora tag (`-1.fc44`), update the file name in the `Containerfile` by hand.

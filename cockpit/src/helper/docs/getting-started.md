@@ -13,30 +13,32 @@ Both images are built from the same `Containerfile`, contain the same AgentUX co
 | Image | Pick it if |
 |---|---|
 | `ghcr.io/agentux-os/agentux` | You want KDE Plasma with the AgentUX theme, panel and shortcuts. The default. |
-| `ghcr.io/agentux-os/agentux-hyprland` | You prefer a keyboard-driven tiling desktop: the cockpit large on the left, agent terminals stacked on the right. The login screen preselects the **AgentUX Hyprland** session; Plasma is still installed and one click away. |
+| `ghcr.io/agentux-os/agentux-cosmic` | You want the lighter COSMIC desktop, with tiling built in. |
 
-The Hyprland image is larger (it carries both desktops). You can move between them at any time with `bootc switch`; your home directory is untouched.
+Both are released. Switching an installed system between them with `bootc switch` is not a supported path yet: install the one you want.
 
 ### From the ISO
 
-Download the ISO from a successful run of the [Build ISO](https://github.com/agentux-os/agentux-os/actions/workflows/iso.yml) workflow: `agentux-<date>-<arch>.iso`, or `agentux-hyprland-<date>-<arch>.iso` when the workflow was run for the Hyprland variant (`<arch>` is `x86_64` for PCs, `aarch64` for 64-bit ARM). Check it and write it to a USB stick:
+Every release ships four ISOs per architecture, named `agentux-<desktop>-<live|installer>-<version>-<arch>.iso`: the desktop (`plasma` or `cosmic`), `live` to try it first (installing from it needs internet) or `installer` to install offline, and `x86_64` for PCs or `aarch64` for 64-bit ARM. The newest release is on [download.agentuxos.org/iso/stable/](https://download.agentuxos.org/iso/stable/) under the same names without the version. Check it and write it to a USB stick:
 
 ```sh
-sha256sum -c agentux-*.iso.sha256
-sudo dd if=agentux-<date>-<arch>.iso of=/dev/sdX bs=4M status=progress oflag=sync
+curl -LO https://download.agentuxos.org/iso/stable/agentux-plasma-installer-x86_64.iso
+curl -LO https://download.agentuxos.org/iso/stable/agentux-plasma-installer-x86_64.iso.sha256
+sha256sum -c agentux-plasma-installer-x86_64.iso.sha256
+sudo dd if=agentux-plasma-installer-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
-Boot it; the installer asks for the disk, language, time zone and your account. If there is no Hyprland ISO, install the Plasma one and switch afterwards (below).
+Boot it and follow the installer: the disk, language, time zone and your account. The x86_64 ISOs boot with UEFI or legacy BIOS.
 
 ### From an existing Fedora Atomic or bootc system
 
 ```sh
-sudo bootc switch ghcr.io/agentux-os/agentux:latest            # Plasma
-sudo bootc switch ghcr.io/agentux-os/agentux-hyprland:latest   # Hyprland
+sudo bootc switch ghcr.io/agentux-os/agentux:stable            # Plasma
+sudo bootc switch ghcr.io/agentux-os/agentux-cosmic:stable     # COSMIC
 systemctl reboot
 ```
 
-The system then tracks that image's `:latest` and updates from it. If an update breaks something, `sudo bootc rollback` (or the previous entry in the boot menu) brings back the image you had.
+The system then tracks that image's `:stable` (releases) and updates from it; use `:latest` instead for nightly builds. If an update breaks something, `sudo bootc rollback` (or the previous entry in the boot menu) brings back the image you had.
 
 ### On ARM
 
@@ -56,7 +58,7 @@ cosign verify ghcr.io/agentux-os/agentux:latest \
 cosign verify --key files/etc/pki/containers/agentux-os.pub ghcr.io/agentux-os/agentux:latest
 ```
 
-For the Hyprland image, use `ghcr.io/agentux-os/agentux-hyprland:latest`. These check the multi-arch list; to check one architecture's image, verify its digest, e.g. for arm64:
+For the COSMIC image, use `ghcr.io/agentux-os/agentux-cosmic:latest`. These check the multi-arch list; to check one architecture's image, verify its digest, e.g. for arm64:
 
 ```sh
 digest="$(skopeo inspect --raw docker://ghcr.io/agentux-os/agentux:latest \
@@ -89,7 +91,7 @@ If something fails, it retries and runs again on the next login. When it has suc
 
 Each item's commands are one click away in the wizard, and the same commands work in a terminal. The wizard's backend is `/usr/libexec/agentux-setup` (`agentux-setup --help`); its logs are in `~/.local/state/agentux/setup/logs/`. To see the wizard again at your next login, run `/usr/libexec/agentux-setup reset`. Why tools install this way: [ADR 0013](adr/0013-first-run-wizard.md).
 
-**Signing in by hand.** Without the wizard, open a terminal (Meta+Return opens Konsole in Plasma, Super+Return opens foot in Hyprland) and start each CLI you want to use once, following its sign-in:
+**Signing in by hand.** Without the wizard, open a terminal (Meta+Return opens Konsole in Plasma) and start each CLI you want to use once, following its sign-in:
 
 ```sh
 claude      # Claude Code
@@ -100,7 +102,7 @@ agy         # Antigravity CLI
 
 You only need the vendors your pipeline uses. The default pipeline uses Claude Code for the planner and implementer and Codex for the reviewer (see [the `agentux.yaml` section](#5-agentuxyaml)).
 
-**The daemon and the cockpit are already running.** `agentuxd` runs as a systemd user service for every user, and the AgentUX Cockpit starts at login. Meta+A (Super+A in Hyprland) opens the cockpit, or brings it forward, at any time.
+**The daemon and the cockpit are already running.** `agentuxd` runs as a systemd user service for every user, and the AgentUX Cockpit starts at login. Meta+A opens the cockpit, or brings it forward, at any time.
 
 ## 3. Cockpit tour
 
@@ -115,6 +117,8 @@ The cockpit is a single window over every agent session the daemon runs. Project
 
 Press `?` in the cockpit for the full list of shortcuts.
 
+**The penguin helps.** The AgentUX penguin at the foot of the sidebar offers a short tour of the cockpit the first time you open it (the wizard's last step can start it too), and you can restart it from its menu. `Shift+F1` turns on **What's this?**: click anything in the cockpit or the wizard to learn what it is and how it works. `F1` opens **Ask the penguin**, which answers questions about AgentUX from the documentation that ships with the cockpit, offline. If you want, it can also ask one of your own agents (off by default; it runs on your agent account, without tools or files). It only knows AgentUX, not the desktop around it ([ADR 0017](adr/0017-help-mascot.md)).
+
 | Key | Action |
 |---|---|
 | `B` / `I` / `M` | Run board / approvals inbox / agent bus |
@@ -126,34 +130,9 @@ Press `?` in the cockpit for the full list of shortcuts.
 | `Shift+Esc`, `Ctrl+]` | Leave the terminal |
 | `[` / `]` | Previous / next project |
 | `?` | All shortcuts |
+| `F1` / `Shift+F1` | Ask the penguin / What's this? |
 
 Desktop-wide in Plasma: **Meta+A** opens the cockpit, **Meta+Return** opens Konsole.
-
-### In the Hyprland session
-
-The **AgentUX Hyprland** session uses the master layout: the cockpit, opened at login, holds the large master area on the left, and every new window (agent terminals, logs) stacks on the right. Waybar runs at the top; its **AgentUX** button also opens the cockpit. These are the shipped bindings (`Super` is the Windows key):
-
-| Key | Action |
-|---|---|
-| `Super+A` | Focus the cockpit, or open it |
-| `Super+Return` | Terminal (foot) |
-| `Super+Space`, `Super+D` | Launcher (fuzzel) |
-| `Super+Q` | Close the window |
-| `Super+F` / `Super+V` | Fullscreen / toggle floating |
-| `Super+M` | Swap the focused window into the master area |
-| `Super+O` | Move the master area (left, top, right, centre) |
-| `Super+[` / `Super+]` | Shrink / grow the master area |
-| `Super+Tab`, `Super+Shift+Tab` | Next / previous window |
-| `Super+arrows`, `Super+H/J/K/L` | Move focus (add `Shift` to move the window) |
-| `Super+1`…`Super+0` | Workspace 1–10 (add `Shift` to move the window there) |
-| `Super`+scroll | Next / previous workspace |
-| `Super`+left / right drag | Move / resize a window |
-| `Super+Shift+V` | Clipboard history |
-| `Print` / `Shift+Print` | Screenshot of a region / the whole screen, to the clipboard |
-| `Super+Escape` | Lock the screen |
-| `Super+Shift+E` | Log out |
-
-The screen locks after 10 minutes idle and before suspend, and turns off after 15. To change anything, edit `~/.config/hypr/hyprland.conf`: it `source`s the AgentUX defaults (`/usr/share/agentux/hyprland/hyprland.conf`, which follow image updates), and whatever you add below that line wins. Waybar, mako, fuzzel, foot, hyprlock and hypridle configs are copied into `~/.config` at Hyprland login when you do not have them yet, and are yours to edit. To make Plasma the default session again, choose it under System Settings > Login Screen.
 
 ## 4. `aux` quick reference
 

@@ -1,6 +1,6 @@
 # 0011. Release channels, ISO distribution and the release gate
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0018](0018-retire-the-hyprland-variant.md) (the Hyprland variant is retired)
 - **Date:** 2026-10-14
 
 ## Context
