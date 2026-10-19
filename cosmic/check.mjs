@@ -29,6 +29,29 @@ const image = path.join(root, source[1]);
 assert.ok(existsSync(image), `COSMIC wallpaper missing: ${source[1]}`);
 assert.deepEqual([...readFileSync(image).subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'the COSMIC wallpaper must be a PNG');
 
+// The dock pins the cockpit first, then the terminal and the browser,
+// like Plasma's panel.
+const favorites = readFileSync(path.join(root, 'usr/share/cosmic/com.system76.CosmicAppList/v1/favorites'), 'utf8');
+const pinned = [...favorites.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+assert.deepEqual(pinned.slice(0, 3), ['agentux-cockpit', 'com.system76.CosmicTerm', 'firefox'], 'the COSMIC dock must pin the cockpit, the terminal and the browser first');
+assert.equal(new Set(pinned).size, pinned.length, 'the COSMIC dock pins an app twice');
+
+// Super+C opens the cockpit (Meta+C on Plasma) and Super+Return a terminal.
+// Super+A stays COSMIC's App Library.
+const shortcuts = readFileSync(path.join(root, 'usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom'), 'utf8');
+assert.match(shortcuts, /\(modifiers: \[Super\], key: "c"\): Spawn\("agentux-cockpit"\)/, 'Super+C must open the cockpit');
+assert.match(shortcuts, /\(modifiers: \[Super\], key: "Return"\): System\(Terminal\)/, 'Super+Return must open the terminal');
+assert.doesNotMatch(shortcuts, /key: "a"\)/, 'Super+A belongs to COSMIC (App Library)');
+
+// The active accent is the first colour of each AgentUX palette.
+for (const [theme, palette] of [['Dark', darkPath], ['Light', lightPath]]) {
+  const accent = readFileSync(path.join(root, `usr/share/cosmic/com.system76.CosmicTheme.${theme}.Builder/v1/accent`), 'utf8');
+  const [, red, green, blue] = accent.match(/Some\(\(\s*red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+),?\s*\)\)/) ?? [];
+  assert.ok(red, `the ${theme} accent must be Some((red, green, blue))`);
+  const first = readFileSync(palette, 'utf8').match(/red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+)/);
+  assert.deepEqual([red, green, blue].map(Number), first.slice(1, 4).map(Number), `the ${theme} accent must be the first colour of its palette`);
+}
+
 function checkNoPlasma(directory) {
   if (!existsSync(directory)) return;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

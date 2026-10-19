@@ -1,0 +1,4 @@
+{
+    (modifiers: [Super], key: "c"): Spawn("agentux-cockpit"),
+    (modifiers: [Super], key: "Return"): System(Terminal),
+}
