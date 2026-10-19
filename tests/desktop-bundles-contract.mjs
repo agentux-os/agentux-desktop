@@ -18,6 +18,8 @@ const required = [
   'cosmic/check.sh',
   'cosmic/check.mjs',
   'cosmic/usr/share/cosmic/com.system76.CosmicSettings/v1/accent_palette_dark.ron',
+  'cosmic/usr/share/cosmic/com.system76.CosmicBackground/v1/all',
+  'cosmic/usr/share/backgrounds/agentux/agentux-dark.png',
 ];
 
 for (const path of required) {

@@ -16,6 +16,19 @@ for (const file of [darkPath, lightPath]) {
   }
 }
 
+// The AgentUX wallpaper is cosmic-bg's system default (desktop and lock
+// screen), and it points at a file this overlay ships.
+const backgroundPath = path.join(root, 'usr/share/cosmic/com.system76.CosmicBackground/v1/all');
+assert.ok(existsSync(backgroundPath), 'COSMIC background default missing');
+const background = readFileSync(backgroundPath, 'utf8');
+assert.match(background, /output:\s*"all"/, 'the COSMIC background default must apply to all outputs');
+const source = background.match(/source:\s*Path\("([^"]+)"\)/);
+assert.ok(source, 'the COSMIC background default must name an image path');
+assert.match(source[1], /^\/usr\/share\/backgrounds\/agentux\//, 'the COSMIC wallpaper must be an AgentUX one');
+const image = path.join(root, source[1]);
+assert.ok(existsSync(image), `COSMIC wallpaper missing: ${source[1]}`);
+assert.deepEqual([...readFileSync(image).subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'the COSMIC wallpaper must be a PNG');
+
 function checkNoPlasma(directory) {
   if (!existsSync(directory)) return;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
