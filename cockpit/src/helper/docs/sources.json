@@ -5,7 +5,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md",
     "repo": "agentux",
     "path": "docs/getting-started.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "cockpit",
@@ -13,7 +13,7 @@
     "url": "https://github.com/agentux-os/agentux-desktop/blob/main/README.md",
     "repo": "agentux-desktop",
     "path": "README.md",
-    "commit": "597f274"
+    "commit": "07c5999"
   },
   {
     "id": "core",
@@ -21,7 +21,7 @@
     "url": "https://github.com/agentux-os/agentux-core/blob/main/README.md",
     "repo": "agentux-core",
     "path": "README.md",
-    "commit": "8a1d21b"
+    "commit": "2879f15"
   },
   {
     "id": "api",
@@ -29,7 +29,7 @@
     "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md",
     "repo": "agentux-core",
     "path": "docs/api.md",
-    "commit": "8a1d21b"
+    "commit": "2879f15"
   },
   {
     "id": "os",
@@ -37,7 +37,7 @@
     "url": "https://github.com/agentux-os/agentux-os/blob/main/README.md",
     "repo": "agentux-os",
     "path": "README.md",
-    "commit": "44f8c37"
+    "commit": "7808d41"
   },
   {
     "id": "adr-0001",
@@ -45,7 +45,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0001-linux-distribution-on-fedora-atomic.md",
     "repo": "agentux",
     "path": "docs/adr/0001-linux-distribution-on-fedora-atomic.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0002",
@@ -53,7 +53,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0002-harness-integration-via-acp.md",
     "repo": "agentux",
     "path": "docs/adr/0002-harness-integration-via-acp.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0003",
@@ -61,7 +61,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0003-workflow-engine.md",
     "repo": "agentux",
     "path": "docs/adr/0003-workflow-engine.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0004",
@@ -69,7 +69,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0004-unified-interface-and-agent-bus.md",
     "repo": "agentux",
     "path": "docs/adr/0004-unified-interface-and-agent-bus.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0005",
@@ -77,7 +77,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0005-agentux-yaml.md",
     "repo": "agentux",
     "path": "docs/adr/0005-agentux-yaml.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0007",
@@ -85,7 +85,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0007-terminal-mode-is-a-session-handoff.md",
     "repo": "agentux",
     "path": "docs/adr/0007-terminal-mode-is-a-session-handoff.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0008",
@@ -93,7 +93,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0008-releases-and-image-pinning.md",
     "repo": "agentux",
     "path": "docs/adr/0008-releases-and-image-pinning.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0009",
@@ -101,7 +101,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0009-container-isolation-for-checks.md",
     "repo": "agentux",
     "path": "docs/adr/0009-container-isolation-for-checks.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0010",
@@ -109,7 +109,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0010-image-variants-and-system-identity.md",
     "repo": "agentux",
     "path": "docs/adr/0010-image-variants-and-system-identity.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0011",
@@ -117,7 +117,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0011-release-channels-and-iso-distribution.md",
     "repo": "agentux",
     "path": "docs/adr/0011-release-channels-and-iso-distribution.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0012",
@@ -125,7 +125,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0012-system-version-and-release-identity.md",
     "repo": "agentux",
     "path": "docs/adr/0012-system-version-and-release-identity.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0013",
@@ -133,7 +133,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0013-first-run-wizard.md",
     "repo": "agentux",
     "path": "docs/adr/0013-first-run-wizard.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0014",
@@ -141,7 +141,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md",
     "repo": "agentux",
     "path": "docs/adr/0014-installation-profiles-and-platform-services.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0015",
@@ -149,7 +149,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0015-organization-command-office-contract.md",
     "repo": "agentux",
     "path": "docs/adr/0015-organization-command-office-contract.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
   },
   {
     "id": "adr-0017",
@@ -157,6 +157,14 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0017-help-mascot.md",
     "repo": "agentux",
     "path": "docs/adr/0017-help-mascot.md",
-    "commit": "aaf24d0"
+    "commit": "713c051"
+  },
+  {
+    "id": "adr-0019",
+    "title": "ADR 0019: Updates without reinstalling",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0019-updates-without-reinstalling.md",
+    "repo": "agentux",
+    "path": "docs/adr/0019-updates-without-reinstalling.md",
+    "commit": "713c051"
   }
 ]

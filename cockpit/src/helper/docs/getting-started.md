@@ -102,7 +102,7 @@ agy         # Antigravity CLI
 
 You only need the vendors your pipeline uses. The default pipeline uses Claude Code for the planner and implementer and Codex for the reviewer (see [the `agentux.yaml` section](#5-agentuxyaml)).
 
-**The daemon and the cockpit are already running.** `agentuxd` runs as a systemd user service for every user, and the AgentUX Cockpit starts at login. Meta+A opens the cockpit, or brings it forward, at any time.
+**The daemon and the cockpit are already running.** `agentuxd` runs as a systemd user service for every user, and the AgentUX Cockpit starts at login. Super+C (Meta+C) opens the cockpit, or brings it forward, at any time.
 
 ## 3. Cockpit tour
 
@@ -132,7 +132,7 @@ Press `?` in the cockpit for the full list of shortcuts.
 | `?` | All shortcuts |
 | `F1` / `Shift+F1` | Ask the penguin / What's this? |
 
-Desktop-wide in Plasma: **Meta+A** opens the cockpit, **Meta+Return** opens Konsole.
+Desktop-wide, on Plasma and COSMIC: **Super+C** opens the cockpit and **Super+Return** a terminal (Konsole on Plasma, COSMIC Terminal on COSMIC). The Super key is the one Plasma calls Meta.
 
 ## 4. `aux` quick reference
 
