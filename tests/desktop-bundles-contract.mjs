@@ -49,3 +49,10 @@ for (const root of roots) {
 }
 
 console.log('desktop bundle layout: OK');
+
+// The wizard's sign-in opens the desktop's own terminal: Konsole on Plasma,
+// COSMIC Terminal on COSMIC (which has neither Konsole nor, always,
+// xdg-terminal-exec).
+const setup = await readFile('common/usr/libexec/agentux-setup', 'utf8');
+assert.match(setup, /command -v cosmic-term[\s\S]*cosmic-term -e bash -lc/, 'agentux-setup opens COSMIC Terminal on COSMIC');
+assert.doesNotMatch(setup, /\bfoot\b/, 'agentux-setup no longer tries foot (Hyprland only)');
