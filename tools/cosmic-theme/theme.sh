@@ -14,7 +14,9 @@
 # 2. with the overlay, every theme file must match what the overlay ships
 #    (--write copies the ones that differ into usr/).
 #
-# Needs dnf, rpm2cpio, cpio and cargo (Fedora 44).
+# Values are compared up to float rounding (same.mjs).
+#
+# Needs dnf, rpm2cpio, cpio, cargo and node (Fedora 44).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../../cosmic"
@@ -29,6 +31,7 @@ mkdir "$work/fedora"
 
 cargo build --quiet --release --manifest-path "$here/Cargo.toml"
 gen=$here/target/release/agentux-cosmic-theme-gen
+same() { node "$here/same.mjs" "$1" "$2"; }
 themes=(com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light)
 ok=1
 
@@ -37,7 +40,7 @@ XDG_DATA_DIRS="$work/fedora/usr/share" XDG_CONFIG_HOME="$work/fedora-out" "$gen"
 for theme in "${themes[@]}"; do
     for built in "$work/fedora-out/cosmic/$theme/v1"/*; do
         key=$(basename "$built")
-        if ! cmp -s "$built" "$work/fedora/usr/share/cosmic/$theme/v1/$key"; then
+        if ! same "$built" "$work/fedora/usr/share/cosmic/$theme/v1/$key"; then
             echo "::error::$theme/$key built from Fedora's builder differs from Fedora's own"
             diff "$work/fedora/usr/share/cosmic/$theme/v1/$key" "$built" || true
             ok=0
@@ -54,7 +57,7 @@ for theme in "${themes[@]}"; do
     for built in "$work/agentux-out/cosmic/$theme/v1"/*; do
         key=$(basename "$built")
         shipped="$work/agentux/usr/share/cosmic/$theme/v1/$key"
-        cmp -s "$built" "$shipped" && continue
+        [[ -f "$shipped" ]] && same "$built" "$shipped" && continue
         if [[ "$write" == 1 ]]; then
             install -D -m 0644 "$built" "usr/share/cosmic/$theme/v1/$key"
             echo "wrote usr/share/cosmic/$theme/v1/$key"
