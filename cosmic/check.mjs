@@ -33,7 +33,7 @@ assert.deepEqual([...readFileSync(image).subarray(0, 8)], [0x89, 0x50, 0x4e, 0x4
 // like Plasma's panel.
 const favorites = readFileSync(path.join(root, 'usr/share/cosmic/com.system76.CosmicAppList/v1/favorites'), 'utf8');
 const pinned = [...favorites.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-assert.deepEqual(pinned.slice(0, 3), ['agentux-cockpit', 'com.system76.CosmicTerm', 'firefox'], 'the COSMIC dock must pin the cockpit, the terminal and the browser first');
+assert.deepEqual(pinned.slice(0, 3), ['agentux-cockpit', 'com.system76.CosmicTerm', 'org.mozilla.firefox'], 'the COSMIC dock must pin the cockpit, the terminal and the browser first');
 assert.equal(new Set(pinned).size, pinned.length, 'the COSMIC dock pins an app twice');
 
 // Super+C opens the cockpit (Meta+C on Plasma) and Super+Return a terminal.
