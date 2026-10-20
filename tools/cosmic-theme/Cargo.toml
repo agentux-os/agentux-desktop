@@ -1,5 +1,5 @@
 # Builds COSMIC's computed themes from their builders, with libcosmic's own
-# code (cosmic/theme.sh runs it). Not part of the cockpit's build.
+# code (theme.sh runs it). Not part of the cockpit's build.
 [package]
 name = "agentux-cosmic-theme-gen"
 version = "0.0.0"

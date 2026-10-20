@@ -6,7 +6,7 @@
 # COSMIC Settings builds from com.system76.CosmicTheme.*.Builder, so a builder
 # default alone (the AgentUX accent) does not show until a user changes the
 # appearance. This builds the themes with libcosmic's own code
-# (theme-gen/, at the revision Fedora's cosmic-settings uses), from Fedora 44's
+# (this directory, at the revision Fedora's cosmic-settings uses), from Fedora 44's
 # cosmic-settings defaults with this overlay on top, as in the image:
 #
 # 1. from Fedora's defaults alone it must give Fedora's own theme files (the
@@ -16,7 +16,8 @@
 #
 # Needs dnf, rpm2cpio, cpio and cargo (Fedora 44).
 set -euo pipefail
-cd "$(dirname "$0")"
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here/../../cosmic"
 write=0
 [[ "${1:-}" == --write ]] && write=1
 
@@ -26,8 +27,8 @@ dnf -q download --destdir "$work/rpm" cosmic-settings
 mkdir "$work/fedora"
 (cd "$work/fedora" && rpm2cpio "$work"/rpm/cosmic-settings-*.rpm | cpio -idm --quiet)
 
-cargo build --quiet --release --manifest-path theme-gen/Cargo.toml
-gen=theme-gen/target/release/agentux-cosmic-theme-gen
+cargo build --quiet --release --manifest-path "$here/Cargo.toml"
+gen=$here/target/release/agentux-cosmic-theme-gen
 themes=(com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light)
 ok=1
 
@@ -58,7 +59,7 @@ for theme in "${themes[@]}"; do
             install -D -m 0644 "$built" "usr/share/cosmic/$theme/v1/$key"
             echo "wrote usr/share/cosmic/$theme/v1/$key"
         else
-            echo "::error::$theme/$key is not what the AgentUX builder gives (run cosmic/theme.sh --write)"
+            echo "::error::$theme/$key is not what the AgentUX builder gives (run tools/cosmic-theme/theme.sh --write)"
             diff "$shipped" "$built" || true
             ok=0
         fi

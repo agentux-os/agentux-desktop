@@ -162,16 +162,16 @@ jobs:
         run: cosmic/check.sh
 
       # The computed themes COSMIC reads are generated from the builders by
-      # libcosmic (cosmic/theme.sh). When they are out of date, the job keeps
+      # libcosmic (tools/cosmic-theme/theme.sh). When they are out of date, the job keeps
       # the up-to-date files as an artifact to commit.
       - name: Install the theme generator's tools
-        run: dnf -y install --setopt=install_weak_deps=False cargo rust cpio git-core 'dnf-command(download)'
+        run: dnf -y install --setopt=install_weak_deps=False cargo rust cpio diffutils git-core 'dnf-command(download)'
       - name: Check the COSMIC themes
         id: themes
-        run: cosmic/theme.sh
+        run: tools/cosmic-theme/theme.sh
       - name: Regenerate the COSMIC themes
         if: failure() && steps.themes.outcome == 'failure'
-        run: cosmic/theme.sh --write || true
+        run: tools/cosmic-theme/theme.sh --write || true
       - name: Keep the regenerated themes
         if: failure() && steps.themes.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -180,7 +180,7 @@ jobs:
           path: |
             cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark
             cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light
-            cosmic/theme-gen/Cargo.lock
+            tools/cosmic-theme/Cargo.lock
 
       # COSMIC reads a component's system defaults from the first data
       # directory that has it, so AgentUX's defaults have to replace the
