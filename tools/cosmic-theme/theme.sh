@@ -6,12 +6,12 @@
 # COSMIC Settings builds from com.system76.CosmicTheme.*.Builder, so a builder
 # default alone (the AgentUX accent) does not show until a user changes the
 # appearance. This builds the themes with libcosmic's own code (this
-# directory, at the revision Fedora's cosmic-settings uses) twice: from Fedora
-# 44's cosmic-settings defaults, and from them with this overlay on top, as in
-# the image. The overlay ships the keys whose values differ between the two
-# builds, and no other theme key: each as Fedora ships it, with the values
-# that differ taken from the AgentUX build (merge.mjs; Fedora's shipped theme
-# is older than its builder in places, which this leaves as Fedora's).
+# directory, at the revision of Fedora's COSMIC release) from Fedora 44's
+# cosmic-settings defaults with this overlay on top, as in the image, and the
+# overlay ships the whole theme it builds: what COSMIC Settings would write
+# for the AgentUX accent. (Fedora's own COSMIC 1.10 theme defaults do not
+# match its code: keys are missing and its builder palette does not parse, so
+# COSMIC falls back key by key. A whole built theme loads cleanly.)
 # --write updates usr/ to that.
 #
 # Values are compared up to float rounding (same.mjs).
@@ -39,51 +39,34 @@ mkdir "$work/fedora"
 (cd "$work/fedora" && rpm2cpio "$work"/rpm/cosmic-settings-*.rpm | cpio -idm --quiet)
 cp -a "$work/fedora" "$work/agentux"
 cp -a usr "$work/agentux/"
-# The theme keys the overlay ships are what this decides, not an input.
-rm -rf "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Dark" \
-    "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Light"
+# The theme the overlay ships is what this decides, not an input.
+rm -rf "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Dark"     "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Light"
 
 cargo build --quiet --release --manifest-path "$here/Cargo.toml"
-gen=$here/target/release/agentux-cosmic-theme-gen
-same() { node "$here/same.mjs" "$1" "$2"; }
-for tree in fedora agentux; do
-    XDG_DATA_DIRS="$work/$tree/usr/share" XDG_CONFIG_HOME="$work/$tree-out" "$gen"
-done
+XDG_DATA_DIRS="$work/agentux/usr/share" XDG_CONFIG_HOME="$work/out"     "$here/target/release/agentux-cosmic-theme-gen"
 
 ok=1
 for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
     # The schema version this COSMIC reads (the generator may leave older ones).
-    out=$(ls "$work/agentux-out/cosmic/$theme" | sort -V | tail -n 1)
-    for built in "$work/agentux-out/cosmic/$theme/$out"/*; do
-        key=$(basename "$built")
-        base="$work/fedora-out/cosmic/$theme/$out/$key"
-        fedora="$work/fedora/usr/share/cosmic/$theme/$out/$key"
-        shipped="usr/share/cosmic/$theme/$out/$key"
-        if same "$built" "$base"; then
-            # Not changed by the overlay: Fedora's own stays.
-            if [[ -f "$shipped" ]]; then
-                if [[ "$write" == 1 ]]; then
-                    rm "$shipped"; echo "removed $shipped"
-                else
-                    echo "::error::$shipped is not changed by the AgentUX builders; drop it"; ok=0
-                fi
-            fi
-            continue
-        fi
-        expected="$work/expected-$theme-$key"
-        if [[ -f "$fedora" ]]; then
-            node "$here/merge.mjs" "$fedora" "$base" "$built" >"$expected" || { ok=0; continue; }
-        else
-            # A key Fedora does not ship (COSMIC then logs it as missing).
-            cp "$built" "$expected"
-        fi
-        [[ -f "$shipped" ]] && same "$expected" "$shipped" && { echo "ok: $shipped"; continue; }
+    out=$(ls "$work/out/cosmic/$theme" | sort -V | tail -n 1)
+    for built in "$work/out/cosmic/$theme/$out"/*; do
+        shipped="usr/share/cosmic/$theme/$out/$(basename "$built")"
+        [[ -f "$shipped" ]] && node "$here/same.mjs" "$built" "$shipped" && continue
         if [[ "$write" == 1 ]]; then
-            install -D -m 0644 "$expected" "$shipped"; echo "wrote $shipped"
+            install -D -m 0644 "$built" "$shipped"; echo "wrote $shipped"
         else
             echo "::error::$shipped is not what the AgentUX builders give (run tools/cosmic-theme/theme.sh --write)"
-            [[ -f "$shipped" ]] && { diff "$shipped" "$expected" || true; }
+            [[ -f "$shipped" ]] && { diff "$shipped" "$built" || true; }
             ok=0
+        fi
+    done
+    for shipped in "usr/share/cosmic/$theme"/*/*; do
+        [[ -e "$shipped" ]] || continue
+        [[ "$shipped" == "usr/share/cosmic/$theme/$out/"* && -f "$work/out/cosmic/$theme/$out/$(basename "$shipped")" ]] && continue
+        if [[ "$write" == 1 ]]; then
+            rm "$shipped"; echo "removed $shipped"
+        else
+            echo "::error::$shipped is not part of the built theme; drop it"; ok=0
         fi
     done
 done
