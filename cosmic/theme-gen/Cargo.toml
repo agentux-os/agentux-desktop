@@ -1,0 +1,15 @@
+# Builds COSMIC's computed themes from their builders, with libcosmic's own
+# code (cosmic/theme.sh runs it). Not part of the cockpit's build.
+[package]
+name = "agentux-cosmic-theme-gen"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# The libcosmic revision Fedora 44's cosmic-settings (epoch-1.0.9) is built
+# from, so the themes come out the way Fedora's own defaults were made.
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", rev = "724351727a191516ca1b2f2f90a00b7d211c7e1f", default-features = false, features = ["macro"] }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic", rev = "724351727a191516ca1b2f2f90a00b7d211c7e1f", default-features = false }

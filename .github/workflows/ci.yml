@@ -161,6 +161,27 @@ jobs:
       - name: Check COSMIC overlay
         run: cosmic/check.sh
 
+      # The computed themes COSMIC reads are generated from the builders by
+      # libcosmic (cosmic/theme.sh). When they are out of date, the job keeps
+      # the up-to-date files as an artifact to commit.
+      - name: Install the theme generator's tools
+        run: dnf -y install --setopt=install_weak_deps=False cargo rust cpio git-core 'dnf-command(download)'
+      - name: Check the COSMIC themes
+        id: themes
+        run: cosmic/theme.sh
+      - name: Regenerate the COSMIC themes
+        if: failure() && steps.themes.outcome == 'failure'
+        run: cosmic/theme.sh --write || true
+      - name: Keep the regenerated themes
+        if: failure() && steps.themes.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosmic-themes
+          path: |
+            cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark
+            cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light
+            cosmic/theme-gen/Cargo.lock
+
       # COSMIC reads a component's system defaults from the first data
       # directory that has it, so AgentUX's defaults have to replace the
       # files Fedora's COSMIC packages install. Every replacement is listed
@@ -189,6 +210,12 @@ jobs:
           done
           while IFS= read -r file; do
             case " ${replaces[*]} " in *" /$file "*) continue ;; esac
+            # The computed themes replace cosmic-settings' key by key; the
+            # step "Check the COSMIC themes" vouches for each of them.
+            case "/$file" in /usr/share/cosmic/com.system76.CosmicTheme.Dark/v1/*|/usr/share/cosmic/com.system76.CosmicTheme.Light/v1/*)
+              if [ -n "$(owners "/$file")" ]; then echo "ok: replaces generated theme file /$file"; continue; fi
+              echo "::error::generated theme file /$file is not a key cosmic-settings ships"; ok=0; continue ;;
+            esac
             owner=$(owners "/$file" | head -n 1)
             if [ -n "$owner" ]; then
               echo "::error::overlay file /$file is owned by $owner and not listed as a replacement"; ok=0
