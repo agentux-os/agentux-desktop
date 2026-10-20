@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# Check (or with --write, update) the computed COSMIC themes this overlay
+# Check (or with --write, update) the computed COSMIC theme keys this overlay
 # ships against what libcosmic builds from the theme builders.
 #
 # COSMIC's desktop reads com.system76.CosmicTheme.Dark/.Light, the theme
 # COSMIC Settings builds from com.system76.CosmicTheme.*.Builder, so a builder
 # default alone (the AgentUX accent) does not show until a user changes the
-# appearance. This builds the themes with libcosmic's own code
-# (this directory, at the revision Fedora's cosmic-settings uses), from Fedora 44's
-# cosmic-settings defaults with this overlay on top, as in the image:
+# appearance. This builds the themes with libcosmic's own code (this
+# directory, at the revision Fedora's cosmic-settings uses) twice: from Fedora
+# 44's cosmic-settings defaults, and from them with this overlay on top, as in
+# the image. The keys the overlay changes are the ones it ships:
 #
-# 1. from Fedora's defaults alone it must give Fedora's own theme files (the
-#    generator builds themes the way Fedora's were made);
-# 2. with the overlay, every theme file must match what the overlay ships
-#    (--write copies the ones that differ into usr/).
+# - each of them must come out of Fedora's own builder as Fedora ships it, so
+#   the rest of the key stays Fedora's (Fedora's palette and status colours
+#   are older than its builder's, so not every key does: those must not
+#   change);
+# - the overlay ships each of them as built with the overlay, and no other
+#   theme key (--write updates usr/ to that).
 #
 # Values are compared up to float rounding (same.mjs).
 #
@@ -28,42 +31,49 @@ trap 'rm -rf "$work"' EXIT
 dnf -q download --destdir "$work/rpm" cosmic-settings
 mkdir "$work/fedora"
 (cd "$work/fedora" && rpm2cpio "$work"/rpm/cosmic-settings-*.rpm | cpio -idm --quiet)
+cp -a "$work/fedora" "$work/agentux"
+cp -a usr "$work/agentux/"
+# The theme keys the overlay ships are what this decides, not an input.
+rm -rf "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Dark" \
+    "$work/agentux/usr/share/cosmic/com.system76.CosmicTheme.Light"
 
 cargo build --quiet --release --manifest-path "$here/Cargo.toml"
 gen=$here/target/release/agentux-cosmic-theme-gen
 same() { node "$here/same.mjs" "$1" "$2"; }
-themes=(com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light)
-ok=1
-
-# 1. Fedora's builders give Fedora's themes.
-XDG_DATA_DIRS="$work/fedora/usr/share" XDG_CONFIG_HOME="$work/fedora-out" "$gen"
-for theme in "${themes[@]}"; do
-    for built in "$work/fedora-out/cosmic/$theme/v1"/*; do
-        key=$(basename "$built")
-        if ! same "$built" "$work/fedora/usr/share/cosmic/$theme/v1/$key"; then
-            echo "::error::$theme/$key built from Fedora's builder differs from Fedora's own"
-            diff "$work/fedora/usr/share/cosmic/$theme/v1/$key" "$built" || true
-            ok=0
-        fi
-    done
+for tree in fedora agentux; do
+    XDG_DATA_DIRS="$work/$tree/usr/share" XDG_CONFIG_HOME="$work/$tree-out" "$gen"
 done
-[[ "$ok" == 1 ]] || { echo "error: the generator does not reproduce Fedora's themes" >&2; exit 1; }
 
-# 2. With the overlay, the shipped themes are what the builders give.
-cp -a "$work/fedora" "$work/agentux"
-cp -a usr "$work/agentux/"
-XDG_DATA_DIRS="$work/agentux/usr/share" XDG_CONFIG_HOME="$work/agentux-out" "$gen"
-for theme in "${themes[@]}"; do
+ok=1
+for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
     for built in "$work/agentux-out/cosmic/$theme/v1"/*; do
         key=$(basename "$built")
-        shipped="$work/agentux/usr/share/cosmic/$theme/v1/$key"
-        [[ -f "$shipped" ]] && same "$built" "$shipped" && continue
+        base="$work/fedora-out/cosmic/$theme/v1/$key"
+        fedora="$work/fedora/usr/share/cosmic/$theme/v1/$key"
+        shipped="usr/share/cosmic/$theme/v1/$key"
+        if same "$built" "$base"; then
+            # Not changed by the overlay: Fedora's own stays.
+            if [[ -f "$shipped" ]]; then
+                if [[ "$write" == 1 ]]; then
+                    rm "$shipped"; echo "removed $shipped"
+                else
+                    echo "::error::$shipped is not changed by the AgentUX builders; drop it"; ok=0
+                fi
+            fi
+            continue
+        fi
+        if ! same "$base" "$fedora"; then
+            echo "::error::the overlay changes $theme/$key, but Fedora's builder does not give Fedora's own $key"
+            diff "$fedora" "$base" || true
+            ok=0
+            continue
+        fi
+        [[ -f "$shipped" ]] && same "$built" "$shipped" && { echo "ok: $shipped"; continue; }
         if [[ "$write" == 1 ]]; then
-            install -D -m 0644 "$built" "usr/share/cosmic/$theme/v1/$key"
-            echo "wrote usr/share/cosmic/$theme/v1/$key"
+            install -D -m 0644 "$built" "$shipped"; echo "wrote $shipped"
         else
-            echo "::error::$theme/$key is not what the AgentUX builder gives (run tools/cosmic-theme/theme.sh --write)"
-            diff "$shipped" "$built" || true
+            echo "::error::$shipped is not what the AgentUX builders give (run tools/cosmic-theme/theme.sh --write)"
+            [[ -f "$shipped" ]] && { diff "$shipped" "$built" || true; }
             ok=0
         fi
     done
