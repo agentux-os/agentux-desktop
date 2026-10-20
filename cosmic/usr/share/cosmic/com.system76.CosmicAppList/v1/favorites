@@ -1,7 +1,7 @@
 [
     "agentux-cockpit",
     "com.system76.CosmicTerm",
-    "firefox",
+    "org.mozilla.firefox",
     "com.system76.CosmicFiles",
     "com.system76.CosmicEdit",
     "com.system76.CosmicStore",

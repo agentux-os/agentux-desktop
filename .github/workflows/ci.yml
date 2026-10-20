@@ -196,4 +196,16 @@ jobs:
               echo "ok: /$file is not owned by a package"
             fi
           done < <(cd cosmic && find usr etc -type f 2>/dev/null | sort)
+          # The dock pins apps by desktop file id; an id no package ships
+          # (Fedora's Firefox is org.mozilla.firefox, not firefox) leaves a
+          # hole in the dock. agentux-cockpit comes from the cockpit RPM.
+          while IFS= read -r app; do
+            [ "$app" = agentux-cockpit ] && continue
+            path=/usr/share/applications/$app.desktop
+            if [ -n "$(owners "$path")" ]; then
+              echo "ok: dock app $app ($(owners "$path" | head -n 1))"
+            else
+              echo "::error::the dock pins $app, but no Fedora 44 package ships $path"; ok=0
+            fi
+          done < <(grep -o '"[^"]*"' cosmic/usr/share/cosmic/com.system76.CosmicAppList/v1/favorites | tr -d '"')
           [ "$ok" = 1 ]
