@@ -24,6 +24,9 @@ const required = [
   'cosmic/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom',
   'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark.Builder/v1/accent',
   'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light.Builder/v1/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark/v1/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light/v1/accent',
+  'tools/cosmic-theme/theme.sh',
 ];
 
 for (const path of required) {
