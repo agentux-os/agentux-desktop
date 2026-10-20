@@ -26,6 +26,15 @@ write=0
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 dnf -q download --destdir "$work/rpm" cosmic-settings
+# The generator is pinned to the libcosmic revision of one COSMIC release
+# (Cargo.toml); a newer Fedora COSMIC may change the theme (COSMIC 1.10 moved
+# it to a v2 schema), so the two must move together.
+epoch=1.10.0
+version=$(rpm -qp --qf '%{VERSION}' "$work"/rpm/cosmic-settings-*.rpm)
+[[ "$version" == "$epoch" ]] || {
+    echo "::error::Fedora's cosmic-settings is $version, the theme generator is pinned to COSMIC $epoch: update its libcosmic revision (Cargo.toml) and epoch here, then run theme.sh --write"
+    exit 1
+}
 mkdir "$work/fedora"
 (cd "$work/fedora" && rpm2cpio "$work"/rpm/cosmic-settings-*.rpm | cpio -idm --quiet)
 cp -a "$work/fedora" "$work/agentux"
@@ -43,11 +52,12 @@ done
 
 ok=1
 for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
-    for built in "$work/agentux-out/cosmic/$theme/v1"/*; do
+    out=$(cd "$work/agentux-out/cosmic/$theme" && echo v*)
+    for built in "$work/agentux-out/cosmic/$theme/$out"/*; do
         key=$(basename "$built")
-        base="$work/fedora-out/cosmic/$theme/v1/$key"
-        fedora="$work/fedora/usr/share/cosmic/$theme/v1/$key"
-        shipped="usr/share/cosmic/$theme/v1/$key"
+        base="$work/fedora-out/cosmic/$theme/$out/$key"
+        fedora="$work/fedora/usr/share/cosmic/$theme/$out/$key"
+        shipped="usr/share/cosmic/$theme/$out/$key"
         if same "$built" "$base"; then
             # Not changed by the overlay: Fedora's own stays.
             if [[ -f "$shipped" ]]; then
@@ -60,7 +70,12 @@ for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
             continue
         fi
         expected="$work/expected-$theme-$key"
-        node "$here/merge.mjs" "$fedora" "$base" "$built" >"$expected" || { ok=0; continue; }
+        if [[ -f "$fedora" ]]; then
+            node "$here/merge.mjs" "$fedora" "$base" "$built" >"$expected" || { ok=0; continue; }
+        else
+            # A key Fedora does not ship (COSMIC then logs it as missing).
+            cp "$built" "$expected"
+        fi
         [[ -f "$shipped" ]] && same "$expected" "$shipped" && { echo "ok: $shipped"; continue; }
         if [[ "$write" == 1 ]]; then
             install -D -m 0644 "$expected" "$shipped"; echo "wrote $shipped"

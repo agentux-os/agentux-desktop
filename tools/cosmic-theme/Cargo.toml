@@ -9,7 +9,7 @@ publish = false
 [workspace]
 
 [dependencies]
-# The libcosmic revision Fedora 44's cosmic-settings (epoch-1.0.9) is built
+# The libcosmic revision Fedora 44's cosmic-settings (epoch-1.10.0; theme.sh checks the versions match) is built
 # from, so the themes come out the way Fedora's own defaults were made.
-cosmic-config = { git = "https://github.com/pop-os/libcosmic", rev = "724351727a191516ca1b2f2f90a00b7d211c7e1f", default-features = false, features = ["macro"] }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic", rev = "724351727a191516ca1b2f2f90a00b7d211c7e1f", default-features = false }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", rev = "5a8bd9482a35ae94c1e54edf77b331c6b970f170", default-features = false, features = ["macro"] }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic", rev = "5a8bd9482a35ae94c1e54edf77b331c6b970f170", default-features = false }

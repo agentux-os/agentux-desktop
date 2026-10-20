@@ -17,8 +17,14 @@ fn main() {
         ("light", ThemeBuilder::light_config(), Theme::light_config()),
     ] {
         let builder = builder.unwrap_or_else(|err| panic!("{name} builder config: {err}"));
-        let builder = ThemeBuilder::get_entry(&builder)
-            .unwrap_or_else(|(errors, _)| panic!("{name} builder defaults: {errors:?}"));
+        // As COSMIC does: a key missing from the defaults keeps its built-in
+        // value (Fedora ships only some of the builder's keys), anything else
+        // is an error.
+        let builder = ThemeBuilder::get_entry(&builder).unwrap_or_else(|(errors, builder)| {
+            let errors: Vec<_> = errors.into_iter().filter(cosmic_config::Error::is_err).collect();
+            assert!(errors.is_empty(), "{name} builder defaults: {errors:?}");
+            builder
+        });
         let theme = theme.unwrap_or_else(|err| panic!("{name} theme config: {err}"));
         builder
             .build()

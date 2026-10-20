@@ -22,10 +22,10 @@ const required = [
   'cosmic/usr/share/backgrounds/agentux/agentux-dark.png',
   'cosmic/usr/share/cosmic/com.system76.CosmicAppList/v1/favorites',
   'cosmic/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom',
-  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark.Builder/v1/accent',
-  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light.Builder/v1/accent',
-  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark/v1/accent',
-  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light/v1/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark.Builder/v2/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light.Builder/v2/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Dark/v2/accent',
+  'cosmic/usr/share/cosmic/com.system76.CosmicTheme.Light/v2/accent',
   'tools/cosmic-theme/theme.sh',
 ];
 
