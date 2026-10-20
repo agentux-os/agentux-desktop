@@ -50,6 +50,13 @@ for (const [theme, palette] of [['Dark', darkPath], ['Light', lightPath]]) {
   assert.ok(red, `the ${theme} accent must be Some((red, green, blue))`);
   const first = readFileSync(palette, 'utf8').match(/red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+)/);
   assert.deepEqual([red, green, blue].map(Number), first.slice(1, 4).map(Number), `the ${theme} accent must be the first colour of its palette`);
+  // COSMIC's desktop reads the computed theme (tools/cosmic-theme/theme.sh
+  // generates it from the builder), so it must carry the same accent.
+  const computed = readFileSync(path.join(root, `usr/share/cosmic/com.system76.CosmicTheme.${theme}/v1/accent`), 'utf8');
+  const base = computed.match(/base:\s*\(\s*red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+)/);
+  assert.ok(base, `the computed ${theme} theme must have an accent base colour`);
+  base.slice(1, 4).forEach((value, i) => assert.ok(Math.abs(Number(value) - Number([red, green, blue][i])) < 1e-5,
+    `the computed ${theme} theme's accent must be the builder's (run tools/cosmic-theme/theme.sh --write)`));
 }
 
 function checkNoPlasma(directory) {
