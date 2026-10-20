@@ -8,14 +8,11 @@
 # appearance. This builds the themes with libcosmic's own code (this
 # directory, at the revision Fedora's cosmic-settings uses) twice: from Fedora
 # 44's cosmic-settings defaults, and from them with this overlay on top, as in
-# the image. The keys the overlay changes are the ones it ships:
-#
-# - each of them must come out of Fedora's own builder as Fedora ships it, so
-#   the rest of the key stays Fedora's (Fedora's palette and status colours
-#   are older than its builder's, so not every key does: those must not
-#   change);
-# - the overlay ships each of them as built with the overlay, and no other
-#   theme key (--write updates usr/ to that).
+# the image. The overlay ships the keys whose values differ between the two
+# builds, and no other theme key: each as Fedora ships it, with the values
+# that differ taken from the AgentUX build (merge.mjs; Fedora's shipped theme
+# is older than its builder in places, which this leaves as Fedora's).
+# --write updates usr/ to that.
 #
 # Values are compared up to float rounding (same.mjs).
 #
@@ -62,19 +59,14 @@ for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
             fi
             continue
         fi
-        if ! same "$base" "$fedora"; then
-            echo "::error::the overlay changes $theme/$key, but Fedora's builder does not give Fedora's own $key"
-            echo "AgentUX against Fedora builder:"; diff "$base" "$built" || true
-            diff "$fedora" "$base" || true
-            ok=0
-            continue
-        fi
-        [[ -f "$shipped" ]] && same "$built" "$shipped" && { echo "ok: $shipped"; continue; }
+        expected="$work/expected-$theme-$key"
+        node "$here/merge.mjs" "$fedora" "$base" "$built" >"$expected" || { ok=0; continue; }
+        [[ -f "$shipped" ]] && same "$expected" "$shipped" && { echo "ok: $shipped"; continue; }
         if [[ "$write" == 1 ]]; then
-            install -D -m 0644 "$built" "$shipped"; echo "wrote $shipped"
+            install -D -m 0644 "$expected" "$shipped"; echo "wrote $shipped"
         else
             echo "::error::$shipped is not what the AgentUX builders give (run tools/cosmic-theme/theme.sh --write)"
-            [[ -f "$shipped" ]] && { diff "$shipped" "$built" || true; }
+            [[ -f "$shipped" ]] && { diff "$shipped" "$expected" || true; }
             ok=0
         fi
     done
