@@ -53,9 +53,9 @@ for (const [theme, palette] of [['Dark', darkPath], ['Light', lightPath]]) {
   // COSMIC's desktop reads the computed theme (tools/cosmic-theme/theme.sh
   // generates it from the builder), so it must carry the same accent.
   const computed = readFileSync(path.join(root, `usr/share/cosmic/com.system76.CosmicTheme.${theme}/v2/accent`), 'utf8');
-  const base = computed.match(/base:\s*\(\s*red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+)/);
+  const base = computed.match(/base:\s*"#([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})[0-9A-Fa-f]{2}"/);
   assert.ok(base, `the computed ${theme} theme must have an accent base colour`);
-  base.slice(1, 4).forEach((value, i) => assert.ok(Math.abs(Number(value) - Number([red, green, blue][i])) < 1e-5,
+  base.slice(1, 4).forEach((hex, i) => assert.equal(parseInt(hex, 16), Math.round(Number([red, green, blue][i]) * 255),
     `the computed ${theme} theme's accent must be the builder's (run tools/cosmic-theme/theme.sh --write)`));
 }
 
