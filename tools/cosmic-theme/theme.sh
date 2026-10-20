@@ -52,7 +52,8 @@ done
 
 ok=1
 for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
-    out=$(cd "$work/agentux-out/cosmic/$theme" && echo v*)
+    # The schema version this COSMIC reads (the generator may leave older ones).
+    out=$(ls "$work/agentux-out/cosmic/$theme" | sort -V | tail -n 1)
     for built in "$work/agentux-out/cosmic/$theme/$out"/*; do
         key=$(basename "$built")
         base="$work/fedora-out/cosmic/$theme/$out/$key"
