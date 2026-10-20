@@ -8,5 +8,5 @@ const tokens = (file) => readFileSync(file, 'utf8').match(/-?\d+(?:\.\d+)?(?:[eE
 const [a, b] = process.argv.slice(2).map(tokens);
 const number = /^-?\d/;
 const same = a.length === b.length && a.every((token, i) =>
-  number.test(token) && number.test(b[i]) ? Math.abs(Number(token) - Number(b[i])) <= 1e-5 : token === b[i]);
+  token === b[i] || (number.test(token) && number.test(b[i]) && Math.abs(Number(token) - Number(b[i])) <= 1e-5));
 process.exit(same ? 0 : 1);
