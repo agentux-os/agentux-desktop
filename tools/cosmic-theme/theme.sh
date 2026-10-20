@@ -64,6 +64,7 @@ for theme in com.system76.CosmicTheme.Dark com.system76.CosmicTheme.Light; do
         fi
         if ! same "$base" "$fedora"; then
             echo "::error::the overlay changes $theme/$key, but Fedora's builder does not give Fedora's own $key"
+            echo "AgentUX against Fedora builder:"; diff "$base" "$built" || true
             diff "$fedora" "$base" || true
             ok=0
             continue
