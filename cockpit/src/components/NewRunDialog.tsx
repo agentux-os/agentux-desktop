@@ -221,7 +221,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
               </div>
               <small className="muted">
                 GitHub's <code>owner/repo</code>, or the https or SSH URL of any Git host (GitLab, Bitbucket, Codeberg,
-                your own). It goes to <code>~/src</code>. Private repositories need GitHub's sign-in or an SSH key from
+                your own). It goes to <code>~/src</code>, or the folder set in Settings. Private repositories need GitHub's sign-in or an SSH key from
                 Welcome &amp; setup.
               </small>
             </label>

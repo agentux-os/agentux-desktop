@@ -76,6 +76,39 @@
       "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#3-cockpit-tour"
     }
   },
+  "nav.settings": {
+    "title": "Settings",
+    "what": "Everything you can set for AgentUX: agent preferences, API keys, where repositories are cloned, theme and the penguin, Git and SSH, and what the cockpit runs against.",
+    "do": [
+      "Open it with ,"
+    ]
+  },
+  "settings.agents": {
+    "title": "Agent preferences",
+    "what": "Which agents runs prefer, an agent and model per role, what happens at a usage limit, when a stopped agent is given up on, and desktop notifications.",
+    "how": "Saved by agentuxd in ~/.config/agentux/agents.yaml; a project's agentux.yaml comes first. Applies to the next run."
+  },
+  "settings.keys": {
+    "title": "API keys",
+    "what": "Keys for agents you use with an API key instead of a subscription sign-in: Anthropic, OpenAI, Google Gemini, OpenRouter.",
+    "how": "Stored in the desktop's secret service under agentux-key=<VARIABLE>, never in a file or shown again. agentuxd looks each up when it starts an agent and gives it to the agents that read it only."
+  },
+  "settings.projects": {
+    "title": "Projects",
+    "what": "Where New run clones repositories (~/src by default)."
+  },
+  "settings.appearance": {
+    "title": "Appearance & help",
+    "what": "The theme, the penguin helper, and whether the penguin also asks one of your agents."
+  },
+  "settings.git": {
+    "title": "Git & SSH",
+    "what": "Your Git identity, SSH key and GitHub sign-in, set up in Welcome & setup."
+  },
+  "settings.about": {
+    "title": "About",
+    "what": "The cockpit's version and the agentuxd it is connected to."
+  },
   "nav.agents": {
     "title": "Agents",
     "what": "Every agent CLI in one place: installed, signed in, version, what it cost, its plan's usage and any usage limit, with your agent preferences.",

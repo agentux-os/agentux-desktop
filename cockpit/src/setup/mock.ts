@@ -189,11 +189,31 @@ export class MockSetupClient implements SetupClient {
     if (!/jsdom/i.test(navigator.userAgent)) window.open(url, "_blank", "noopener");
   }
 
-  async clone(source: string): Promise<string> {
-    this.calls.push(`clone ${source}`);
+  async clone(source: string, into?: string): Promise<string> {
+    this.calls.push(into ? `clone ${source} --into ${into}` : `clone ${source}`);
     const name = source.replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop();
     if (!name) throw new Error(`clone: not a repository URL or OWNER/REPO: ${source}`);
-    return `/home/you/src/${name}`;
+    const parent = (into ?? "~/src").replace(/^~/, "/home/you").replace(/\/+$/, "");
+    return `${parent}/${name}`;
+  }
+
+  private stored = new Set<string>();
+
+  async keys(): Promise<Record<string, boolean>> {
+    return Object.fromEntries(
+      ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"].map((k) => [k, this.stored.has(k)]),
+    );
+  }
+
+  async setKey(variable: string, value: string): Promise<void> {
+    if (!value.trim()) throw new Error("key: the key is empty");
+    this.calls.push(`key set ${variable}`);
+    this.stored.add(variable);
+  }
+
+  async removeKey(variable: string): Promise<void> {
+    this.calls.push(`key remove ${variable}`);
+    this.stored.delete(variable);
   }
 
   async getGit(): Promise<GitConfig> {

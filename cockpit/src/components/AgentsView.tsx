@@ -6,7 +6,7 @@ import type { AgentId, SetupClient } from "../setup/client";
 import { formatUsd } from "../lib/format";
 import { help } from "../helper/content";
 import { Icon } from "./Icon";
-import { limitText, RUN_ROLES } from "./NewRunDialog";
+import { limitText } from "./NewRunDialog";
 
 /** The wizard's id of each harness (agentux-setup's sign-in and update). */
 const SETUP_ID: Record<string, AgentId> = {
@@ -31,23 +31,23 @@ export function orderedIds(prefs: AgentPrefs | null, ids: string[]): string[] {
 }
 
 interface Props {
-  client: Pick<DaemonClient, "harnesses" | "clearLimit" | "testHarness" | "getPrefs" | "setPrefs">;
+  client: Pick<DaemonClient, "harnesses" | "clearLimit" | "testHarness" | "getPrefs">;
   /** The wizard's backend, for sign-in and update terminals; null where there is none. */
   setup: () => Promise<SetupClient | null>;
+  /** Opens Settings, where the agent preferences are. */
+  onSettings?: () => void;
 }
 
 /**
  * Every agent CLI in one place: installed, signed in, version, spending,
- * plan usage and limits, with sign-in, test and update; and the user's
- * agent preferences (~/.config/agentux/agents.yaml).
+ * plan usage and limits, with sign-in, test and update. The agent
+ * preferences are in Settings.
  */
-export function AgentsView({ client, setup }: Props) {
+export function AgentsView({ client, setup, onSettings }: Props) {
   const [agents, setAgents] = useState<HarnessInfo[] | null>(null);
   const [prefs, setPrefs] = useState<AgentPrefs | null>(null);
-  const [draft, setDraft] = useState<AgentPrefs | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, HarnessTestResult | "running">>({});
-  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -55,7 +55,6 @@ export function AgentsView({ client, setup }: Props) {
       const [list, p] = await Promise.all([client.harnesses(), client.getPrefs().catch(() => null)]);
       setAgents(list);
       setPrefs(p);
-      setDraft(p && structuredClone(p));
     } catch (err) {
       setError(errorText(err));
     }
@@ -94,24 +93,6 @@ export function AgentsView({ client, setup }: Props) {
       await (what === "signIn" ? s.signIn(agent) : s.updateAgent(agent));
     });
 
-  const save = () =>
-    act(async () => {
-      if (!draft) return;
-      const clean: AgentPrefs = {
-        ...draft,
-        roles: Object.fromEntries(
-          Object.entries(draft.roles)
-            .map(([role, p]) => [role, { harness: p.harness || undefined, model: p.model?.trim() || undefined }] as const)
-            .filter(([, p]) => p.harness || p.model),
-        ),
-      };
-      const next = await client.setPrefs(clean);
-      setPrefs(next);
-      setDraft(structuredClone(next));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    });
-
   if (!agents) {
     return (
       <div className="agents-view">
@@ -126,23 +107,19 @@ export function AgentsView({ client, setup }: Props) {
     );
   }
 
-  const ids = agents.map((a) => a.id);
-  const order = orderedIds(draft, ids);
-  const moveUp = (i: number) => {
-    if (!draft || i === 0) return;
-    const next = [...order];
-    [next[i - 1], next[i]] = [next[i], next[i - 1]];
-    setDraft({ ...draft, order: next });
-  };
-  const dirty = JSON.stringify(draft) !== JSON.stringify(prefs);
-
+  const order = orderedIds(prefs, agents.map((a) => a.id));
   return (
     <div className="agents-view">
       <div className="agents-head">
         <p className="muted">
-          The agent CLIs runs use. Sign-in, updates and keys stay with each vendor's own CLI; AgentUX only reads what they
-          report.
+          The agent CLIs runs use, in your order. Sign-in, updates and keys stay with each vendor's own CLI; AgentUX only
+          reads what they report.
         </p>
+        {onSettings && (
+          <button className="btn btn-quiet" onClick={onSettings}>
+            Preferences
+          </button>
+        )}
         <button className="btn btn-quiet" onClick={() => void load()}>
           Refresh
         </button>
@@ -152,7 +129,6 @@ export function AgentsView({ client, setup }: Props) {
           {error}
         </div>
       )}
-
       <div className="agent-cards">
         {order
           .map((id) => agents.find((a) => a.id === id))
@@ -165,156 +141,15 @@ export function AgentsView({ client, setup }: Props) {
               onTest={() => void test(a.id)}
               onSignIn={() => void terminal(a.id, "signIn")}
               onUpdate={() => void terminal(a.id, "updateAgent")}
-              onLift={() => void act(async () => {
-                await client.clearLimit(a.id);
-                await load();
-              })}
+              onLift={() =>
+                void act(async () => {
+                  await client.clearLimit(a.id);
+                  await load();
+                })
+              }
             />
           ))}
       </div>
-
-      {draft ? (
-        <section className="wz-card agent-prefs" aria-labelledby="prefs-title" {...help("agents.prefs")}>
-          <h2 id="prefs-title">Preferences</h2>
-          <p className="muted">
-            For every project; a project's <code>agentux.yaml</code> comes first. Saved in{" "}
-            <code>~/.config/agentux/agents.yaml</code>.
-          </p>
-
-          <div className="prefs-grid">
-            <div>
-              <h3>Order</h3>
-              <p className="muted">Automatic picks and fallbacks try agents in this order.</p>
-              <ol className="prefs-order">
-                {order.map((id, i) => (
-                  <li key={id}>
-                    <span>{agentName(id)}</span>
-                    <button className="icon-btn" aria-label={`Move ${agentName(id)} up`} disabled={i === 0} onClick={() => moveUp(i)}>
-                      ↑
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div>
-              <h3>Roles</h3>
-              <p className="muted">Without an agentux.yaml. Empty: automatic.</p>
-              {RUN_ROLES.map((role) => {
-                const pref = draft.roles[role.id] ?? {};
-                const setRole = (p: { harness?: string; model?: string }) =>
-                  setDraft({ ...draft, roles: { ...draft.roles, [role.id]: { ...pref, ...p } } });
-                return (
-                  <div className="prefs-role" key={role.id}>
-                    <span>{role.label}</span>
-                    <select
-                      aria-label={`Agent that ${role.label.toLowerCase()}`}
-                      value={pref.harness ?? ""}
-                      onChange={(e) => setRole({ harness: e.target.value || undefined })}
-                    >
-                      <option value="">Automatic</option>
-                      {order.map((id) => (
-                        <option key={id} value={id}>
-                          {agentName(id)}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      aria-label={`Model that ${role.label.toLowerCase()}`}
-                      placeholder="default model"
-                      value={pref.model ?? ""}
-                      onChange={(e) => setRole({ model: e.target.value })}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
-            <div>
-              <h3>At a usage limit</h3>
-              <label className="prefs-check">
-                <input
-                  type="radio"
-                  name="fallback"
-                  checked={draft.fallback === null}
-                  onChange={() => setDraft({ ...draft, fallback: null })}
-                />
-                Any agent I can use, in my order
-              </label>
-              <label className="prefs-check">
-                <input
-                  type="radio"
-                  name="fallback"
-                  checked={draft.fallback !== null}
-                  onChange={() => setDraft({ ...draft, fallback: draft.fallback ?? [] })}
-                />
-                Only these (none: wait for the limit)
-              </label>
-              {draft.fallback !== null &&
-                order.map((id) => (
-                  <label className="prefs-check is-sub" key={id}>
-                    <input
-                      type="checkbox"
-                      checked={draft.fallback?.includes(id) ?? false}
-                      onChange={(e) => {
-                        const set = new Set(draft.fallback ?? []);
-                        if (e.target.checked) set.add(id);
-                        else set.delete(id);
-                        setDraft({ ...draft, fallback: order.filter((x) => set.has(x)) });
-                      }}
-                    />
-                    {agentName(id)}
-                  </label>
-                ))}
-            </div>
-
-            <div>
-              <h3>Stopped agents</h3>
-              <label className="prefs-num">
-                Give up after
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="10"
-                  value={draft.idleMinutes ?? ""}
-                  onChange={(e) => setDraft({ ...draft, idleMinutes: e.target.value ? Number(e.target.value) : null })}
-                />
-                minutes without activity
-              </label>
-              <label className="prefs-num">
-                or
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="60"
-                  value={draft.toolMinutes ?? ""}
-                  onChange={(e) => setDraft({ ...draft, toolMinutes: e.target.value ? Number(e.target.value) : null })}
-                />
-                while a command runs
-              </label>
-              <label className="prefs-check">
-                <input
-                  type="checkbox"
-                  checked={draft.notifications}
-                  onChange={(e) => setDraft({ ...draft, notifications: e.target.checked })}
-                />
-                Desktop notifications for limits and agents taking over
-              </label>
-            </div>
-          </div>
-          <div className="form-actions">
-            {saved && <span className="ok">Saved</span>}
-            <button className="btn btn-quiet" disabled={!dirty} onClick={() => setDraft(prefs && structuredClone(prefs))}>
-              Undo
-            </button>
-            <button className="btn btn-primary" disabled={!dirty} onClick={() => void save()}>
-              Save preferences
-            </button>
-          </div>
-        </section>
-      ) : (
-        <p className="muted">Preferences need agentux-core 0.4.8 or later.</p>
-      )}
     </div>
   );
 }
