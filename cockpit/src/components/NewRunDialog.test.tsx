@@ -102,6 +102,7 @@ describe("NewRunDialog usage limits", () => {
     expect(limitText(limit({}), at)).toMatch(/^weekly limit until (15:30|03:30 PM)$/);
     expect(limitText(limit({ untilKnown: false, kind: "session" }), at)).toMatch(/^usage limit, trying again at (15:30|03:30 PM)$/);
     expect(limitText(limit({ kind: "credits", until: null }), at)).toBe("out of credits until you lift it");
+    expect(limitText(limit({ kind: "stalled", untilKnown: false }), at)).toMatch(/^stopped responding, trying again at (15:30|03:30 PM)$/);
     expect(limitText(limit({ model: "opus" }), at)).toMatch(/^weekly limit \(opus\) until/);
     const h: HarnessInfo = { ...HARNESSES[0], signedIn: true, limits: [limit({ kind: "credits", until: null })] };
     expect(harnessOption(h)).toEqual({ label: "Claude Code (out of credits until you lift it)", disabled: false });

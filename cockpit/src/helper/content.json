@@ -318,7 +318,7 @@
   },
   "request.limit": {
     "title": "Usage limit",
-    "what": "The agent of the next step ran out of its usage (a 5-hour or weekly limit, a quota, credits) and no other agent can take its role.",
+    "what": "The agent of the next step ran out of its usage (a 5-hour or weekly limit, a quota, credits), or stopped responding, and no other agent can take its role.",
     "how": "agentuxd keeps that agent out of use until the time it said its limit resets, and the run goes on by itself then. Retry now when you lifted the limit yourself (added credits, reset it on the vendor's site); Stop run fails it. A role's fallback in agentux.yaml, or another signed-in agent, takes over without asking.",
     "do": [
       "Wait: the run goes on at the reset time",
