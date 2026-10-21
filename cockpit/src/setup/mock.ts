@@ -176,6 +176,10 @@ export class MockSetupClient implements SetupClient {
     this.calls.push(`signin ${target}`);
   }
 
+  async updateAgent(id: AgentId): Promise<void> {
+    this.calls.push(`update-agent ${id}`);
+  }
+
   async launch(itemId: string): Promise<void> {
     this.calls.push(`launch ${itemId}`);
   }

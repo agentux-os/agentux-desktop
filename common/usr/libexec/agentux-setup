@@ -17,6 +17,8 @@
 #   agentux-setup retry-first-login         start agentux-first-login.service again
 #   agentux-setup signin VENDOR             open a terminal with VENDOR's sign-in
 #                                           (claude, codex, opencode, antigravity, github)
+#   agentux-setup update-agent AGENT        open a terminal that updates an agent CLI
+#                                           (claude, codex, opencode, antigravity)
 #   agentux-setup git [--show | NAME EMAIL BRANCH]
 #   agentux-setup ssh-key [--show | COMMENT]
 #                                           create ~/.ssh/id_ed25519 if missing (the
@@ -554,6 +556,21 @@ cmd_signin() {
     open_terminal "$cmd"
 }
 
+# The same way agentux-os's first-login installed each CLI.
+cmd_update_agent() {
+    local cmd
+    case "${1:-}" in
+        claude) cmd="claude update" ;;
+        codex) cmd='npm install --global --prefix "$HOME/.local" @openai/codex@latest' ;;
+        opencode) cmd="opencode upgrade" ;;
+        antigravity) cmd="curl -fsSL https://antigravity.google/cli/install.sh | bash" ;;
+        *) die "update-agent: unknown agent ${1:-}" ;;
+    esac
+    echo "$cmd"
+    [[ "${2:-}" == --dry-run ]] && return 0
+    open_terminal "$cmd"
+}
+
 cmd_launch() {
     need_catalog
     local item method
@@ -701,6 +718,7 @@ main() {
         autostart) cmd_should_run 2>/dev/null || exit 0; cmd_wait_desktop_setup; exec agentux-cockpit --welcome ;;
         wait-desktop-setup) cmd_wait_desktop_setup ;;
         clone) cmd_clone "$@" ;;
+        update-agent) cmd_update_agent "$@" ;;
         finish) mkdir -p "$state_root" && touch "$welcome_marker" ;;
         reset) rm -f "$welcome_marker" ;;
         vscode-settings) need_catalog; cmd_vscode_settings "$@" ;;

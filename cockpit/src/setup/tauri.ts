@@ -1,4 +1,4 @@
-import type { GitConfig, SetupClient, SetupStatus, SignInTarget } from "./client";
+import type { AgentId, GitConfig, SetupClient, SetupStatus, SignInTarget } from "./client";
 
 interface SetupOutput {
   code: number;
@@ -46,6 +46,10 @@ export class TauriSetupClient implements SetupClient {
 
   async signIn(target: SignInTarget): Promise<void> {
     await this.exec(["signin", target]);
+  }
+
+  async updateAgent(id: AgentId): Promise<void> {
+    await this.exec(["update-agent", id]);
   }
 
   async launch(itemId: string): Promise<void> {

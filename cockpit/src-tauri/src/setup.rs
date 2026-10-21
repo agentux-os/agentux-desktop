@@ -29,6 +29,7 @@ const ALLOWED: &[&str] = &[
     "profile",
     "retry-first-login",
     "signin",
+    "update-agent",
     "launch",
     "open-url",
     "clone",

@@ -290,6 +290,7 @@ pub async fn daemon_start_run(
     title: Option<String>,
     issue: Option<u64>,
     roles: Option<std::collections::BTreeMap<String, String>>,
+    models: Option<std::collections::BTreeMap<String, String>>,
 ) -> Result<Value, CommandError> {
     let socket = state.socket()?;
     timed(CALL_TIMEOUT, async {
@@ -314,6 +315,9 @@ pub async fn daemon_start_run(
         }
         if let Some(roles) = roles.filter(|r| !r.is_empty()) {
             params["roles"] = json!(roles);
+        }
+        if let Some(models) = models.filter(|m| !m.is_empty()) {
+            params["models"] = json!(models);
         }
         c.call(method::RUNS_START, params).await
     })
@@ -414,6 +418,46 @@ pub async fn daemon_harnesses(state: State<'_, DaemonState>) -> Result<Value, Co
 #[tauri::command]
 pub async fn daemon_clear_limit(state: State<'_, DaemonState>, harness: String) -> Result<Value, CommandError> {
     call(&state, method::LIMITS_CLEAR, json!({ "harness": harness })).await
+}
+
+/// One short test prompt to `harness` (`harnesses.test`), on a connection of
+/// its own: an agent may take a while to start and answer.
+#[tauri::command]
+pub async fn daemon_test_harness(
+    state: State<'_, DaemonState>,
+    harness: String,
+    model: Option<String>,
+) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(HELPER_TIMEOUT, async {
+        let mut c = Client::connect(socket).await?;
+        let mut params = json!({ "harness": harness });
+        if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+            params["model"] = model.into();
+        }
+        c.call(method::HARNESSES_TEST, params).await
+    })
+    .await
+}
+
+/// The user's agent preferences (`preferences.get`), or `null` from a daemon
+/// that has none.
+#[tauri::command]
+pub async fn daemon_get_prefs(state: State<'_, DaemonState>) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(CALL_TIMEOUT, async {
+        let mut c = Client::connect(socket).await?;
+        match c.call(method::PREFERENCES_GET, json!({})).await {
+            Err(ClientError::Rpc { code, .. }) if code == client::METHOD_NOT_FOUND => Ok(Value::Null),
+            other => other,
+        }
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn daemon_set_prefs(state: State<'_, DaemonState>, prefs: Value) -> Result<Value, CommandError> {
+    call(&state, method::PREFERENCES_SET, prefs).await
 }
 
 /// Sends the human's prompt into a session (`sessions.prompt`), on daemons

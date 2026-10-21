@@ -12,6 +12,7 @@ import { Icon } from "./components/Icon";
 import { Inbox } from "./components/Inbox";
 import { LiveRail } from "./components/LiveRail";
 import { NewRunDialog } from "./components/NewRunDialog";
+import { AgentsView } from "./components/AgentsView";
 import { RunBoard } from "./components/RunBoard";
 import { SessionPanel } from "./components/SessionPanel";
 import { Sidebar, type View } from "./components/Sidebar";
@@ -22,7 +23,7 @@ import { COCKPIT_TOUR } from "./helper/Tour";
 
 type Theme = "dark" | "light";
 
-const VIEW_TITLE: Record<View, string> = { board: "Run board", inbox: "Approvals", bus: "Agent bus" };
+const VIEW_TITLE: Record<View, string> = { board: "Run board", inbox: "Approvals", bus: "Agent bus", agents: "Agents" };
 
 function loadTheme(): Theme {
   try {
@@ -143,6 +144,10 @@ export default function App() {
   };
 
   const loadHarnesses = useCallback(() => client.harnesses(), [client]);
+  const setupClient = useCallback(async () => {
+    const { createSetupClient } = await import("./setup/client");
+    return createSetupClient();
+  }, []);
   const clearLimit = useCallback((harness: string) => client.clearLimit(harness), [client]);
   const cloneRepo = useCallback(async (source: string) => {
     const { createSetupClient } = await import("./setup/client");
@@ -211,6 +216,9 @@ export default function App() {
         break;
       case "m":
         setView("bus");
+        break;
+      case "g":
+        setView("agents");
         break;
       case "j":
       case "arrowdown":
@@ -419,6 +427,7 @@ export default function App() {
                 onOpenRun={openRun}
               />
             )}
+            {view === "agents" && <AgentsView client={client} setup={setupClient} />}
             {view === "bus" && (
               <BusFeed state={state} mode={client.mode} projectId={projectId} onOpenRun={openRun} onPost={postBus} />
             )}
@@ -536,7 +545,7 @@ function requestLine(r: PermissionRequest, state: { runs: Record<string, Run>; s
 }
 
 const SHORTCUTS: [string, string][] = [
-  ["B / I / M", "Run board / approvals inbox / agent bus"],
+  ["B / I / M / G", "Run board / approvals inbox / agent bus / agents"],
   ["A", "Approve the focused request (inbox selection or open run)"],
   ["D", "Deny or reject it (decline a question)"],
   ["1 … 9", "Answer the focused question with that option"],

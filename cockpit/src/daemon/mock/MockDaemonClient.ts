@@ -2,7 +2,9 @@ import type {
   DaemonClient,
   HelperQuestion,
   HelperReply,
+  AgentPrefs,
   HarnessInfo,
+  HarnessTestResult,
   StartRunInput,
   TerminalHandle,
   TerminalSink,
@@ -189,8 +191,27 @@ export class MockDaemonClient implements DaemonClient {
 
   async harnesses(): Promise<HarnessInfo[] | null> {
     return [
-      { id: "claude-code", command: "claude", installed: true, signedIn: true, experimental: false },
-      { id: "codex", command: "codex", installed: true, signedIn: false, experimental: false },
+      {
+        id: "claude-code",
+        command: "claude",
+        installed: true,
+        signedIn: true,
+        experimental: false,
+        version: "2.1.30 (Claude Code)",
+        usage: { todayUsd: 1.84, weekUsd: 12.4, weekSessions: 9 },
+      },
+      {
+        id: "codex",
+        command: "codex",
+        installed: true,
+        signedIn: false,
+        experimental: false,
+        version: "codex-cli 0.153.0",
+        quota: [
+          { label: "5h", usedPercent: 37, resetsAt: Date.now() + 2 * 3_600_000, seenAt: Date.now() },
+          { label: "weekly", usedPercent: 81, resetsAt: Date.now() + 3 * 86_400_000, seenAt: Date.now() },
+        ],
+      },
       { id: "opencode", command: "opencode", installed: true, signedIn: true, experimental: false },
       { id: "antigravity", command: "agy-acp-server", installed: true, signedIn: null, experimental: true },
     ];
@@ -198,6 +219,21 @@ export class MockDaemonClient implements DaemonClient {
 
   async clearLimit(_harness: string): Promise<void> {
     throw new Error("Usage limits need agentuxd; the cockpit is showing mock data");
+  }
+
+  private prefs: AgentPrefs = { order: [], roles: {}, fallback: null, idleMinutes: null, toolMinutes: null, notifications: true };
+
+  async testHarness(harness: string): Promise<HarnessTestResult> {
+    return { harness, ok: true, detail: "OK (mock)", seconds: 1.2, limit: null };
+  }
+
+  async getPrefs(): Promise<AgentPrefs | null> {
+    return structuredClone(this.prefs);
+  }
+
+  async setPrefs(prefs: AgentPrefs): Promise<AgentPrefs> {
+    this.prefs = structuredClone(prefs);
+    return structuredClone(this.prefs);
   }
 
   async cancelRun(_runId: string): Promise<void> {

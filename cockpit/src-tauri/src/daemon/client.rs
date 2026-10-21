@@ -60,6 +60,12 @@ pub mod method {
     pub const HARNESSES_LIST: &str = "harnesses.list";
     /// The human lifted a harness's usage limit (agentux-core 0.4.7).
     pub const LIMITS_CLEAR: &str = "limits.clear";
+    /// A short test prompt to a harness (agentux-core 0.4.8).
+    pub const HARNESSES_TEST: &str = "harnesses.test";
+    /// The user's agent preferences (agentux-core 0.4.8); older daemons
+    /// answer -32601.
+    pub const PREFERENCES_GET: &str = "preferences.get";
+    pub const PREFERENCES_SET: &str = "preferences.set";
     /// Server-to-client notification: `{ terminalId, data }`, data base64.
     pub const TERMINAL_OUTPUT: &str = "terminal_output";
     /// Server-to-client notification, a terminal's last: `{ terminalId, code }`.

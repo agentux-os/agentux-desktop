@@ -5,7 +5,7 @@ import { help } from "../helper/content";
 import { useOptionalHelper } from "../helper/context";
 import { Mascot } from "../helper/Mascot";
 
-export type View = "board" | "inbox" | "bus";
+export type View = "board" | "inbox" | "bus" | "agents";
 
 interface Props {
   state: CockpitState;
@@ -25,6 +25,7 @@ export function Sidebar({ state, view, onView, projectId, onProject, theme, onTo
     { id: "board", label: "Run board", icon: "board", key: "B", help: help("nav.board") },
     { id: "inbox", label: "Approvals", icon: "inbox", key: "I", count: pending.length, help: help("nav.inbox") },
     { id: "bus", label: "Agent bus", icon: "bus", key: "M", help: help("nav.bus") },
+    { id: "agents", label: "Agents", icon: "terminal", key: "G", help: help("nav.agents") },
   ];
 
   const projectStats = (id: string | null) => {

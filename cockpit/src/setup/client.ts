@@ -75,6 +75,8 @@ export interface SetupClient {
   retryFirstLogin(): Promise<void>;
   /** Opens a terminal with the vendor's sign-in command. */
   signIn(target: SignInTarget): Promise<void>;
+  /** Opens a terminal that updates an agent CLI to its latest release. */
+  updateAgent(id: AgentId): Promise<void>;
   launch(itemId: string): Promise<void>;
   openUrl(url: string): Promise<void>;
   /** Clones a repository (an https or SSH URL, or GitHub's OWNER/REPO) into ~/src; resolves to its directory. */
