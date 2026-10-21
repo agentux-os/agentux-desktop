@@ -2,7 +2,9 @@ import type {
   DaemonClient,
   HelperQuestion,
   HelperReply,
+  AgentPrefs,
   HarnessInfo,
+  HarnessTestResult,
   StartRunInput,
   TerminalHandle,
   TerminalSink,
@@ -237,6 +239,7 @@ export class TauriDaemonClient implements DaemonClient {
       prompt: input.prompt,
       title: input.title,
       roles: input.roles && Object.keys(input.roles).length ? input.roles : undefined,
+      models: input.models && Object.keys(input.models).length ? input.models : undefined,
     });
     // The run event follows on the stream; apply the result now so the UI can
     // open the run immediately.
@@ -250,6 +253,18 @@ export class TauriDaemonClient implements DaemonClient {
 
   async clearLimit(harness: string): Promise<void> {
     await this.transport.invoke("daemon_clear_limit", { harness });
+  }
+
+  async testHarness(harness: string, model?: string): Promise<HarnessTestResult> {
+    return this.transport.invoke<HarnessTestResult>("daemon_test_harness", { harness, model: model || undefined });
+  }
+
+  async getPrefs(): Promise<AgentPrefs | null> {
+    return this.transport.invoke<AgentPrefs | null>("daemon_get_prefs");
+  }
+
+  async setPrefs(prefs: AgentPrefs): Promise<AgentPrefs> {
+    return this.transport.invoke<AgentPrefs>("daemon_set_prefs", { prefs });
   }
 
   async cancelRun(runId: string): Promise<void> {

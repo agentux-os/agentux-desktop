@@ -53,6 +53,13 @@ export function limitText(l: HarnessLimit, now = Date.now()): string {
   return l.untilKnown ? `${what}${scope} until ${when(l.until, now)}` : `${what}${scope}, trying again at ${when(l.until, now)}`;
 }
 
+/** Model names each CLI takes, as suggestions; any name the CLI knows works. */
+const MODEL_HINTS: Record<string, string[]> = {
+  "claude-code": ["opus", "sonnet", "haiku"],
+  codex: ["gpt-5-codex", "gpt-5"],
+  antigravity: ["gemini-2.5-pro", "gemini-2.5-flash"],
+};
+
 /** How a harness reads in the agent picker. */
 export function harnessOption(h: HarnessInfo): { label: string; disabled: boolean } {
   const name = harnessName(h.id);
@@ -84,6 +91,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
   const [cloned, setCloned] = useState<string | null>(null);
   const [harnesses, setHarnesses] = useState<HarnessInfo[] | null>(null);
   const [roles, setRoles] = useState<Record<string, string>>({});
+  const [models, setModels] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -135,11 +143,17 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
     setError(null);
     try {
       const chosen = Object.fromEntries(Object.entries(roles).filter(([, h]) => h));
+      const picked = Object.fromEntries(
+        Object.entries(models)
+          .map(([role, m]) => [role, m.trim()] as const)
+          .filter(([, m]) => m),
+      );
       await onSubmit({
         projectPath: path.trim(),
         prompt: prompt.trim(),
         title: title.trim() || undefined,
         roles: Object.keys(chosen).length ? chosen : undefined,
+        models: Object.keys(picked).length ? picked : undefined,
       });
     } catch (err) {
       setError(errorText(err));
@@ -273,11 +287,25 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
                         );
                       })}
                     </select>
+                    <input
+                      className="mono"
+                      aria-label={`Model that ${role.label.toLowerCase()}`}
+                      placeholder="default model"
+                      list={`models-${role.id}`}
+                      value={models[role.id] ?? ""}
+                      onChange={(e) => setModels((m) => ({ ...m, [role.id]: e.target.value }))}
+                    />
+                    <datalist id={`models-${role.id}`}>
+                      {(MODEL_HINTS[roles[role.id] ?? ""] ?? []).map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
                   </label>
                 ))}
               </div>
               <small className="muted">
-                Automatic: the project's <code>agentux.yaml</code>, or else the agents you are signed in to.
+                Automatic: the project's <code>agentux.yaml</code>, or else your preferences and the agents you are signed
+                in to. The model is optional.
               </small>
               {limited.length > 0 && (
                 <ul className="limit-list" aria-label="Agents at a usage limit">

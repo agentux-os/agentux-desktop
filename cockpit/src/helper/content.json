@@ -76,6 +76,26 @@
       "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md#3-cockpit-tour"
     }
   },
+  "nav.agents": {
+    "title": "Agents",
+    "what": "Every agent CLI in one place: installed, signed in, version, what it cost, its plan's usage and any usage limit, with your agent preferences.",
+    "how": "Test sends an agent a short prompt; Sign in and Update open a terminal with the vendor's own commands; Limit lifted puts an agent at a limit back in use.",
+    "do": [
+      "Open it with G",
+      "Test an agent after signing in",
+      "Set which agents runs prefer"
+    ]
+  },
+  "agents.card": {
+    "title": "An agent CLI",
+    "what": "What agentuxd knows of one agent: installed, signed in, its --version, what its sessions cost today and over 7 days, its plan windows (Codex) and its usage limits.",
+    "how": "Sign-in is read from where each CLI keeps it; when it cannot be told, Test asks the agent for a short answer."
+  },
+  "agents.prefs": {
+    "title": "Agent preferences",
+    "what": "Your choices for every project, in ~/.config/agentux/agents.yaml: the order agents are picked and fall back in, an agent and model per role, what happens at a usage limit, when a stopped agent is given up on, and desktop notifications.",
+    "how": "A project's agentux.yaml comes first. Changes apply to the next run, without restarting anything."
+  },
   "nav.bus": {
     "title": "Agent bus",
     "what": "What agents say to each other, and to you, over the agent bus: messages, review requests, handoffs and questions.",

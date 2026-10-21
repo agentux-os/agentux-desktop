@@ -56,6 +56,11 @@ export interface DaemonClient {
   harnesses(): Promise<HarnessInfo[] | null>;
   /** The human lifted a harness's usage limit (credits added, reset on the vendor's site). */
   clearLimit(harness: string): Promise<void>;
+  /** One short prompt to an agent, to see that it is set up and answers. */
+  testHarness(harness: string, model?: string): Promise<HarnessTestResult>;
+  /** The user's agent preferences; null from a daemon too old to have them. */
+  getPrefs(): Promise<AgentPrefs | null>;
+  setPrefs(prefs: AgentPrefs): Promise<AgentPrefs>;
   cancelRun(runId: string): Promise<void>;
 
   /**
@@ -122,6 +127,8 @@ export interface StartRunInput {
    * installed harness the user signed in to.
    */
   roles?: Record<string, string>;
+  /** Role name to model for this run (`planner: "opus"`). */
+  models?: Record<string, string>;
 }
 
 /** One entry of agentuxd's `harnesses.list`. */
@@ -136,6 +143,43 @@ export interface HarnessInfo {
   experimental: boolean;
   /** Its usage limits in force (agentux-core 0.4.7); absent from older daemons. */
   limits?: HarnessLimit[];
+  /** First line of its `--version` (agentux-core 0.4.8). */
+  version?: string | null;
+  /** What its sessions cost (agentux-core 0.4.8). */
+  usage?: { todayUsd: number; weekUsd: number; weekSessions: number };
+  /** Its plan's usage windows, where the CLI's own files say (Codex). */
+  quota?: QuotaWindow[];
+}
+
+export interface QuotaWindow {
+  /** `5h`, `weekly`, or the window in minutes. */
+  label: string;
+  usedPercent: number;
+  /** ms since the epoch. */
+  resetsAt: number | null;
+  seenAt: number;
+}
+
+export interface HarnessTestResult {
+  harness: string;
+  ok: boolean;
+  /** The answer, or why there was none. */
+  detail: string;
+  seconds: number;
+  limit: HarnessLimit | null;
+}
+
+/** `~/.config/agentux/agents.yaml`: the user's agent choices for every project. */
+export interface AgentPrefs {
+  /** Harness ids, most preferred first. */
+  order: string[];
+  /** Role to its harness and model, for projects without agentux.yaml. */
+  roles: Record<string, { harness?: string; model?: string }>;
+  /** Agents that take a role at a limit; null: any the user can use. */
+  fallback: string[] | null;
+  idleMinutes: number | null;
+  toolMinutes: number | null;
+  notifications: boolean;
 }
 
 /** A harness, or one of its models, out of use until `until` or until cleared. */

@@ -144,6 +144,8 @@ cd agentux-desktop/cockpit
 npm run tauri dev
 ```
 
+**Agents** (`G`) shows every agent CLI in one place: installed, signed in, its version, what its sessions cost today and over 7 days, Codex's plan windows, and usage limits with **Limit lifted**. **Test** sends an agent a short prompt; **Sign in** and **Update** open a terminal with the vendor's own commands (`agentux-setup update-agent`). Its **Preferences** edit `~/.config/agentux/agents.yaml` through agentuxd: the order agents are picked and fall back in, an agent and model per role, what happens at a usage limit, when a stopped agent is given up on, and desktop notifications.
+
 Then click **New run** (or press `N`), enter a directory inside any git repository and a prompt. **Clone a repository** clones one first, into `~/src` (`agentux-setup clone`): GitHub's `owner/repo` (through `gh` when you signed in to it), or the https or SSH URL of any Git host. **Agents** picks the agent that plans, implements and reviews; **Automatic** uses the project's `agentux.yaml`, or else the agents you are signed in to (agentux-core's `harnesses.list`; older daemons do not show the choice). Agents at a usage limit say so there, until when, with **Limit lifted** for when you added credits or reset the limit on the vendor's site; meanwhile runs give their role to another agent, or wait on a **Usage limit** request in the inbox (**Retry now**, or the run goes on by itself at the reset). The run moves across the board, and the plan approval shows up in the approvals inbox (`A` to approve, `D` to deny); the open run's panel has **Cancel run**. `aux ps`, `aux approve <id>` and friends act on the same daemon, and the cockpit follows along.
 
 <details>
