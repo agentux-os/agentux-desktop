@@ -409,6 +409,13 @@ pub async fn daemon_harnesses(state: State<'_, DaemonState>) -> Result<Value, Co
     .await
 }
 
+/// The human lifted `harness`'s usage limits (`limits.clear`); runs waiting
+/// for it go on. Returns the limits still in force.
+#[tauri::command]
+pub async fn daemon_clear_limit(state: State<'_, DaemonState>, harness: String) -> Result<Value, CommandError> {
+    call(&state, method::LIMITS_CLEAR, json!({ "harness": harness })).await
+}
+
 /// Sends the human's prompt into a session (`sessions.prompt`), on daemons
 /// that serve it (see `daemon_capabilities`).
 #[tauri::command]

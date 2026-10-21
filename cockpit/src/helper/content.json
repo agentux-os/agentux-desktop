@@ -316,6 +316,16 @@
     "what": "The run has cost more than budget.max_usd_per_run, checked before each agent step.",
     "how": "Extend budget raises the budget by another max_usd_per_run and the run goes on; Stop run fails it. Cost is what the harnesses report; one step can overshoot."
   },
+  "request.limit": {
+    "title": "Usage limit",
+    "what": "The agent of the next step ran out of its usage (a 5-hour or weekly limit, a quota, credits) and no other agent can take its role.",
+    "how": "agentuxd keeps that agent out of use until the time it said its limit resets, and the run goes on by itself then. Retry now when you lifted the limit yourself (added credits, reset it on the vendor's site); Stop run fails it. A role's fallback in agentux.yaml, or another signed-in agent, takes over without asking.",
+    "do": [
+      "Wait: the run goes on at the reset time",
+      "Retry now after adding credits",
+      "Stop run"
+    ]
+  },
   "request.question": {
     "title": "An agent's question",
     "what": "An agent asked you something through the bus (ask_human).",

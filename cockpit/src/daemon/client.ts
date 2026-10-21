@@ -54,6 +54,8 @@ export interface DaemonClient {
    * a daemon too old to say (which also ignores `StartRunInput.roles`).
    */
   harnesses(): Promise<HarnessInfo[] | null>;
+  /** The human lifted a harness's usage limit (credits added, reset on the vendor's site). */
+  clearLimit(harness: string): Promise<void>;
   cancelRun(runId: string): Promise<void>;
 
   /**
@@ -132,6 +134,21 @@ export interface HarnessInfo {
   /** null when the daemon cannot tell. */
   signedIn: boolean | null;
   experimental: boolean;
+  /** Its usage limits in force (agentux-core 0.4.7); absent from older daemons. */
+  limits?: HarnessLimit[];
+}
+
+/** A harness, or one of its models, out of use until `until` or until cleared. */
+export interface HarnessLimit {
+  harness: string;
+  model: string | null;
+  kind: "session" | "weekly" | "credits" | "rate";
+  /** ms since the epoch; null: only when the human clears it. */
+  until: number | null;
+  /** The harness said when; false: the daemon's guess, then it tries again. */
+  untilKnown: boolean;
+  message: string;
+  at: number;
 }
 
 export interface TerminalSize {

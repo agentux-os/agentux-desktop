@@ -248,6 +248,10 @@ export class TauriDaemonClient implements DaemonClient {
     return this.transport.invoke<HarnessInfo[] | null>("daemon_harnesses");
   }
 
+  async clearLimit(harness: string): Promise<void> {
+    await this.transport.invoke("daemon_clear_limit", { harness });
+  }
+
   async cancelRun(runId: string): Promise<void> {
     await this.transport.invoke("daemon_cancel", { runId });
   }

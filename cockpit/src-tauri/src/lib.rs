@@ -83,6 +83,7 @@ pub fn run() {
             daemon::daemon_bus_list,
             daemon::daemon_capabilities,
             daemon::daemon_harnesses,
+            daemon::daemon_clear_limit,
             daemon::daemon_send_prompt,
             daemon::daemon_bus_post,
             daemon::daemon_helper_ask,

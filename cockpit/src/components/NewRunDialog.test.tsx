@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HarnessInfo, StartRunInput } from "../daemon/client";
-import { harnessOption, NewRunDialog } from "./NewRunDialog";
+import type { HarnessInfo, HarnessLimit, StartRunInput } from "../daemon/client";
+import { harnessOption, limitText, NewRunDialog } from "./NewRunDialog";
 
 const HARNESSES: HarnessInfo[] = [
   { id: "claude-code", command: "claude", installed: true, signedIn: false, experimental: false },
@@ -80,5 +80,54 @@ describe("NewRunDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clone" }));
     await settle();
     expect(screen.getByRole("alert").textContent).toContain("Repository not found");
+  });
+});
+
+describe("NewRunDialog usage limits", () => {
+  afterEach(cleanup);
+
+  const at = new Date(2026, 9, 20, 10, 0).getTime();
+  const limit = (over: Partial<HarnessLimit>): HarnessLimit => ({
+    harness: "claude-code",
+    model: null,
+    kind: "weekly",
+    until: new Date(2026, 9, 20, 15, 30).getTime(),
+    untilKnown: true,
+    message: "Weekly limit reached",
+    at,
+    ...over,
+  });
+
+  it("says until when an agent is out of use", () => {
+    expect(limitText(limit({}), at)).toMatch(/^weekly limit until (15:30|03:30 PM)$/);
+    expect(limitText(limit({ untilKnown: false, kind: "session" }), at)).toMatch(/^usage limit, trying again at (15:30|03:30 PM)$/);
+    expect(limitText(limit({ kind: "credits", until: null }), at)).toBe("out of credits until you lift it");
+    expect(limitText(limit({ model: "opus" }), at)).toMatch(/^weekly limit \(opus\) until/);
+    const h: HarnessInfo = { ...HARNESSES[0], signedIn: true, limits: [limit({ kind: "credits", until: null })] };
+    expect(harnessOption(h)).toEqual({ label: "Claude Code (out of credits until you lift it)", disabled: false });
+  });
+
+  it("lifts a limit when the human says so", async () => {
+    let limits = [limit({ kind: "credits", until: null })];
+    const onClearLimit = vi.fn(async () => {
+      limits = [];
+    });
+    render(
+      <NewRunDialog
+        projects={[]}
+        initialPath="/src/a"
+        onClose={() => {}}
+        onSubmit={async () => {}}
+        loadHarnesses={async () => [{ ...HARNESSES[0], limits }]}
+        onClearLimit={onClearLimit}
+      />,
+    );
+    await settle();
+    expect(screen.getByLabelText("Agents at a usage limit").textContent).toContain("out of credits");
+    fireEvent.click(screen.getByRole("button", { name: "Limit lifted" }));
+    await settle();
+    await settle();
+    expect(onClearLimit).toHaveBeenCalledWith("claude-code");
+    expect(screen.queryByLabelText("Agents at a usage limit")).toBeNull();
   });
 });

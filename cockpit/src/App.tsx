@@ -143,6 +143,7 @@ export default function App() {
   };
 
   const loadHarnesses = useCallback(() => client.harnesses(), [client]);
+  const clearLimit = useCallback((harness: string) => client.clearLimit(harness), [client]);
   const cloneRepo = useCallback(async (source: string) => {
     const { createSetupClient } = await import("./setup/client");
     return (await createSetupClient()).clone(source);
@@ -460,6 +461,7 @@ export default function App() {
           onSubmit={startRun}
           loadHarnesses={loadHarnesses}
           onClone={cloneRepo}
+          onClearLimit={clearLimit}
         />
       )}
     </div>
@@ -512,6 +514,7 @@ const APPROVED: Record<PermissionRequest["kind"], string> = {
   permission: "Allowed",
   budget: "Budget extended",
   question: "Answered",
+  limit: "Retrying",
 };
 const DENIED: Record<PermissionRequest["kind"], string> = {
   plan: "Rejected",
@@ -519,6 +522,7 @@ const DENIED: Record<PermissionRequest["kind"], string> = {
   permission: "Denied",
   budget: "Stopped",
   question: "Declined",
+  limit: "Stopped",
 };
 
 /** "Permission · Codex on 3f9a0c12" (the asking session's harness and the run, when known). */
