@@ -698,15 +698,19 @@ cmd_node() {
             ;;
         pending) if [[ -r "$pending" ]]; then jq -c 'map(select(.decision == null))' "$pending"; else echo '[]'; fi ;;
         enroll)
-            # The token comes on stdin, never as an argument.
-            local url="${2:-}" org="${3:-}" node_id="${4:-}" token
+            # The token comes on stdin, never as an argument. An enrollment
+            # token (auxe1_...) carries the organization; ORG ("" when none)
+            # is only for a static token.
+            local url="${2:-}" org="${3:-}" node_id="${4:-}" token err
             [[ "$url" =~ ^https?://[A-Za-z0-9._~:/%-]+$ ]] || die "node: not a Command URL: $url"
-            [[ "$org" =~ ^[A-Za-z0-9._-]+$ ]] || die "node: not an organization id: $org"
+            [[ -z "$org" || "$org" =~ ^[A-Za-z0-9._-]+$ ]] || die "node: not an organization id: $org"
             [[ -z "$node_id" || "$node_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "node: not a node id: $node_id"
             command -v aux >/dev/null || die "node: aux is not installed"
             IFS= read -r token || true
             [[ -n "$token" ]] || die "node: the token is empty"
-            AGENTUX_NODE_TOKEN="$token" aux node enroll "$url" --organization "$org" ${node_id:+--node-id "$node_id"} >/dev/null                 || die "node: enrolling failed"
+            err="$(AGENTUX_NODE_TOKEN="$token" aux node enroll "$url" ${org:+--organization "$org"} \
+                ${node_id:+--node-id "$node_id"} 2>&1 >/dev/null)" \
+                || die "node: $(tail -n 2 <<<"$err" | sed 's/^error: //')"
             systemctl --user enable --now agentux-gateway.service >/dev/null 2>&1 || true
             cmd_node status
             ;;

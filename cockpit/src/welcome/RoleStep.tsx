@@ -40,9 +40,8 @@ function CommandServer({ complete }: { complete: boolean }) {
       </p>
       <ol className="wz-steps-list">
         <li>
-          Write the configuration to <code>/etc/agentux/command/config.env</code>: the database password, the server's
-          public address, and one token per node (<code>AGENTUX_COMMAND_NODE_TOKENS=node-a=…,node-b=…</code>). Start from{" "}
-          <code>command.env.example</code> in agentux-command.
+          Write the configuration to <code>/etc/agentux/command/config.env</code>: the database password and the server's
+          public address. Start from <code>command.env.example</code> in agentux-command.
         </li>
         <li>
           Turn it on:{" "}
@@ -52,8 +51,8 @@ function CommandServer({ complete }: { complete: boolean }) {
           Give it a DNS name with TLS that the nodes can reach (a reverse proxy, or your network's certificate).
         </li>
         <li>
-          On each node, connect it with its token:{" "}
-          <code>aux node enroll https://command.example.org --organization your-org</code>
+          Issue an enrollment token per node (<code>POST /v1/enrollment-tokens</code>, single use, expiring), and on each
+          node join with it: <code>aux node enroll https://command.example.org</code> (it asks for the token)
           {complete ? " (this machine's node is connected below)" : ""}.
         </li>
       </ol>
@@ -88,10 +87,15 @@ function ConnectNode({ client, profile, onError }: { client: SetupClient; profil
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || !organization.trim() || !token.trim()) return;
+    if (!url.trim() || !token.trim()) return;
     setBusy(true);
     try {
-      await client.enrollNode({ url: url.trim(), organization: organization.trim(), nodeId: nodeId.trim() || undefined, token: token.trim() });
+      await client.enrollNode({
+        url: url.trim(),
+        organization: organization.trim() || undefined,
+        nodeId: nodeId.trim() || undefined,
+        token: token.trim(),
+      });
       setToken("");
       await load();
     } catch (err) {
@@ -106,7 +110,7 @@ function ConnectNode({ client, profile, onError }: { client: SetupClient; profil
       <h2 id="connect-title">{profile.id === "node" ? "Connect this node to Command" : "Connect to a Command server (optional)"}</h2>
       <p>
         {profile.id === "node"
-          ? "A node takes its work from AgentUX Command. Enter the server your administrator gave you, and this node's token."
+          ? "A node takes its work from AgentUX Command. Enter the server your administrator gave you and the enrollment token they issued for this node."
           : "If your team runs AgentUX Command, connect this machine so the team sees its runs and can send it work. Without it, this machine works on its own."}
       </p>
       {status?.enrolled ? (
@@ -121,12 +125,15 @@ function ConnectNode({ client, profile, onError }: { client: SetupClient; profil
             <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://command.example.org" />
           </label>
           <label className="field">
-            <span>Organization</span>
-            <input value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="your-org" />
+            <span>Enrollment token</span>
+            <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="auxe1_…" />
+            <small className="muted">Issued by the Command server, for one node, and valid once.</small>
           </label>
           <label className="field">
-            <span>Node token</span>
-            <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+            <span>
+              Organization <span className="muted">(only for a static token; an enrollment token carries it)</span>
+            </span>
+            <input value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="your-org" />
           </label>
           <label className="field">
             <span>
@@ -135,15 +142,17 @@ function ConnectNode({ client, profile, onError }: { client: SetupClient; profil
             <input className="mono" value={nodeId} onChange={(e) => setNodeId(e.target.value)} />
           </label>
           <div className="form-actions">
-            <button className="btn btn-primary" disabled={busy || !url.trim() || !organization.trim() || !token.trim()}>
+            <button className="btn btn-primary" disabled={busy || !url.trim() || !token.trim()}>
               {busy ? "Connecting…" : "Connect"}
             </button>
           </div>
         </form>
       )}
       <p className="muted wz-small">
-        The token stays on this machine (readable by you only). Starting runs and changing agent preferences from Command
-        wait for you in the cockpit's Settings → Remote control.
+        This machine checks it reached the Command server that issued the token before sending it, and from then on talks to
+        that server only: another Command server, even at the same address, cannot take it. Its credential stays here,
+        readable by you only. Starting runs and changing agent preferences from Command wait for you in the cockpit's
+        Settings → Remote control.
       </p>
     </section>
   );
