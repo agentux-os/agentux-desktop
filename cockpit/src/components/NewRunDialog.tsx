@@ -41,7 +41,13 @@ function when(ms: number, now: number): string {
 
 /** "weekly limit until Tue 27 Oct 09:00", "out of credits until you lift it". */
 export function limitText(l: HarnessLimit, now = Date.now()): string {
-  const what = { session: "usage limit", weekly: "weekly limit", credits: "out of credits", rate: "rate limit" }[l.kind];
+  const what = {
+    session: "usage limit",
+    weekly: "weekly limit",
+    credits: "out of credits",
+    rate: "rate limit",
+    stalled: "stopped responding",
+  }[l.kind];
   const scope = l.model ? ` (${l.model})` : "";
   if (l.until === null) return `${what}${scope} until you lift it`;
   return l.untilKnown ? `${what}${scope} until ${when(l.until, now)}` : `${what}${scope}, trying again at ${when(l.until, now)}`;

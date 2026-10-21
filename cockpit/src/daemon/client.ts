@@ -142,7 +142,8 @@ export interface HarnessInfo {
 export interface HarnessLimit {
   harness: string;
   model: string | null;
-  kind: "session" | "weekly" | "credits" | "rate";
+  /** `stalled`: the agent stopped responding in a turn and the daemon gave up on it. */
+  kind: "session" | "weekly" | "credits" | "rate" | "stalled";
   /** ms since the epoch; null: only when the human clears it. */
   until: number | null;
   /** The harness said when; false: the daemon's guess, then it tries again. */
