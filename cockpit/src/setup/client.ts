@@ -106,6 +106,8 @@ export interface SetupClient {
   nodeStatus(): Promise<NodeStatus>;
   /** Commands from Command waiting for someone at this node. */
   nodePending(): Promise<HeldCommand[]>;
+  /** Connects this node to a Command server (the token goes on stdin). */
+  enrollNode(input: { url: string; organization: string; nodeId?: string; token: string }): Promise<NodeStatus>;
   /** Accept (run) or reject a waiting command. */
   decideCommand(commandId: string, accept: boolean): Promise<void>;
   getGit(): Promise<GitConfig>;

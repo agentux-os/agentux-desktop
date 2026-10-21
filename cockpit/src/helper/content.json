@@ -736,6 +736,16 @@
       "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md"
     }
   },
+  "wz.role.command": {
+    "title": "Setting up the Command server",
+    "what": "What a Command server needs before it runs: its configuration (database password, public address, node tokens), its container image, and a DNS name with TLS.",
+    "how": "Its services stay off until configured. Nodes connect out to it with their own tokens, so you never list their addresses here."
+  },
+  "wz.role.connect": {
+    "title": "Connecting to Command",
+    "what": "Connects this machine's agent node to an AgentUX Command server, so a team sees its runs and can send it work.",
+    "how": "Runs aux node enroll with the token on stdin (kept in ~/.config/agentux/node.json, readable by you only) and starts agentux-gateway. Starting runs and changing preferences from Command wait for you in Settings → Remote control."
+  },
   "wz.profile.choose": {
     "title": "Choose this machine's role",
     "what": "Picks how this computer takes part in AgentUX: Workstation (the local node and the cockpit), Node, Command Server, Executive, Complete or Custom.",
