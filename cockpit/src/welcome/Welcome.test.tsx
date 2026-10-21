@@ -82,11 +82,10 @@ describe("Welcome wizard (mock backend)", () => {
     await flush();
     expect(screen.getByRole("heading", { level: 2, name: "Connect this node to Command" })).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText("https://command.example.org"), { target: { value: "https://command.acme.org" } });
-    fireEvent.change(screen.getByPlaceholderText("your-org"), { target: { value: "acme" } });
-    fireEvent.change(screen.getByLabelText("Node token"), { target: { value: "tok" } });
+    fireEvent.change(screen.getByLabelText(/Enrollment token/), { target: { value: "auxe1_cmd-0123456789abcdef_x" } });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     await flush();
-    expect(client.calls).toContain("node enroll https://command.acme.org acme");
+    expect(client.calls).toContain("node enroll https://command.acme.org");
     expect(screen.getByText(/reports to/).textContent).toContain("https://command.acme.org");
   });
 

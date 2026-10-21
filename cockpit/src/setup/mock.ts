@@ -233,10 +233,12 @@ export class MockSetupClient implements SetupClient {
     return { ...this.node };
   }
 
-  async enrollNode(input: { url: string; organization: string; nodeId?: string; token: string }): Promise<NodeStatus> {
+  async enrollNode(input: { url: string; organization?: string; nodeId?: string; token: string }): Promise<NodeStatus> {
     if (!input.token) throw new Error("node: the token is empty");
-    this.calls.push(`node enroll ${input.url} ${input.organization}`);
-    this.node = { enrolled: true, commandUrl: input.url, organizationId: input.organization, nodeId: input.nodeId ?? "node-demo", gateway: "active" };
+    this.calls.push(`node enroll ${input.url}${input.organization ? ` ${input.organization}` : ""}`);
+    const organization = input.organization || (input.token.startsWith("auxe1_") ? "org-from-token" : "");
+    if (!organization) throw new Error("node: this is not an enrollment token (auxe1_...); a static token needs the organization");
+    this.node = { enrolled: true, commandUrl: input.url, organizationId: organization, nodeId: input.nodeId ?? "node-demo", gateway: "active" };
     return { ...this.node };
   }
 

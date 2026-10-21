@@ -92,7 +92,7 @@ export function RemoteControl({ setup, pollMs = 10_000 }: { setup: () => Promise
       ) : (
         <p className="muted">
           Not connected to AgentUX Command. To manage this node from a Command server, run in a terminal{" "}
-          <code>aux node enroll https://command.example.org --organization your-org</code> (it asks for the node token),
+          <code>aux node enroll https://command.example.org</code> (it asks for the enrollment token the Command server issued),
           then <code>systemctl --user enable --now agentux-gateway</code>.
         </p>
       )}
