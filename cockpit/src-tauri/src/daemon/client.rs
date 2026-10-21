@@ -54,6 +54,10 @@ pub mod method {
     /// One read-only question for the cockpit's helper, answered by the
     /// user's own harness (agentux-core 0.4.3); probed like `bus.post`.
     pub const HELPER_ASK: &str = "helper.ask";
+    /// The built-in harnesses, installed and signed in to (agentux-core
+    /// #34). Older daemons answer -32601, and ignore `roles` in
+    /// `runs.start`.
+    pub const HARNESSES_LIST: &str = "harnesses.list";
     /// Server-to-client notification: `{ terminalId, data }`, data base64.
     pub const TERMINAL_OUTPUT: &str = "terminal_output";
     /// Server-to-client notification, a terminal's last: `{ terminalId, code }`.

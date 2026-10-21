@@ -77,6 +77,8 @@ export interface SetupClient {
   signIn(target: SignInTarget): Promise<void>;
   launch(itemId: string): Promise<void>;
   openUrl(url: string): Promise<void>;
+  /** Clones a repository (an https or SSH URL, or GitHub's OWNER/REPO) into ~/src; resolves to its directory. */
+  clone(source: string): Promise<string>;
   getGit(): Promise<GitConfig>;
   setGit(config: GitConfig): Promise<GitConfig>;
   /** The public key of ~/.ssh/id_ed25519, or null. */

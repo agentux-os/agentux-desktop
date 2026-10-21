@@ -31,6 +31,7 @@ const ALLOWED: &[&str] = &[
     "signin",
     "launch",
     "open-url",
+    "clone",
     "git",
     "ssh-key",
     "finish",

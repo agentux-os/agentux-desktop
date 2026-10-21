@@ -1932,6 +1932,46 @@ kbd {
   outline: none;
   border-color: var(--focus);
 }
+.form-dialog .seg {
+  align-self: flex-start;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+.field-row input {
+  flex: 1;
+  min-width: 0;
+}
+.agents-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.agents-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.agents-grid select {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+}
+@media (max-width: 560px) {
+  .agents-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .form-error {
   padding: 7px 10px;
   border-radius: var(--radius-sm);

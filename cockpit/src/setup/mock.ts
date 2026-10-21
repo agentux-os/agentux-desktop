@@ -185,6 +185,13 @@ export class MockSetupClient implements SetupClient {
     if (!/jsdom/i.test(navigator.userAgent)) window.open(url, "_blank", "noopener");
   }
 
+  async clone(source: string): Promise<string> {
+    this.calls.push(`clone ${source}`);
+    const name = source.replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop();
+    if (!name) throw new Error(`clone: not a repository URL or OWNER/REPO: ${source}`);
+    return `/home/you/src/${name}`;
+  }
+
   async getGit(): Promise<GitConfig> {
     return { ...this.git };
   }
