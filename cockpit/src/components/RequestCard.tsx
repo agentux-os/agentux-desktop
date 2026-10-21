@@ -12,6 +12,7 @@ const KIND_HELP: Record<PermissionRequest["kind"], ReturnType<typeof help>> = {
   permission: help("request.permission"),
   budget: help("request.budget"),
   question: help("request.question"),
+  limit: help("request.limit"),
 };
 
 const KIND_ICON: Record<PermissionRequest["kind"], IconName> = {
@@ -20,6 +21,7 @@ const KIND_ICON: Record<PermissionRequest["kind"], IconName> = {
   permission: "execute",
   budget: "coins",
   question: "question",
+  limit: "alert",
 };
 
 /** Button labels per kind: what approving and denying actually do in agentuxd. */
@@ -29,6 +31,7 @@ const ACTIONS: Record<PermissionRequest["kind"], { approve: string; deny: string
   permission: { approve: "Allow", deny: "Deny", denyTitle: "The agent is told no and goes on" },
   budget: { approve: "Extend budget", deny: "Stop run", denyTitle: "Stopping fails the run" },
   question: { approve: "Answer", deny: "Decline", denyTitle: "The agent is told you declined to answer and goes on" },
+  limit: { approve: "Retry now", deny: "Stop run", denyTitle: "Stopping fails the run" },
 };
 
 /** Options the number keys pick (1-9). */
@@ -39,7 +42,17 @@ function outcome(r: PermissionRequest): string {
     case "pending":
       return "Pending";
     case "approved":
-      return r.kind === "permission" ? "Allowed" : r.kind === "budget" ? "Budget extended" : r.kind === "question" ? "Answered" : "Approved";
+      return r.kind === "permission"
+        ? "Allowed"
+        : r.kind === "budget"
+          ? "Budget extended"
+          : r.kind === "question"
+            ? "Answered"
+            : r.kind === "limit"
+              ? r.answer
+                ? "Limit over, run went on"
+                : "Retried"
+              : "Approved";
     case "denied":
       return r.kind === "permission" ? "Denied" : r.kind === "budget" ? "Run stopped" : r.kind === "question" ? "Declined" : "Rejected";
     case "cancelled":
@@ -102,7 +115,7 @@ export function RequestCard({ request: r, run, session, now, selected, inline, s
       )}
       <div className="req-title">{r.title}</div>
       {r.kind === "budget" && pending && run && <BudgetMeter run={run} />}
-      {r.detail && <pre className={`req-detail ${r.kind === "budget" ? "is-prose" : ""}`}>{r.detail}</pre>}
+      {r.detail && <pre className={`req-detail ${r.kind === "budget" || r.kind === "limit" ? "is-prose" : ""}`}>{r.detail}</pre>}
       {pending && r.kind === "question" ? (
         <QuestionAnswer request={r} showShortcuts={showShortcuts} onAnswer={onApprove} onDecline={onDeny} />
       ) : pending ? (

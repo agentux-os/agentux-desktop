@@ -58,6 +58,8 @@ pub mod method {
     /// #34). Older daemons answer -32601, and ignore `roles` in
     /// `runs.start`.
     pub const HARNESSES_LIST: &str = "harnesses.list";
+    /// The human lifted a harness's usage limit (agentux-core 0.4.7).
+    pub const LIMITS_CLEAR: &str = "limits.clear";
     /// Server-to-client notification: `{ terminalId, data }`, data base64.
     pub const TERMINAL_OUTPUT: &str = "terminal_output";
     /// Server-to-client notification, a terminal's last: `{ terminalId, code }`.

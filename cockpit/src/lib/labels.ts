@@ -21,6 +21,7 @@ export const REQUEST_LABEL: Record<RequestKind, string> = {
   permission: "Permission",
   budget: "Budget exceeded",
   question: "Question",
+  limit: "Usage limit",
 };
 
 /** Label of a pipeline role; custom role names are shown capitalised. */

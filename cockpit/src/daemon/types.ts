@@ -195,9 +195,11 @@ export type SessionEvent =
  * `plan`: approve the plan; `step`: any other `approve: true` step;
  * `permission`: an agent asks before a tool call; `budget`: the run is over
  * its budget (approving extends it); `question`: an agent asks the human
- * through the bus (`ask_human`): approving answers it, denying declines.
+ * through the bus (`ask_human`): approving answers it, denying declines;
+ * `limit`: the next step's agent is at its usage limit and no other can take
+ * its role (approving retries now; the run also goes on at the reset).
  */
-export type RequestKind = "plan" | "step" | "permission" | "budget" | "question";
+export type RequestKind = "plan" | "step" | "permission" | "budget" | "question" | "limit";
 
 /** `cancelled`: no longer answerable (run cancelled, agent turn over, daemon restart). */
 export type RequestStatus = "pending" | "approved" | "denied" | "cancelled";

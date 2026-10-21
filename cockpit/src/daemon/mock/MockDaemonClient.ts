@@ -196,6 +196,10 @@ export class MockDaemonClient implements DaemonClient {
     ];
   }
 
+  async clearLimit(_harness: string): Promise<void> {
+    throw new Error("Usage limits need agentuxd; the cockpit is showing mock data");
+  }
+
   async cancelRun(_runId: string): Promise<void> {
     throw new Error("Cancelling runs needs agentuxd; the cockpit is showing mock data");
   }

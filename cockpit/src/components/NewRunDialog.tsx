@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { HarnessInfo, StartRunInput } from "../daemon/client";
+import type { HarnessInfo, HarnessLimit, StartRunInput } from "../daemon/client";
 import { VENDORS, type Project, type Vendor } from "../daemon/types";
 import { VENDOR_INFO } from "../daemon/vendors";
 import { Icon } from "./Icon";
@@ -16,6 +16,8 @@ interface Props {
   loadHarnesses?: () => Promise<HarnessInfo[] | null>;
   /** Clones a repository (URL or GitHub OWNER/REPO); resolves to its directory. */
   onClone?: (source: string) => Promise<string>;
+  /** The human lifted a harness's usage limit. */
+  onClearLimit?: (harness: string) => Promise<void>;
 }
 
 /** The roles of the built-in pipeline, in the order they act. */
@@ -25,10 +27,32 @@ export const RUN_ROLES = [
   { id: "reviewer", label: "Reviews" },
 ] as const;
 
+function harnessName(id: string): string {
+  return (VENDORS as readonly string[]).includes(id) ? VENDOR_INFO[id as Vendor].label : id;
+}
+
+function when(ms: number, now: number): string {
+  const d = new Date(ms);
+  const sameDay = new Date(now).toDateString() === d.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/** "weekly limit until Tue 27 Oct 09:00", "out of credits until you lift it". */
+export function limitText(l: HarnessLimit, now = Date.now()): string {
+  const what = { session: "usage limit", weekly: "weekly limit", credits: "out of credits", rate: "rate limit" }[l.kind];
+  const scope = l.model ? ` (${l.model})` : "";
+  if (l.until === null) return `${what}${scope} until you lift it`;
+  return l.untilKnown ? `${what}${scope} until ${when(l.until, now)}` : `${what}${scope}, trying again at ${when(l.until, now)}`;
+}
+
 /** How a harness reads in the agent picker. */
 export function harnessOption(h: HarnessInfo): { label: string; disabled: boolean } {
-  const name = (VENDORS as readonly string[]).includes(h.id) ? VENDOR_INFO[h.id as Vendor].label : h.id;
+  const name = harnessName(h.id);
   if (!h.installed) return { label: `${name} (not installed)`, disabled: true };
+  const limit = h.limits?.find((l) => !l.model);
+  if (limit) return { label: `${name} (${limitText(limit)})`, disabled: false };
   if (h.signedIn === false) return { label: `${name} (not signed in)`, disabled: false };
   return { label: h.experimental ? `${name} (experimental)` : name, disabled: false };
 }
@@ -42,7 +66,7 @@ function errorText(err: unknown): string {
  * repository; registered on first use, or cloned here first), the prompt for
  * the agents, and optionally which agent plays each role.
  */
-export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHarnesses, onClone }: Props) {
+export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHarnesses, onClone, onClearLimit }: Props) {
   const [path, setPath] = useState(initialPath);
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
@@ -54,6 +78,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
   const [cloned, setCloned] = useState<string | null>(null);
   const [harnesses, setHarnesses] = useState<HarnessInfo[] | null>(null);
   const [roles, setRoles] = useState<Record<string, string>>({});
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -63,7 +88,19 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
     return () => {
       live = false;
     };
-  }, [loadHarnesses]);
+  }, [loadHarnesses, reload]);
+
+  const limited = (harnesses ?? []).flatMap((h) => h.limits ?? []);
+  const lift = async (harness: string) => {
+    if (!onClearLimit) return;
+    setError(null);
+    try {
+      await onClearLimit(harness);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
 
   const clone = async () => {
     if (!onClone || !repo.trim() || cloning) return;
@@ -236,6 +273,23 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
               <small className="muted">
                 Automatic: the project's <code>agentux.yaml</code>, or else the agents you are signed in to.
               </small>
+              {limited.length > 0 && (
+                <ul className="limit-list" aria-label="Agents at a usage limit">
+                  {limited.map((l) => (
+                    <li key={`${l.harness}/${l.model ?? ""}`} title={l.message}>
+                      <Icon name="alert" size={13} />
+                      <span>
+                        <strong>{harnessName(l.harness)}</strong>: {limitText(l)}. Runs use another agent meanwhile.
+                      </span>
+                      {onClearLimit && (
+                        <button type="button" className="btn btn-quiet" onClick={() => void lift(l.harness)}>
+                          Limit lifted
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </fieldset>
           )}
           <label className="field" {...help("newRun.title")}>
