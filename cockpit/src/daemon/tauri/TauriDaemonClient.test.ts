@@ -166,6 +166,21 @@ describe("TauriDaemonClient", () => {
     );
   });
 
+  it("passes the agents chosen per role and lists the daemon's harnesses", async () => {
+    const t = new FakeTransport();
+    t.results.daemon_start_run = run("r9", { title: "Fix it" });
+    t.results.daemon_harnesses = [{ id: "opencode", command: "opencode", installed: true, signedIn: true, experimental: false }];
+    const client = new TauriDaemonClient(t);
+    await client.connect();
+
+    await client.startRun({ projectPath: "/src/a", prompt: "Fix it", roles: { implementer: "opencode" } });
+    await client.startRun({ projectPath: "/src/a", prompt: "Fix it", roles: {} });
+    expect(await client.harnesses()).toEqual(t.results.daemon_harnesses);
+
+    const starts = t.calls.filter((c) => c.command === "daemon_start_run").map((c) => c.args?.roles);
+    expect(starts).toEqual([{ implementer: "opencode" }, undefined]);
+  });
+
   it("loads sessions with the snapshot and a run's history on watchRun", async () => {
     const t = new FakeTransport();
     const session = {

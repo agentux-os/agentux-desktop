@@ -2,6 +2,7 @@ import type {
   DaemonClient,
   HelperQuestion,
   HelperReply,
+  HarnessInfo,
   StartRunInput,
   TerminalHandle,
   TerminalSink,
@@ -184,6 +185,15 @@ export class MockDaemonClient implements DaemonClient {
 
   async startRun(_input: StartRunInput): Promise<Run> {
     throw new Error("Starting runs needs agentuxd; the cockpit is showing mock data");
+  }
+
+  async harnesses(): Promise<HarnessInfo[] | null> {
+    return [
+      { id: "claude-code", command: "claude", installed: true, signedIn: true, experimental: false },
+      { id: "codex", command: "codex", installed: true, signedIn: false, experimental: false },
+      { id: "opencode", command: "opencode", installed: true, signedIn: true, experimental: false },
+      { id: "antigravity", command: "agy-acp-server", installed: true, signedIn: null, experimental: true },
+    ];
   }
 
   async cancelRun(_runId: string): Promise<void> {

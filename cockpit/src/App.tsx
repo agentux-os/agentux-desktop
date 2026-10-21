@@ -142,6 +142,12 @@ export default function App() {
     }
   };
 
+  const loadHarnesses = useCallback(() => client.harnesses(), [client]);
+  const cloneRepo = useCallback(async (source: string) => {
+    const { createSetupClient } = await import("./setup/client");
+    return (await createSetupClient()).clone(source);
+  }, []);
+
   const startRun = async (input: StartRunInput) => {
     const started = await client.startRun(input);
     setNewRun(false);
@@ -452,6 +458,8 @@ export default function App() {
           initialPath={project?.path ?? ""}
           onClose={() => setNewRun(false)}
           onSubmit={startRun}
+          loadHarnesses={loadHarnesses}
+          onClone={cloneRepo}
         />
       )}
     </div>

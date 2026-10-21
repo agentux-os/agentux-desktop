@@ -24,9 +24,14 @@
 #                                           print the public key
 #   agentux-setup launch ITEM               start an installed app
 #   agentux-setup open-url URL              open an https:// URL in the browser
+#   agentux-setup clone SOURCE [DIR]        clone a repository and print its path:
+#                                           an https:// or SSH URL, or OWNER/REPO on
+#                                           GitHub; DIR defaults to ~/src/REPO
 #   agentux-setup should-run                exit 0 if the wizard should open at login
 #   agentux-setup autostart                 the login autostart: open the wizard if
 #                                           should-run says so
+#   agentux-setup wait-desktop-setup        wait for the desktop's own first-login
+#                                           setup (COSMIC Initial Setup) to finish
 #   agentux-setup finish | reset            write or remove the "wizard done" marker
 #
 # The catalog (/usr/share/agentux/setup/catalog.json, or $AGENTUX_SETUP_CATALOG)
@@ -409,7 +414,9 @@ agents_json() {
             claude) cmd=claude; signed=$([[ -s "$HOME/.claude/.credentials.json" || -n "${ANTHROPIC_API_KEY:-}" ]] && echo true || echo false) ;;
             codex) cmd=codex; signed=$([[ -s "$HOME/.codex/auth.json" || -n "${OPENAI_API_KEY:-}" ]] && echo true || echo false) ;;
             opencode) cmd=opencode; signed=$([[ -s "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json" ]] && echo true || echo null) ;;
-            antigravity) cmd=agy; signed=null ;;
+            # Where agy keeps its Google sign-in is not documented; a token
+            # file under its directory is the sign. Without one, cannot tell.
+            antigravity) cmd=agy; signed=$([[ -n "$(find "$HOME/.gemini/antigravity-cli" -maxdepth 2 -type f -size +0 \( -iname '*token*' -o -iname '*oauth*' -o -iname '*credential*' \) -print -quit 2>/dev/null)" ]] && echo true || echo null) ;;
         esac
         rows+=("$(jq -nc --arg id "$id" --arg cmd "$cmd" --argjson installed "$(command -v "$cmd" >/dev/null && echo true || echo false)" \
             --argjson signedIn "$signed" '{id: $id, command: $cmd, installed: $installed, signedIn: $signedIn}')")
@@ -565,6 +572,46 @@ cmd_open_url() {
     run_detached xdg-open "$1"
 }
 
+# host/owner/repo of a remote URL, the same for its https and SSH forms.
+repo_key() { local u="${1%/}"; u="${u%.git}"; u="${u#*://}"; u="${u#*@}"; echo "${u/://}"; }
+
+# A repository for the cockpit's New run. GitHub's OWNER/REPO goes through gh
+# when it is signed in (its protocol and credentials), else over https. No
+# prompts: a clone that needs a password fails with git's message instead of
+# hanging the window, and a new SSH host is accepted the first time.
+cmd_clone() {
+    local src="${1:-}" url name dir
+    [[ "$src" != -* && "$src" =~ ^[A-Za-z0-9._~:/@+=-]+$ ]] || die "clone: not a repository URL or OWNER/REPO: $src"
+    case "$src" in
+        https://*/*/* | ssh://*/* | git@*:*/*) url="$src" ;;
+        *) [[ "$src" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "clone: not a repository URL or OWNER/REPO: $src"
+           url="https://github.com/${src%.git}.git" ;;
+    esac
+    name="${url%/}"; name="${name##*/}"; name="${name##*:}"; name="${name%.git}"
+    [[ "$name" =~ ^[A-Za-z0-9_.-]+$ && "$name" != . && "$name" != .. ]] || die "clone: no repository name in $src"
+    dir="${2:-$HOME/src/$name}"
+    if [[ -e "$dir" ]]; then
+        # The same repository cloned before: use it.
+        local origin
+        origin="$(git -C "$dir" remote get-url origin 2>/dev/null)" || die "clone: $dir already exists and is not a clone of $src"
+        [[ "$(repo_key "$origin")" == "$(repo_key "$url")" ]] || die "clone: $dir already exists, a clone of $origin"
+        echo "$dir"; return 0
+    fi
+    mkdir -p "$(dirname "$dir")" || die "clone: cannot create $(dirname "$dir")"
+    export GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+    local err
+    if [[ "$src" != *://* && "$src" != *@* ]] && command -v gh >/dev/null && gh auth status --hostname github.com >/dev/null 2>&1; then
+        err="$(gh repo clone "${src%.git}" "$dir" 2>&1 >/dev/null)"
+    else
+        err="$(git clone --quiet -- "$url" "$dir" 2>&1 >/dev/null)"
+    fi || {
+        # Not there before: a half clone would be taken as done next time.
+        rm -rf -- "$dir"
+        die "clone: $(tail -n 3 <<<"$err")"
+    }
+    echo "$dir"
+}
+
 cmd_git() {
     if [[ "${1:-}" == --show ]]; then
         jq -nc --arg name "$(git config --global user.name 2>/dev/null)" \
@@ -611,6 +658,25 @@ cmd_should_run() {
     return 0
 }
 
+# COSMIC opens its own first-login setup (cosmic-initial-setup) at the same
+# login as AgentUX's windows. Wait for it to finish, or to close, so they do
+# not open on top of each other: while it runs, and up to 30 seconds for it
+# to start. It writes ~/.config/cosmic-initial-setup-done when done.
+cmd_wait_desktop_setup() {
+    [[ "${XDG_CURRENT_DESKTOP:-}" == *COSMIC* ]] && command -v cosmic-initial-setup >/dev/null || return 0
+    local done="$HOME/.config/cosmic-initial-setup-done" idle=0
+    while [[ ! -e "$done" ]]; do
+        if pgrep -u "$(id -u)" -f '(^|/)cosmic-initial-setup( |$)' >/dev/null; then
+            idle=0
+        elif (( idle >= ${AGENTUX_DESKTOP_SETUP_GRACE:-30} )); then
+            break
+        else
+            (( idle += 1 ))
+        fi
+        sleep 1
+    done
+}
+
 cmd_retry_first_login() {
     systemctl --user reset-failed agentux-first-login.service 2>/dev/null || true
     systemctl --user start --no-block agentux-first-login.service
@@ -632,7 +698,9 @@ main() {
         git) cmd_git "$@" ;;
         ssh-key) cmd_ssh_key "$@" ;;
         should-run) cmd_should_run ;;
-        autostart) cmd_should_run 2>/dev/null || exit 0; exec agentux-cockpit --welcome ;;
+        autostart) cmd_should_run 2>/dev/null || exit 0; cmd_wait_desktop_setup; exec agentux-cockpit --welcome ;;
+        wait-desktop-setup) cmd_wait_desktop_setup ;;
+        clone) cmd_clone "$@" ;;
         finish) mkdir -p "$state_root" && touch "$welcome_marker" ;;
         reset) rm -f "$welcome_marker" ;;
         vscode-settings) need_catalog; cmd_vscode_settings "$@" ;;

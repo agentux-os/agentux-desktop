@@ -49,6 +49,11 @@ export interface DaemonClient {
 
   /** Register the project at `projectPath` if needed and start a run on it. */
   startRun(input: StartRunInput): Promise<Run>;
+  /**
+   * The harnesses the daemon can run, installed and signed in to; `null` from
+   * a daemon too old to say (which also ignores `StartRunInput.roles`).
+   */
+  harnesses(): Promise<HarnessInfo[] | null>;
   cancelRun(runId: string): Promise<void>;
 
   /**
@@ -109,6 +114,24 @@ export interface StartRunInput {
   prompt: string;
   /** Defaults to the first line of the prompt. */
   title?: string;
+  /**
+   * Role name to harness id for this run (`implementer: "opencode"`). Roles
+   * left out get the project's `agentux.yaml` harness or, without one, an
+   * installed harness the user signed in to.
+   */
+  roles?: Record<string, string>;
+}
+
+/** One entry of agentuxd's `harnesses.list`. */
+export interface HarnessInfo {
+  /** `claude-code`, `codex`, `opencode`, `antigravity`. */
+  id: string;
+  /** The vendor program it needs, e.g. `claude`. */
+  command: string;
+  installed: boolean;
+  /** null when the daemon cannot tell. */
+  signedIn: boolean | null;
+  experimental: boolean;
 }
 
 export interface TerminalSize {

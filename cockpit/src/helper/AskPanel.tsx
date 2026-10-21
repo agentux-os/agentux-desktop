@@ -65,6 +65,18 @@ export function AskPanel({ onClose }: { onClose: () => void }) {
       .catch(() => setAgents({}));
   }, [h.settings.ai, ai, agents]);
 
+  // The agent that answers should be one the user set up: when the chosen one
+  // is not installed or is signed out, take one they signed in to.
+  const { update } = h;
+  useEffect(() => {
+    if (!agents) return;
+    const usable = (id: string) => agents[id]?.installed === true && agents[id]?.signedIn !== false;
+    if (usable(harness)) return;
+    const pick =
+      AI_HARNESSES.find((a) => usable(a.id) && agents[a.id]?.signedIn === true) ?? AI_HARNESSES.find((a) => usable(a.id));
+    if (pick) update({ aiHarness: pick.id });
+  }, [agents, harness, update]);
+
   const push = (e: NewEntry) => {
     const entry = { ...e, id: nextId.current++ } as Entry;
     setLog((l) => [...l, entry]);
@@ -200,11 +212,13 @@ export function AskPanel({ onClose }: { onClose: () => void }) {
           {AI_HARNESSES.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
-              {agents?.[a.id]?.signedIn
-                ? " (signed in)"
-                : agents?.[a.id] && !agents[a.id].installed
-                  ? " (not installed)"
-                  : ""}
+              {agents?.[a.id] && !agents[a.id].installed
+                ? " (not installed)"
+                : agents?.[a.id]?.signedIn
+                  ? " (signed in)"
+                  : agents?.[a.id]?.signedIn === false
+                    ? " (not signed in)"
+                    : ""}
             </option>
           ))}
         </select>

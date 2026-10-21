@@ -519,6 +519,20 @@
     "what": "What the agents should do.",
     "how": "Every step's prompt includes it, with the plan and any feedback from gates or reviews."
   },
+  "newRun.clone": {
+    "title": "Clone a repository",
+    "what": "Clones a repository into ~/src and uses it as the run's project.",
+    "how": "Give GitHub's owner/repo, or the https or SSH URL of any Git host. owner/repo goes through the GitHub CLI when you signed in to it in Welcome & setup, so private repositories work; other hosts use your SSH key or a public https URL. A repository cloned before is reused.",
+    "do": [
+      "Type the repository and press Clone",
+      "Then write the prompt and start the run"
+    ]
+  },
+  "newRun.agents": {
+    "title": "Agents",
+    "what": "Which agent CLI plans, implements and reviews this run.",
+    "how": "Automatic uses the roles of the project's agentux.yaml, or, without one, the agents you are signed in to, with the reviewer from another vendor when there is one. Agents that are not installed cannot be picked; one that looks signed out can, but its step fails until you sign in from Welcome & setup."
+  },
   "newRun.title": {
     "title": "Title",
     "what": "The run's name on the board. Optional: the prompt's first line by default."

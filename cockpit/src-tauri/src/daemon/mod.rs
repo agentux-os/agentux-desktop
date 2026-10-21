@@ -289,6 +289,7 @@ pub async fn daemon_start_run(
     prompt: Option<String>,
     title: Option<String>,
     issue: Option<u64>,
+    roles: Option<std::collections::BTreeMap<String, String>>,
 ) -> Result<Value, CommandError> {
     let socket = state.socket()?;
     timed(CALL_TIMEOUT, async {
@@ -310,6 +311,9 @@ pub async fn daemon_start_run(
         }
         if let Some(issue) = issue {
             params["issue"] = issue.into();
+        }
+        if let Some(roles) = roles.filter(|r| !r.is_empty()) {
+            params["roles"] = json!(roles);
         }
         c.call(method::RUNS_START, params).await
     })
@@ -386,6 +390,21 @@ pub async fn daemon_capabilities(
             // Empty params are -32602 before any harness starts.
             helper_ask: c.serves(method::HELPER_ASK).await?,
         })
+    })
+    .await
+}
+
+/// The daemon's harnesses (`harnesses.list`), or `null` from a daemon that
+/// does not serve it (and so cannot take `roles` in `runs.start`).
+#[tauri::command]
+pub async fn daemon_harnesses(state: State<'_, DaemonState>) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(CALL_TIMEOUT, async {
+        let mut c = Client::connect(socket).await?;
+        match c.call(method::HARNESSES_LIST, json!({})).await {
+            Err(ClientError::Rpc { code, .. }) if code == client::METHOD_NOT_FOUND => Ok(Value::Null),
+            other => other,
+        }
     })
     .await
 }

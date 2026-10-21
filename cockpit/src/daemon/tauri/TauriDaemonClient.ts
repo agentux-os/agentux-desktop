@@ -2,6 +2,7 @@ import type {
   DaemonClient,
   HelperQuestion,
   HelperReply,
+  HarnessInfo,
   StartRunInput,
   TerminalHandle,
   TerminalSink,
@@ -235,11 +236,16 @@ export class TauriDaemonClient implements DaemonClient {
       path: input.projectPath,
       prompt: input.prompt,
       title: input.title,
+      roles: input.roles && Object.keys(input.roles).length ? input.roles : undefined,
     });
     // The run event follows on the stream; apply the result now so the UI can
     // open the run immediately.
     this.update((s) => applyEvent(s, { kind: "run", seq: 0, at: Date.now(), runId: run.id, run }));
     return mapRun(run);
+  }
+
+  async harnesses(): Promise<HarnessInfo[] | null> {
+    return this.transport.invoke<HarnessInfo[] | null>("daemon_harnesses");
   }
 
   async cancelRun(runId: string): Promise<void> {

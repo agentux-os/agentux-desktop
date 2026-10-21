@@ -16,4 +16,10 @@ if [ "$uid" -lt "$uid_min" ]; then
     exit 0
 fi
 
+# After the desktop's own first-login setup (COSMIC Initial Setup), not on
+# top of it.
+if [ -x /usr/libexec/agentux-setup ]; then
+    /usr/libexec/agentux-setup wait-desktop-setup
+fi
+
 exec agentux-cockpit "$@"
