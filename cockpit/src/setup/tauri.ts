@@ -1,4 +1,4 @@
-import type { AgentId, GitConfig, SetupClient, SetupStatus, SignInTarget } from "./client";
+import type { AgentId, GitConfig, HeldCommand, NodeStatus, SetupClient, SetupStatus, SignInTarget } from "./client";
 
 interface SetupOutput {
   code: number;
@@ -74,6 +74,18 @@ export class TauriSetupClient implements SetupClient {
 
   async removeKey(variable: string): Promise<void> {
     await this.exec(["key", "remove", variable]);
+  }
+
+  async nodeStatus(): Promise<NodeStatus> {
+    return JSON.parse(await this.exec(["node", "status"])) as NodeStatus;
+  }
+
+  async nodePending(): Promise<HeldCommand[]> {
+    return JSON.parse(await this.exec(["node", "pending"])) as HeldCommand[];
+  }
+
+  async decideCommand(commandId: string, accept: boolean): Promise<void> {
+    await this.exec(["node", accept ? "confirm" : "reject", commandId]);
   }
 
   async getGit(): Promise<GitConfig> {

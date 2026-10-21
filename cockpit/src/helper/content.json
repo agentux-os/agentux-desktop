@@ -105,6 +105,11 @@
     "title": "Git & SSH",
     "what": "Your Git identity, SSH key and GitHub sign-in, set up in Welcome & setup."
   },
+  "settings.remote": {
+    "title": "Remote control",
+    "what": "This node's link to AgentUX Command, the control plane that manages many AgentUX machines: where it reports, and the commands from Command waiting for you.",
+    "how": "The node gateway (aux node enroll, agentux-gateway.service) reports agents, limits, approvals and runs, and takes commands. /etc/agentux/node-policy.yaml decides what runs by itself; starting runs and changing preferences wait for Accept or Reject here."
+  },
   "settings.about": {
     "title": "About",
     "what": "The cockpit's version and the agentuxd it is connected to."

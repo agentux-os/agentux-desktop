@@ -4,6 +4,8 @@ import {
   FIRST_LOGIN_STEPS,
   type AgentId,
   type GitConfig,
+  type HeldCommand,
+  type NodeStatus,
   type ItemStatus,
   type SetupClient,
   type SetupStatus,
@@ -214,6 +216,28 @@ export class MockSetupClient implements SetupClient {
   async removeKey(variable: string): Promise<void> {
     this.calls.push(`key remove ${variable}`);
     this.stored.delete(variable);
+  }
+
+  held: HeldCommand[] = [
+    {
+      commandId: "cmd-7f3a",
+      method: "run.start",
+      params: { repository: "https://github.com/acme/ledger-api", prompt: "Add rate limiting to the public API", agents: { implementer: "opencode" } },
+      receivedAt: "2026-10-21T14:02:00Z",
+    },
+  ];
+
+  async nodeStatus(): Promise<NodeStatus> {
+    return { enrolled: true, commandUrl: "https://command.example.org", organizationId: "org-acme", nodeId: "node-workstation", gateway: "active" };
+  }
+
+  async nodePending(): Promise<HeldCommand[]> {
+    return [...this.held];
+  }
+
+  async decideCommand(commandId: string, accept: boolean): Promise<void> {
+    this.calls.push(`node ${accept ? "confirm" : "reject"} ${commandId}`);
+    this.held = this.held.filter((h) => h.commandId !== commandId);
   }
 
   async getGit(): Promise<GitConfig> {
