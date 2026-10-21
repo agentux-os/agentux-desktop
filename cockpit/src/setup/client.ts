@@ -64,6 +64,22 @@ export interface GitConfig {
 
 export type SignInTarget = AgentId | "github";
 
+export interface NodeStatus {
+  enrolled: boolean;
+  commandUrl?: string;
+  organizationId?: string;
+  nodeId?: string;
+  /** systemd state of agentux-gateway.service. */
+  gateway: string;
+}
+
+export interface HeldCommand {
+  commandId: string;
+  method: string;
+  params: Record<string, unknown>;
+  receivedAt: string;
+}
+
 export interface SetupClient {
   readonly mode: "mock" | "system";
   /** `scan` also looks for what is installed already (slower). */
@@ -86,6 +102,12 @@ export interface SetupClient {
   /** Stores an API key in the secret service, for agentuxd to give the agent CLIs. */
   setKey(variable: string, value: string): Promise<void>;
   removeKey(variable: string): Promise<void>;
+  /** This node's link to AgentUX Command (never the token). */
+  nodeStatus(): Promise<NodeStatus>;
+  /** Commands from Command waiting for someone at this node. */
+  nodePending(): Promise<HeldCommand[]>;
+  /** Accept (run) or reject a waiting command. */
+  decideCommand(commandId: string, accept: boolean): Promise<void>;
   getGit(): Promise<GitConfig>;
   setGit(config: GitConfig): Promise<GitConfig>;
   /** The public key of ~/.ssh/id_ed25519, or null. */

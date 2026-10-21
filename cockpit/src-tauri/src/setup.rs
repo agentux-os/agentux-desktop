@@ -34,6 +34,7 @@ const ALLOWED: &[&str] = &[
     "open-url",
     "clone",
     "key",
+    "node",
     "git",
     "ssh-key",
     "finish",

@@ -7,6 +7,7 @@ import { updateSettings, useHelperSettings } from "../helper/settings";
 import { getCloneDir, setCloneDir } from "../lib/localPrefs";
 import type { SetupClient } from "../setup/client";
 import { AgentPrefsForm } from "./AgentPrefsForm";
+import { RemoteControl } from "./RemoteControl";
 
 /** The keys AgentUX keeps, and who reads them. */
 export const API_KEYS: { variable: string; label: string; agents: string }[] = [
@@ -68,6 +69,7 @@ export function SettingsView({ client, state, setup, theme, onTheme, onWelcome, 
           ["projects", "Projects"],
           ["appearance", "Appearance & help"],
           ["git", "Git & SSH"],
+          ["remote", "Remote control"],
           ["about", "About"],
         ].map(([id, label]) => (
           <a key={id} href={`#settings-${id}`}>
@@ -141,6 +143,10 @@ export function SettingsView({ client, state, setup, theme, onTheme, onWelcome, 
         <button className="btn" onClick={onWelcome}>
           Open Welcome &amp; setup
         </button>
+      </Section>
+
+      <Section id="remote" title="Remote control" helpProps={help("settings.remote")}>
+        <RemoteControl setup={setup} />
       </Section>
 
       <Section id="about" title="About" helpProps={help("settings.about")}>

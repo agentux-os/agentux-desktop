@@ -31,6 +31,10 @@
 #                                           an https:// or SSH URL, or OWNER/REPO on
 #                                           GitHub; DIR defaults to PARENT/REPO,
 #                                           PARENT to ~/src
+#   agentux-setup node status | pending | confirm ID | reject ID
+#                                           this node's link to AgentUX Command: where
+#                                           it reports (never the token), and the
+#                                           commands waiting for someone here
 #   agentux-setup key list | set VAR | remove VAR
 #                                           API keys in the secret service, which
 #                                           agentuxd gives the agent CLIs: list says
@@ -678,6 +682,30 @@ cmd_key() {
     esac
 }
 
+# The node gateway (aux node, agentux-gateway.service): its enrollment
+# without the token, and the commands from Command it holds for someone here.
+cmd_node() {
+    local config="${XDG_CONFIG_HOME:-$HOME/.config}/agentux/node.json" pending="$state_root/gateway-pending.json"
+    case "${1:-}" in
+        status)
+            local active
+            active="$(systemctl --user is-active agentux-gateway.service 2>/dev/null || true)"
+            if [[ -r "$config" ]]; then
+                jq -c --arg active "${active:-unknown}"                     '{enrolled: true, commandUrl, organizationId, nodeId, gateway: $active}' "$config"
+            else
+                jq -nc --arg active "${active:-unknown}" '{enrolled: false, gateway: $active}'
+            fi
+            ;;
+        pending) if [[ -r "$pending" ]]; then jq -c 'map(select(.decision == null))' "$pending"; else echo '[]'; fi ;;
+        confirm | reject)
+            [[ "${2:-}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "node: not a command id: ${2:-}"
+            command -v aux >/dev/null || die "node: aux is not installed"
+            aux node "$1" "$2"
+            ;;
+        *) die "usage: node status | pending | confirm ID | reject ID" ;;
+    esac
+}
+
 cmd_git() {
     if [[ "${1:-}" == --show ]]; then
         jq -nc --arg name "$(git config --global user.name 2>/dev/null)" \
@@ -769,6 +797,7 @@ main() {
         clone) cmd_clone "$@" ;;
         update-agent) cmd_update_agent "$@" ;;
         key) cmd_key "$@" ;;
+        node) cmd_node "$@" ;;
         finish) mkdir -p "$state_root" && touch "$welcome_marker" ;;
         reset) rm -f "$welcome_marker" ;;
         vscode-settings) need_catalog; cmd_vscode_settings "$@" ;;
