@@ -227,8 +227,17 @@ export class MockSetupClient implements SetupClient {
     },
   ];
 
+  node: NodeStatus = { enrolled: true, commandUrl: "https://command.example.org", organizationId: "org-acme", nodeId: "node-workstation", gateway: "active" };
+
   async nodeStatus(): Promise<NodeStatus> {
-    return { enrolled: true, commandUrl: "https://command.example.org", organizationId: "org-acme", nodeId: "node-workstation", gateway: "active" };
+    return { ...this.node };
+  }
+
+  async enrollNode(input: { url: string; organization: string; nodeId?: string; token: string }): Promise<NodeStatus> {
+    if (!input.token) throw new Error("node: the token is empty");
+    this.calls.push(`node enroll ${input.url} ${input.organization}`);
+    this.node = { enrolled: true, commandUrl: input.url, organizationId: input.organization, nodeId: input.nodeId ?? "node-demo", gateway: "active" };
+    return { ...this.node };
   }
 
   async nodePending(): Promise<HeldCommand[]> {

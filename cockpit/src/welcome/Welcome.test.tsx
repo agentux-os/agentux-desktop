@@ -25,6 +25,8 @@ describe("Welcome wizard (mock backend)", () => {
     const client = new MockSetupClient({ firstLoginDone: 1 });
     render(<Welcome client={client} pollMs={500} />);
     await flush();
+    fireEvent.click(screen.getByRole("button", { name: /^3\s*Agents/ }));
+    await flush();
     expect(screen.getByRole("heading", { level: 1, name: "Your coding agents" })).toBeTruthy();
     const claude = screen.getByRole("article", { name: "Claude Code" });
     expect(within(claude).getByText("Installed")).toBeTruthy();
@@ -50,21 +52,50 @@ describe("Welcome wizard (mock backend)", () => {
     expect(screen.getByText("node · desktop")).toBeTruthy();
   });
 
-  it("persists a different OS profile without installing anything", async () => {
+  it("explains each profile and saves the choice when moving on", async () => {
     const client = new MockSetupClient();
     render(<Welcome client={client} pollMs={500} />);
     await flush();
+    expect(screen.getByRole("heading", { level: 1, name: "What is this machine for?" })).toBeTruthy();
+    const detail = () => screen.getByRole("heading", { level: 2, name: /^(Workstation|Executive|Agent Node)$/ }).closest("section")!;
+    expect(detail().textContent).toContain("Runs on this machine");
     fireEvent.click(screen.getByText("Executive"));
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(detail().textContent).toContain("The Office view of an organization");
+    // An Executive runs no agents: no Agents, Tools or Git steps.
+    const steps = screen.getByRole("navigation", { name: "Setup steps" }).textContent ?? "";
+    expect(steps).not.toContain("Agents");
+    expect(steps).not.toContain("Tools & SDKs");
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
     await flush();
     expect(client.calls).toContain("profile executive");
     expect(screen.getByText("AgentUX Executive")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Follow a Command server" })).toBeTruthy();
+  });
+
+  it("connects a node to Command with its token", async () => {
+    const client = new MockSetupClient();
+    client.node = { enrolled: false, gateway: "inactive" };
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    fireEvent.click(screen.getByText("Agent Node"));
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await flush();
+    expect(screen.getByRole("heading", { level: 2, name: "Connect this node to Command" })).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("https://command.example.org"), { target: { value: "https://command.acme.org" } });
+    fireEvent.change(screen.getByPlaceholderText("your-org"), { target: { value: "acme" } });
+    fireEvent.change(screen.getByLabelText("Node token"), { target: { value: "tok" } });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await flush();
+    expect(client.calls).toContain("node enroll https://command.acme.org acme");
+    expect(screen.getByText(/reports to/).textContent).toContain("https://command.acme.org");
   });
 
   it("offers a retry when first-login failed", async () => {
     const client = new MockSetupClient({ firstLoginDone: 2, fail: ["first-login"] });
     render(<Welcome client={client} pollMs={500} />);
     await flush(3000);
+    fireEvent.click(screen.getByRole("button", { name: /^3\s*Agents/ }));
+    await flush();
     fireEvent.click(screen.getByRole("button", { name: "Retry now" }));
     await flush();
     expect(client.calls).toContain("retry-first-login");
@@ -74,7 +105,7 @@ describe("Welcome wizard (mock backend)", () => {
     const client = new MockSetupClient({ fail: ["dbeaver"] });
     render(<Welcome client={client} pollMs={500} />);
     await flush();
-    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    fireEvent.click(screen.getByRole("button", { name: /Tools & SDKs/ }));
     await flush();
     expect(screen.getByRole("heading", { level: 1, name: "Developer tools" })).toBeTruthy();
 

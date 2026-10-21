@@ -5,6 +5,9 @@ import type { SetupClient } from "../setup/client";
 import { AgentsStep } from "./AgentsStep";
 import { DoneStep } from "./DoneStep";
 import { GitStep } from "./GitStep";
+import { ProfileStep } from "./ProfileStep";
+import { profileById, stepsFor, type ProfileId, type StepId } from "./profiles";
+import { RoleStep } from "./RoleStep";
 import { ToolsStep, isBusy, type Selection } from "./ToolsStep";
 import { useSetupStatus } from "./useSetupStatus";
 import { help } from "../helper/content";
@@ -12,18 +15,21 @@ import { HelperProvider, type HelperHost } from "../helper/HelperProvider";
 import { Mascot } from "../helper/Mascot";
 import { markWelcomeOpen, requestTour } from "../helper/settings";
 
-type StepId = "agents" | "tools" | "git" | "done";
-
-const PROFILES = [
-  { id: "workstation", title: "Workstation", detail: "Desktop, local agent node and developer tools.", resources: "8 GB RAM · 40 GB storage · network recommended" },
-  { id: "node", title: "Agent Node", detail: "A headless execution node for local agents.", resources: "4 GB RAM · 20 GB storage · network optional" },
-  { id: "command", title: "Command", detail: "Organization orchestration server; services remain guarded until configured.", resources: "16 GB RAM · 100 GB storage · network required" },
-  { id: "executive", title: "Executive", detail: "Office command center and organization visibility.", resources: "8 GB RAM · 40 GB storage · network recommended" },
-  { id: "complete", title: "Complete", detail: "Workstation, Node, Command and Office capabilities.", resources: "24 GB RAM · 150 GB storage · network required" },
-  { id: "custom", title: "Custom", detail: "Choose the capabilities for this machine later.", resources: "Review the selected capabilities before applying" },
-] as const;
-
-const STEPS: { id: StepId; title: string; sub: string; heading: string; lead: string }[] = [
+const STEP_INFO: { id: StepId; title: string; sub: string; heading: string; lead: string }[] = [
+  {
+    id: "profile",
+    title: "Profile",
+    sub: "What this machine is for",
+    heading: "What is this machine for?",
+    lead: "Pick the role that fits. Each one says what runs here, how it works with your other machines and what it needs; the next steps follow from it.",
+  },
+  {
+    id: "role",
+    title: "Command",
+    sub: "Connect or set up",
+    heading: "AgentUX Command",
+    lead: "Command coordinates many AgentUX machines. Connect this one to it, or prepare the server.",
+  },
   {
     id: "agents",
     title: "Agents",
@@ -92,7 +98,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   );
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
-  const [profile, setProfile] = useState("workstation");
+  const [profile, setProfile] = useState<ProfileId>("workstation");
   const [profileSaving, setProfileSaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -104,7 +110,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   }, []);
 
   useEffect(() => {
-    if (status?.profile.requested) setProfile(status.profile.requested);
+    if (status?.profile.requested) setProfile(profileById(status.profile.requested).id);
   }, [status?.profile.requested]);
 
   const saveProfile = async () => {
@@ -129,7 +135,23 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   }, [step]);
 
   const fail = useCallback((message: string) => setError(message), []);
-  const go = useCallback((i: number) => setStep(Math.max(0, Math.min(STEPS.length - 1, i))), []);
+  const current = profileById(profile);
+  const STEPS = useMemo(
+    () =>
+      stepsFor(current).map((id) => {
+        const info = STEP_INFO.find((x) => x.id === id)!;
+        return id === "role" && current.roleStep ? { ...info, title: current.roleStep.title, sub: current.roleStep.sub } : info;
+      }),
+    [current],
+  );
+  const go = useCallback((i: number) => setStep(Math.max(0, Math.min(STEPS.length - 1, i))), [STEPS.length]);
+  // Leaving the profile step saves the choice (it only records an intent).
+  const next = async () => {
+    if (STEPS[step].id === "profile" && status?.profile.requested !== profile) {
+      await saveProfile();
+    }
+    go(step + 1);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -148,7 +170,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, step]);
+  }, [go, step, STEPS]);
 
   const toggle = useCallback((item: CatalogItem, on: boolean) => {
     setSelection((prev) => {
@@ -263,7 +285,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
         </nav>
 
         {activity.total + activity.failed > 0 && (
-          <button className="wz-activity" {...help("wz.activity")} onClick={() => go(1)} aria-label="Install progress, show tools">
+          <button className="wz-activity" {...help("wz.activity")} onClick={() => go(Math.max(0, STEPS.findIndex((x) => x.id === "tools")))} aria-label="Install progress, show tools">
             <div className="wz-activity-top">
               {activity.busy ? <span className="wz-spin" aria-hidden="true" /> : <Icon name="check" size={13} className="ok" />}
               <span>
@@ -328,33 +350,11 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
         )}
 
         <div className={`wz-body ${s.id === "tools" ? "is-tools" : ""}`}>
-          {s.id === "agents" && (
-            <>
-              <section className="wz-panel" aria-labelledby="profile-selection-heading" {...help("wz.profile.choose")}>
-                <div className="wz-panel-head">
-                  <div>
-                    <h2 id="profile-selection-heading">Choose this machine's role</h2>
-                    <p className="muted">This writes a local profile intent. The system applies it on first boot and can be reopened safely.</p>
-                  </div>
-                  <button className="btn btn-primary" onClick={() => void saveProfile()} disabled={profileSaving}>
-                    {profileSaving ? "Saving…" : "Save profile"}
-                  </button>
-                </div>
-                <div className="wz-profile-grid">
-                  {PROFILES.map((option) => (
-                    <label key={option.id} className={`wz-profile-option ${profile === option.id ? "is-selected" : ""}`}>
-                      <input type="radio" name="os-profile" value={option.id} checked={profile === option.id} onChange={() => setProfile(option.id)} />
-                      <strong>{option.title}</strong>
-                      <span>{option.detail}</span>
-                      <small>{option.resources}</small>
-                    </label>
-                  ))}
-                </div>
-                <p className="muted wz-small">Offline-safe: selection does not download anything. Command services require explicit image and configuration.</p>
-              </section>
-              <AgentsStep client={client} status={status} onError={fail} />
-            </>
+          {s.id === "profile" && (
+            <ProfileStep selected={profile} saved={status?.profile.requested} onSelect={setProfile} />
           )}
+          {s.id === "role" && <RoleStep profile={current} client={client} onError={fail} />}
+          {s.id === "agents" && <AgentsStep client={client} status={status} onError={fail} />}
           {s.id === "tools" && (
             <ToolsStep
               ref={searchRef}
@@ -395,8 +395,8 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
             )}
           </span>
           {step < STEPS.length - 1 ? (
-            <button className="btn btn-primary" onClick={() => go(step + 1)}>
-              Next
+            <button className="btn btn-primary" disabled={profileSaving} onClick={() => void next()}>
+              {s.id === "profile" && profileSaving ? "Saving…" : "Next"}
               <Icon name="arrowRight" size={14} />
             </button>
           ) : (

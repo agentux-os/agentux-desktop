@@ -31,7 +31,7 @@
 #                                           an https:// or SSH URL, or OWNER/REPO on
 #                                           GitHub; DIR defaults to PARENT/REPO,
 #                                           PARENT to ~/src
-#   agentux-setup node status | pending | confirm ID | reject ID
+#   agentux-setup node status | pending | confirm ID | reject ID | enroll URL ORG [NODE_ID]
 #                                           this node's link to AgentUX Command: where
 #                                           it reports (never the token), and the
 #                                           commands waiting for someone here
@@ -697,12 +697,25 @@ cmd_node() {
             fi
             ;;
         pending) if [[ -r "$pending" ]]; then jq -c 'map(select(.decision == null))' "$pending"; else echo '[]'; fi ;;
+        enroll)
+            # The token comes on stdin, never as an argument.
+            local url="${2:-}" org="${3:-}" node_id="${4:-}" token
+            [[ "$url" =~ ^https?://[A-Za-z0-9._~:/%-]+$ ]] || die "node: not a Command URL: $url"
+            [[ "$org" =~ ^[A-Za-z0-9._-]+$ ]] || die "node: not an organization id: $org"
+            [[ -z "$node_id" || "$node_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "node: not a node id: $node_id"
+            command -v aux >/dev/null || die "node: aux is not installed"
+            IFS= read -r token || true
+            [[ -n "$token" ]] || die "node: the token is empty"
+            AGENTUX_NODE_TOKEN="$token" aux node enroll "$url" --organization "$org" ${node_id:+--node-id "$node_id"} >/dev/null                 || die "node: enrolling failed"
+            systemctl --user enable --now agentux-gateway.service >/dev/null 2>&1 || true
+            cmd_node status
+            ;;
         confirm | reject)
             [[ "${2:-}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "node: not a command id: ${2:-}"
             command -v aux >/dev/null || die "node: aux is not installed"
             aux node "$1" "$2"
             ;;
-        *) die "usage: node status | pending | confirm ID | reject ID" ;;
+        *) die "usage: node status | pending | confirm ID | reject ID | enroll URL ORG [NODE_ID]" ;;
     esac
 }
 

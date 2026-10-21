@@ -84,6 +84,11 @@ export class TauriSetupClient implements SetupClient {
     return JSON.parse(await this.exec(["node", "pending"])) as HeldCommand[];
   }
 
+  async enrollNode(input: { url: string; organization: string; nodeId?: string; token: string }): Promise<NodeStatus> {
+    const args = ["node", "enroll", input.url, input.organization, ...(input.nodeId ? [input.nodeId] : [])];
+    return JSON.parse(await this.exec(args, input.token)) as NodeStatus;
+  }
+
   async decideCommand(commandId: string, accept: boolean): Promise<void> {
     await this.exec(["node", accept ? "confirm" : "reject", commandId]);
   }
