@@ -226,8 +226,9 @@ function AgentCard({
           {guide.apiKey.env && guide.apiKey.label && (
             <>
               <p className="muted">
-                To keep a key in the desktop's secret service (KWallet) rather than in a file, run this in a terminal and
-                paste the key when asked; new shells then get <code>{guide.apiKey.env}</code>:
+                Add it in the cockpit's <strong>Settings → API keys</strong>: it is kept in the desktop's secret service
+                (KWallet), and agentuxd gives it to the agents that read it. From a terminal, the same, plus{" "}
+                <code>{guide.apiKey.env}</code> in new shells:
               </p>
               <pre className="wz-snippet">{apiKeySnippet(guide.apiKey.env, guide.apiKey.label)}</pre>
             </>

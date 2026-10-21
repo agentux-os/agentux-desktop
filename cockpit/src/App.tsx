@@ -13,6 +13,9 @@ import { Inbox } from "./components/Inbox";
 import { LiveRail } from "./components/LiveRail";
 import { NewRunDialog } from "./components/NewRunDialog";
 import { AgentsView } from "./components/AgentsView";
+import { SettingsView } from "./components/SettingsView";
+import { getCloneDir } from "./lib/localPrefs";
+import { openWelcome } from "./setup/open";
 import { RunBoard } from "./components/RunBoard";
 import { SessionPanel } from "./components/SessionPanel";
 import { Sidebar, type View } from "./components/Sidebar";
@@ -23,7 +26,13 @@ import { COCKPIT_TOUR } from "./helper/Tour";
 
 type Theme = "dark" | "light";
 
-const VIEW_TITLE: Record<View, string> = { board: "Run board", inbox: "Approvals", bus: "Agent bus", agents: "Agents" };
+const VIEW_TITLE: Record<View, string> = {
+  board: "Run board",
+  inbox: "Approvals",
+  bus: "Agent bus",
+  agents: "Agents",
+  settings: "Settings",
+};
 
 function loadTheme(): Theme {
   try {
@@ -151,7 +160,16 @@ export default function App() {
   const clearLimit = useCallback((harness: string) => client.clearLimit(harness), [client]);
   const cloneRepo = useCallback(async (source: string) => {
     const { createSetupClient } = await import("./setup/client");
-    return (await createSetupClient()).clone(source);
+    return (await createSetupClient()).clone(source, getCloneDir());
+  }, []);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const { isTauri } = await import("./daemon/tauri/TauriDaemonClient");
+      if (!isTauri()) return;
+      const { getVersion } = await import("@tauri-apps/api/app");
+      setAppVersion(await getVersion());
+    })().catch(() => {});
   }, []);
 
   const startRun = async (input: StartRunInput) => {
@@ -219,6 +237,9 @@ export default function App() {
         break;
       case "g":
         setView("agents");
+        break;
+      case ",":
+        setView("settings");
         break;
       case "j":
       case "arrowdown":
@@ -427,7 +448,18 @@ export default function App() {
                 onOpenRun={openRun}
               />
             )}
-            {view === "agents" && <AgentsView client={client} setup={setupClient} />}
+            {view === "agents" && <AgentsView client={client} setup={setupClient} onSettings={() => setView("settings")} />}
+            {view === "settings" && (
+              <SettingsView
+                client={client}
+                state={state}
+                setup={setupClient}
+                theme={theme}
+                onTheme={setTheme}
+                onWelcome={() => void openWelcome()}
+                version={appVersion}
+              />
+            )}
             {view === "bus" && (
               <BusFeed state={state} mode={client.mode} projectId={projectId} onOpenRun={openRun} onPost={postBus} />
             )}
@@ -545,7 +577,7 @@ function requestLine(r: PermissionRequest, state: { runs: Record<string, Run>; s
 }
 
 const SHORTCUTS: [string, string][] = [
-  ["B / I / M / G", "Run board / approvals inbox / agent bus / agents"],
+  ["B / I / M / G / ,", "Run board / approvals inbox / agent bus / agents / settings"],
   ["A", "Approve the focused request (inbox selection or open run)"],
   ["D", "Deny or reject it (decline a question)"],
   ["1 … 9", "Answer the focused question with that option"],

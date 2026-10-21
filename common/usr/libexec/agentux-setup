@@ -26,9 +26,16 @@
 #                                           print the public key
 #   agentux-setup launch ITEM               start an installed app
 #   agentux-setup open-url URL              open an https:// URL in the browser
-#   agentux-setup clone SOURCE [DIR]        clone a repository and print its path:
+#   agentux-setup clone SOURCE [DIR | --into PARENT]
+#                                           clone a repository and print its path:
 #                                           an https:// or SSH URL, or OWNER/REPO on
-#                                           GitHub; DIR defaults to ~/src/REPO
+#                                           GitHub; DIR defaults to PARENT/REPO,
+#                                           PARENT to ~/src
+#   agentux-setup key list | set VAR | remove VAR
+#                                           API keys in the secret service, which
+#                                           agentuxd gives the agent CLIs: list says
+#                                           which are set (never their values), set
+#                                           reads the key from stdin
 #   agentux-setup should-run                exit 0 if the wizard should open at login
 #   agentux-setup autostart                 the login autostart: open the wizard if
 #                                           should-run says so
@@ -606,7 +613,15 @@ cmd_clone() {
     esac
     name="${url%/}"; name="${name##*/}"; name="${name##*:}"; name="${name%.git}"
     [[ "$name" =~ ^[A-Za-z0-9_.-]+$ && "$name" != . && "$name" != .. ]] || die "clone: no repository name in $src"
-    dir="${2:-$HOME/src/$name}"
+    if [[ "${2:-}" == --into ]]; then
+        local parent="${3:-}"
+        [[ -n "$parent" ]] || die "clone: --into needs a directory"
+        [[ "$parent" == "~" || "$parent" == "~/"* ]] && parent="$HOME${parent#\~}"
+        [[ "$parent" == /* ]] || die "clone: --into needs an absolute directory or ~/...: $parent"
+        dir="${parent%/}/$name"
+    else
+        dir="${2:-$HOME/src/$name}"
+    fi
     if [[ -e "$dir" ]]; then
         # The same repository cloned before: use it.
         local origin
@@ -627,6 +642,40 @@ cmd_clone() {
         die "clone: $(tail -n 3 <<<"$err")"
     }
     echo "$dir"
+}
+
+# API keys for the agent CLIs, in the desktop's secret service under
+# agentux-key=<VAR>: agentuxd looks them up when it starts an agent and hands
+# each to that CLI's process only. Their values are never printed.
+key_vars=(ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY)
+
+cmd_key() {
+    local action="${1:-}" var="${2:-}"
+    command -v secret-tool >/dev/null || die "key: secret-tool (libsecret) is not installed"
+    if [[ "$action" != list ]]; then
+        [[ " ${key_vars[*]} " == *" $var "* ]] || die "key: not a key AgentUX keeps: ${var:-none} (${key_vars[*]})"
+    fi
+    case "$action" in
+        list)
+            local v set rows=()
+            for v in "${key_vars[@]}"; do
+                set=false
+                timeout 5 secret-tool lookup agentux-key "$v" >/dev/null 2>&1 && set=true
+                rows+=("$(jq -nc --arg k "$v" --argjson v "$set" '{key: $k, value: $v}')")
+            done
+            printf '%s\n' "${rows[@]}" | jq -sc from_entries
+            ;;
+        set)
+            local key
+            IFS= read -r key || true
+            key="${key//[[:space:]]/}"
+            [[ -n "$key" ]] || die "key: the key is empty"
+            printf '%s' "$key" | secret-tool store --label="AgentUX: $var" agentux-key "$var" \
+                || die "key: the secret service did not store it (is the wallet open?)"
+            ;;
+        remove) secret-tool clear agentux-key "$var" ;;
+        *) die "usage: key list | set VAR | remove VAR" ;;
+    esac
 }
 
 cmd_git() {
@@ -719,6 +768,7 @@ main() {
         wait-desktop-setup) cmd_wait_desktop_setup ;;
         clone) cmd_clone "$@" ;;
         update-agent) cmd_update_agent "$@" ;;
+        key) cmd_key "$@" ;;
         finish) mkdir -p "$state_root" && touch "$welcome_marker" ;;
         reset) rm -f "$welcome_marker" ;;
         vscode-settings) need_catalog; cmd_vscode_settings "$@" ;;

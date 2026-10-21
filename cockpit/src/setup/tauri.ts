@@ -60,8 +60,20 @@ export class TauriSetupClient implements SetupClient {
     await this.exec(["open-url", url]);
   }
 
-  async clone(source: string): Promise<string> {
-    return (await this.exec(["clone", source])).trim();
+  async clone(source: string, into?: string): Promise<string> {
+    return (await this.exec(into ? ["clone", source, "--into", into] : ["clone", source])).trim();
+  }
+
+  async keys(): Promise<Record<string, boolean>> {
+    return JSON.parse(await this.exec(["key", "list"])) as Record<string, boolean>;
+  }
+
+  async setKey(variable: string, value: string): Promise<void> {
+    await this.exec(["key", "set", variable], value);
+  }
+
+  async removeKey(variable: string): Promise<void> {
+    await this.exec(["key", "remove", variable]);
   }
 
   async getGit(): Promise<GitConfig> {

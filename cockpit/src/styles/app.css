@@ -2119,6 +2119,79 @@ kbd {
 .prefs-check.is-sub {
   padding-left: 22px;
 }
+/* ---- settings ------------------------------------------------------------ */
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+  height: 100%;
+}
+.settings-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.settings-section h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.prefs-sub {
+  margin-top: 14px !important;
+}
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-rows select {
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+.settings-about {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 12.5px;
+}
+.settings-about dd {
+  margin: 0;
+}
+.key-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.key-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.key-form,
+.key-actions {
+  display: flex;
+  gap: 6px;
+}
+.key-form input {
+  width: 260px;
+  max-width: 40vw;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+}
 .form-error {
   padding: 7px 10px;
   border-radius: var(--radius-sm);
