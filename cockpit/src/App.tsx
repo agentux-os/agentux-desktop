@@ -8,6 +8,7 @@ import { useCockpit, useDaemon } from "./state/daemon";
 import type { StartRunInput } from "./daemon/client";
 import { BusFeed } from "./components/BusFeed";
 import { DaemonBanner } from "./components/DaemonBanner";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Icon } from "./components/Icon";
 import { Inbox } from "./components/Inbox";
 import { LiveRail } from "./components/LiveRail";
@@ -409,6 +410,7 @@ export default function App() {
           </button>
         </header>
         {state.connection.fallbackReason && <DaemonBanner reason={state.connection.fallbackReason} />}
+        <UpdateBanner setup={setupClient} />
         <div className={`content ${panelOpen ? "has-panel" : ""}`}>
           <div className="view">
             {view === "board" && (
