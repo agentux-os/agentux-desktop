@@ -20,7 +20,13 @@ echo '{"jsonrpc":"2.0","id":1,"method":"runs.list"}' | socat - UNIX-CONNECT:$XDG
 |---|---|---|
 | `projects.register` | `{ path }` — absolute path inside a git repository | `Project` (idempotent per repository) |
 | `projects.list` | — | `Project[]` |
-| `runs.start` | `{ projectId, prompt?, issue?, title? }` — `prompt` or `issue` required | `Run` |
+| `runs.start` | `{ projectId, prompt?, issue?, title?, roles?, models? }` — `prompt` or `issue` required; `roles` maps role names to harness ids for this run, `models` role names to models | `Run` |
+| `harnesses.test` | `{ harness, model? }` | `{ harness, ok, detail, seconds, limit }`: one short prompt, answered like a helper question (no tools); a usage limit in the answer is recorded |
+| `preferences.get` | none | `AgentPrefs`: the user's agent preferences; see [Agent preferences](#agent-preferences) |
+| `preferences.set` | `AgentPrefs` | `AgentPrefs`, as written to the file; an unknown harness or 0 minutes is `-32602` |
+| `limits.list` | none | `HarnessLimit[]`: the usage limits in force; see [Usage limits](#usage-limits) |
+| `limits.clear` | `{ harness, model? }` — without `model`, every limit of the harness | `HarnessLimit[]` still in force; runs waiting for the harness go on |
+| `harnesses.list` | none | `[{ id, command, installed, signedIn, experimental, limits, version, usage: { todayUsd, weekUsd, weekSessions }, quota: [{ label, usedPercent, resetsAt, seenAt }] }]`: the built-in harnesses, whether each one's vendor program (`command`) is on the daemon's `PATH`, whether the user signed in to it (`null`: cannot tell), its `--version`, what its sessions cost, and its plan's usage windows where the harness's own files say (Codex) |
 | `runs.list` | `{ projectId? }` | `Run[]`, newest first |
 | `runs.get` | `{ runId }` | `{ run: Run, attempts: StepAttempt[], requests: PermissionRequest[], sessions: Session[] }` |
 | `runs.cancel` | `{ runId }` | `Run` |
@@ -43,7 +49,20 @@ echo '{"jsonrpc":"2.0","id":1,"method":"runs.list"}' | socat - UNIX-CONNECT:$XDG
 | `bus.hello` | `{ sessionToken }` | `{ identity, allowedTools, maxTurnsPerExchange }` — bus bridge only, see [Agent bus](#agent-bus) |
 | `bus.call` | `{ sessionToken, call }` | `{ ok: <tool result> }` or `{ err: <refusal> }` — bus bridge only |
 
-`runs.start` reads the project's `agentux.yaml` at that moment and stores it with the run; editing the file later does not affect a run in progress. Without the file, the built-in default pipeline applies.
+`runs.start` reads the project's `agentux.yaml` at that moment and stores it with the run; editing the file later does not affect a run in progress. Without the file, the built-in default pipeline applies, with the harnesses you can use: installed, and not known to be signed out (`harnesses.list`). Each role keeps its default harness (Claude Code to plan and implement, Codex to review) when that one is usable, and otherwise takes the first usable one, in the order of `harnesses.list`; the reviewer prefers a different harness than the implementer. When none is usable, the defaults stay, and the run fails with what is missing when it reaches a role.
+
+Sign-in is read from where each CLI keeps it: `~/.claude/.credentials.json` or `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` for Claude Code, `$CODEX_HOME/auth.json` (`~/.codex`) or `OPENAI_API_KEY` for Codex, OpenCode's `auth.json` under `$XDG_DATA_HOME/opencode`, and `~/.gemini/antigravity-cli/antigravity-oauth-token` for Antigravity. OpenCode can also take keys from its config, and Antigravity may keep its token elsewhere, so for those two a missing file is `null`, not signed out.
+
+**API keys in the secret service.** A user service does not read `~/.bashrc`, so keys exported there never reach the daemon. Keys kept in the desktop's secret service under `agentux-key=<VARIABLE>` (the cockpit's Settings, or `secret-tool store --label="Anthropic API key" agentux-key ANTHROPIC_API_KEY`) are looked up when a harness starts and given to that harness's process only: `ANTHROPIC_API_KEY` to Claude Code, `OPENAI_API_KEY` to Codex, `GEMINI_API_KEY` to Antigravity, and all of them (with `OPENROUTER_API_KEY`) to OpenCode. A variable set in the daemon's own environment wins. Such a key counts as signed in.
+
+On a server without a desktop (no secret service), give agentuxd the keys as systemd credentials: they are read from `$CREDENTIALS_DIRECTORY/<VARIABLE>` first. For example, with `systemd-creds encrypt --user --name=ANTHROPIC_API_KEY key.txt ~/.config/credstore.encrypted/ANTHROPIC_API_KEY.cred` and a drop-in `~/.config/systemd/user/agentuxd.service.d/keys.conf`:
+
+```ini
+[Service]
+LoadCredentialEncrypted=ANTHROPIC_API_KEY:%h/.config/credstore.encrypted/ANTHROPIC_API_KEY.cred
+```
+
+`roles` overrides the harness of the pipeline's roles for this run (`{"implementer": "opencode", "reviewer": "antigravity"}`). A role the pipeline does not have, or an unknown harness id, is `-32602`. A role's `model` is dropped when its harness is replaced. The run's `roles` field shows what each role got.
 
 ### Errors
 
@@ -86,6 +105,7 @@ Where the replay ends, the subscription gets one notification of its own, exactl
 | `session` | `session: Session` | A session started or changed state or usage (full snapshot) |
 | `session_event` | `sessionId`, `event: SessionEvent` | Something happened in a session |
 | `bus_message` | `message: BusMessage` | Traffic on the run's agent bus (see [Agent bus](#agent-bus)) |
+| `limits` | `limits: HarnessLimit[]` | The usage limits in force changed (no `runId`) |
 
 Session events are stored in the event log like the others, so `events.subscribe` with `since: 0` replays a run's sessions. Agent message chunks are coalesced (up to about 4 KB, or 750 ms); reasoning chunks are not recorded; tool output and diff texts are cut at 16 KB.
 
@@ -98,6 +118,16 @@ type StepKind = "plan" | "implement" | "gate" | "review" | "pull_request" | "cus
 type RunStatus = "running" | "waiting" | "done" | "failed" | "cancelled"; // waiting = paused on an approval
 
 interface Project { id: string; name: string; path: string; createdAt: number }
+
+interface HarnessLimit {
+  harness: string;           // e.g. "claude-code"
+  model: string | null;      // the model the limit is for; null: the whole harness
+  kind: "session" | "weekly" | "credits" | "rate" | "stalled";
+  until: number | null;      // when it ends; null: only when cleared (credits)
+  untilKnown: boolean;       // the harness said when; false: a guess, then tried again
+  message: string;           // what the harness said
+  at: number;
+}
 
 interface Run {
   id: string;              // 8 hex digits; the branch is aux/<id>
@@ -136,7 +166,7 @@ interface PermissionRequest {
   // plan = approve the plan; step = any other approve: true step;
   // permission = an agent asks before a tool call; budget = the run is over budget;
   // question = an agent asks the human through the bus (ask_human)
-  kind: "plan" | "step" | "permission" | "budget" | "question";
+  kind: "plan" | "step" | "permission" | "budget" | "question" | "limit";
   runId: string; projectId: string; stepIndex: number; step: StepKind;
   sessionId: string | null;  // the session that asked, for permission and question requests
   title: string; detail: string;
@@ -240,8 +270,48 @@ type BusEndpoint =
 5. **Permissions.** An agent asking before a tool call creates a `permission` request and the run is `waiting` while the agent waits (the step does not end). `requests.approve` lets the tool run; `requests.deny` tells the agent no and the step goes on. Requests still pending when the agent's turn ends, the run is cancelled or the daemon restarts become `cancelled`. With `--auto-approve-permissions` no request is created and a `log` event records each allowed call.
 6. **Budget.** Before each agent step, a run whose `costUsd` exceeds `budgetUsd` pauses on a `budget` request. Approving raises `budgetUsd` to `costUsd + budget.max_usd_per_run`; denying fails the run.
 
-7. **Agent bus.** Agents talk to each other and to the human through the `agentux` MCP server; see [Agent bus](#agent-bus).
-8. **The human in a session.** `sessions.prompt` sends the human's message to a live session; see [Talking to a session](#talking-to-a-session).
+7. **Usage limits.** A harness that says it ran out is kept out of use until its limit resets, and the step runs again with another agent, or waits; see [Usage limits](#usage-limits).
+8. **Agent bus.** Agents talk to each other and to the human through the `agentux` MCP server; see [Agent bus](#agent-bus).
+9. **The human in a session.** `sessions.prompt` sends the human's message to a live session; see [Talking to a session](#talking-to-a-session).
+
+### Usage limits
+
+When an agent step's harness answers with a usage limit instead of work (an error, or a short reply that is only the notice), the daemon records a `HarnessLimit` and runs the step again. It reads what Claude Code, Codex, Gemini / Antigravity and HTTP APIs say:
+
+- **Which limit** (`kind`): `session` (Claude Code's 5-hour window, Codex's usage limit), `weekly`, `credits` (credit balance too low, insufficient quota, billing), or `rate` (HTTP 429, quota exceeded).
+- **For what:** a model the notice names (`opus`, `gemini-2.5-pro`, `gpt-5-codex`) when the role uses that model, else the whole harness.
+- **Until when** (`until`, `untilKnown: true`): Claude Code's `limit reached|<epoch>`, `resets 3pm (America/Sao_Paulo)`, `resets Oct 27, 9am`; Codex's `try again in 2 days 3 hours` or `try again at 3:05 PM`; Gemini's `retry in 41.5s`, `reset after 3h12m`, `"retryDelay": "30s"`; `retry-after: 120`. Times without a zone are in the daemon's local time zone. Without a time, the daemon tries the harness again after a guess (`untilKnown: false`): 2 minutes for `rate`, an hour for `session`, a day for `weekly`. `credits` have no time: they hold until `limits.clear`.
+
+**Stalled agents.** A turn that goes 10 minutes without a sign of life from the agent (no message, tool call or update), or 60 minutes while one of its tool calls runs (a long build or test suite says nothing until it ends), is given up on: the daemon cancels it, closes the session and records a `stalled` limit for the harness, for 15 minutes. Time the agent spends waiting for the human (a permission request, a bus `ask_human`) does not count. The step then goes on like any other limit: another agent, or a wait.
+
+While a limit holds, the harness (or model) is out of use: the built-in pipeline does not pick it, and an agent step of a role it plays gives the role to the role's `fallback` harnesses in `agentux.yaml`, in order, or, without the key, to the first other harness the user can use (`harnesses.list` order); `fallback: []` keeps the role. When no harness can take it, the run waits on a `limit` request saying why and until when. It goes on by itself once the limit is over (checked every 15 seconds), or when the human approves the request or calls `limits.clear` (after adding credits or resetting the limit on the vendor's site). Denying the request fails the run.
+
+```yaml
+roles:
+  implementer:
+    harness: antigravity
+    fallback: [opencode, claude-code]
+```
+
+### Agent preferences
+
+`$XDG_CONFIG_HOME/agentux/agents.yaml` (`~/.config/agentux/agents.yaml`) holds the user's choices for every project; a project's `agentux.yaml` comes first. The daemon reads it each time, so edits apply to the next run (and the next turn, for the minutes). The cockpit's Agents view writes it through `preferences.set`.
+
+```yaml
+order: [opencode, claude-code]     # most preferred first; the others follow
+roles:                             # projects without agentux.yaml
+  planner:
+    harness: claude-code
+    model: opus
+fallback: [opencode]               # roles with no fallback of their own
+idle_minutes: 10                   # a turn with no sign of life is given up on
+tool_minutes: 60                   # the same while a tool call runs
+notifications: true                # desktop notifications
+```
+
+`order` is the order automatic picks and fallbacks try harnesses in. A preferred role harness that is not usable (not installed, signed out, at a limit) is replaced like a default one, and its model goes with it. **Notifications** go to the desktop (`org.freedesktop.Notifications`) when an agent reaches a limit or stops responding, when another takes over, when a run waits for a limit and when it goes on.
+
+**Plan usage.** Codex writes its 5-hour and weekly windows into its session logs (`$CODEX_HOME/sessions`); `harnesses.list` shows them, and a spent window keeps Codex out of use until its reset before a step even starts.
 
 ### Talking to a session
 

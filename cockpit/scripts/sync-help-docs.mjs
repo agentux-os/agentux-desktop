@@ -47,28 +47,21 @@ const PAGES = [
     path: "README.md",
     sections: ["Release channels", "Version", "AgentUX versions"],
   },
-  ...[
-    ["0001-linux-distribution-on-fedora-atomic", "ADR 0001: AgentUX is a Linux distribution on Fedora Atomic"],
-    ["0002-harness-integration-via-acp", "ADR 0002: Harness integration via ACP"],
-    ["0003-workflow-engine", "ADR 0003: Workflow engine"],
-    ["0004-unified-interface-and-agent-bus", "ADR 0004: Unified interface and agent bus"],
-    ["0005-agentux-yaml", "ADR 0005: Pipelines in agentux.yaml"],
-    ["0007-terminal-mode-is-a-session-handoff", "ADR 0007: Terminal mode is a session handoff"],
-    ["0008-releases-and-image-pinning", "ADR 0008: Releases and image pinning"],
-    ["0009-container-isolation-for-checks", "ADR 0009: Container isolation for checks"],
-    ["0010-image-variants-and-system-identity", "ADR 0010: Image variants and system identity"],
-    ["0011-release-channels-and-iso-distribution", "ADR 0011: Release channels and ISO distribution"],
-    ["0012-system-version-and-release-identity", "ADR 0012: System version and release identity"],
-    ["0013-first-run-wizard", "ADR 0013: First-run wizard"],
-    ["0014-installation-profiles-and-platform-services", "ADR 0014: Installation profiles and platform services"],
-    ["0015-organization-command-office-contract", "ADR 0015: Organization definitions are versioned domain contracts"],
-    ["0017-help-mascot", "ADR 0017: A help mascot that knows AgentUX, offline first"],
-    ["0019-updates-without-reinstalling", "ADR 0019: Updates without reinstalling"],
-  ].map(([file, title]) => ({ id: `adr-${file.slice(0, 4)}`, title, repo: "agentux", path: `docs/adr/${file}.md` })),
 ];
 
 function git(repo, ...argv) {
   return execFileSync("git", ["-C", join(root, repo), ...argv], { encoding: "utf8", maxBuffer: 8 << 20 });
+}
+
+// Every ADR in agentux's docs/adr on origin/main, titled by its heading, so a
+// new ADR is bundled without editing this list.
+for (const file of git("agentux", "ls-tree", "--name-only", "origin/main", "docs/adr/").split("\n")) {
+  const name = file.split("/").pop();
+  if (!/^\d{4}-.*\.md$/.test(name)) continue;
+  const heading = git("agentux", "show", `origin/main:${file}`).split("\n")[0];
+  const m = /^#\s+(\d{4})\.\s+(.*)$/.exec(heading);
+  if (!m) throw new Error(`${file}: first line is not "# NNNN. Title"`);
+  PAGES.push({ id: `adr-${m[1]}`, title: `ADR ${m[1]}: ${m[2]}`, repo: "agentux", path: file });
 }
 
 /** Drops HTML blocks (badges, pictures, details/summary lines). */

@@ -1,0 +1,46 @@
+name: help docs
+
+# The penguin's offline docs (cockpit/src/helper/docs/) are copies of pages
+# from the other AgentUX repositories. Weekly, this regenerates them from
+# each repository's main and fails when the bundled copies are stale, with
+# the refresh as an artifact to commit.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: agentux-desktop
+      - name: Clone the other repositories
+        run: |
+          for repo in agentux agentux-core agentux-os; do
+            git clone --quiet --filter=blob:none "https://github.com/agentux-os/$repo" "$repo"
+          done
+          # The script reads origin/main of every repository, this one too.
+          git -C agentux-desktop fetch --quiet origin main
+      - name: Regenerate
+        run: node agentux-desktop/cockpit/scripts/sync-help-docs.mjs --root "$GITHUB_WORKSPACE"
+      - name: Check
+        run: node agentux-desktop/cockpit/scripts/check-help-docs.mjs
+      - name: Fail when stale
+        working-directory: agentux-desktop
+        run: |
+          if [ -n "$(git status --porcelain cockpit/src/helper/docs)" ]; then
+            git status --short cockpit/src/helper/docs
+            echo "::error::The bundled help docs are stale: run cockpit/scripts/sync-help-docs.mjs and commit cockpit/src/helper/docs (the refresh is attached)"
+            exit 1
+          fi
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: help-docs
+          path: agentux-desktop/cockpit/src/helper/docs
