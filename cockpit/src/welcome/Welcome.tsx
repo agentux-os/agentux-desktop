@@ -78,6 +78,32 @@ function loadTheme(): "dark" | "light" {
   }
 }
 
+/** Where the user was in the wizard, so a wizard that was interrupted (a
+ * reboot, a crash) opens where it left off. Cleared when it finishes. */
+const PROGRESS_KEY = "agentux.welcome.progress";
+
+type Progress = { step: StepId; profile: ProfileId };
+
+function loadProgress(): Progress | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "null") as Partial<Progress> | null;
+    if (!saved || typeof saved.step !== "string" || typeof saved.profile !== "string") return null;
+    const profile = profileById(saved.profile).id;
+    return stepsFor(profileById(profile)).includes(saved.step as StepId) ? { step: saved.step as StepId, profile } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveProgress(progress: Progress | null) {
+  try {
+    if (progress) localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    else localStorage.removeItem(PROGRESS_KEY);
+  } catch {
+    // Without storage the wizard starts at the beginning next time.
+  }
+}
+
 function profileLabel(profile: string | null | undefined): string {
   const labels: Record<string, string> = {
     workstation: "AgentUX Workstation",
@@ -92,13 +118,16 @@ function profileLabel(profile: string | null | undefined): string {
 
 export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: number }) {
   const { status, installed, error: statusError, refresh } = useSetupStatus(client, pollMs);
-  const [step, setStep] = useState(0);
+  const [resumed] = useState(loadProgress);
+  const [step, setStep] = useState(() =>
+    resumed ? Math.max(0, stepsFor(profileById(resumed.profile)).indexOf(resumed.step)) : 0,
+  );
   const [selection, setSelection] = useState<Selection>(
     () => new Map(CATALOG.items.filter((i) => i.recommended).map((i) => [i.id, undefined])),
   );
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
-  const [profile, setProfile] = useState<ProfileId>("workstation");
+  const [profile, setProfile] = useState<ProfileId>(resumed?.profile ?? "workstation");
   const [profileSaving, setProfileSaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -145,6 +174,10 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
     [current],
   );
   const go = useCallback((i: number) => setStep(Math.max(0, Math.min(STEPS.length - 1, i))), [STEPS.length]);
+  useEffect(() => {
+    const id = STEPS[Math.min(step, STEPS.length - 1)]?.id;
+    if (id) saveProgress({ step: id, profile });
+  }, [step, profile, STEPS]);
   // Leaving the profile step saves the choice (it only records an intent).
   const next = async () => {
     if (STEPS[step].id === "profile" && status?.profile.requested !== profile) {
@@ -225,6 +258,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   const finish = async (openCockpit: boolean, tour = false) => {
     if (tour) requestTour();
     markWelcomeOpen(false);
+    saveProgress(null);
     try {
       await client.finish();
       await client.close(openCockpit);

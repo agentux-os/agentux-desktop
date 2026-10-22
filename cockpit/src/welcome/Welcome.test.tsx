@@ -15,6 +15,7 @@ async function flush(ms = 0) {
 describe("Welcome wizard (mock backend)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorage.clear();
   });
   afterEach(() => {
     cleanup();
@@ -183,6 +184,40 @@ describe("Welcome wizard (mock backend)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip setup" }));
     await flush();
     expect(skipper.calls.slice(-2)).toEqual(["finish", "close"]);
+  });
+});
+
+describe("Welcome wizard progress", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it("reopens on the step it was left on, and starts over once finished", async () => {
+    render(<Welcome client={new MockSetupClient({ firstLoginDone: 1 })} pollMs={500} />);
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: /^3\s*Agents/ }));
+    await flush();
+    cleanup();
+
+    // Interrupted (a reboot): the wizard comes back where it was.
+    const client = new MockSetupClient({ firstLoginDone: 1 });
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    expect(screen.getByRole("heading", { level: 1, name: "Your coding agents" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip setup" }));
+    await flush();
+    expect(client.calls).toContain("finish");
+    cleanup();
+
+    render(<Welcome client={new MockSetupClient({ firstLoginDone: 1 })} pollMs={500} />);
+    await flush();
+    expect(screen.getByRole("heading", { level: 1, name: "What is this machine for?" })).toBeTruthy();
   });
 });
 
