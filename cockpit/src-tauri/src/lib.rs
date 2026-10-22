@@ -16,8 +16,16 @@ pub(crate) const MAIN_WINDOW: &str = "main";
 /// Brings the existing cockpit window forward: restore it if minimized, map it
 /// if hidden, then ask the compositor for focus. Each step is best effort; on
 /// Wayland the compositor decides whether the focus request is honoured.
+/// While the welcome wizard is not finished, the wizard comes forward
+/// instead: the cockpit does not run without it.
 #[cfg(desktop)]
 pub(crate) fn reveal_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if setup::welcome_pending() {
+        if let Err(e) = setup::open_welcome(app) {
+            eprintln!("agentux-cockpit: cannot open the welcome window: {e}");
+        }
+        return;
+    }
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return;
     };
@@ -49,9 +57,13 @@ pub fn run() {
     builder
         .setup(|app| {
             daemon::init(app.handle());
+            // The cockpit window starts hidden: it shows unless the wizard
+            // still has to be finished, which then opens alone.
             #[cfg(desktop)]
             if setup::wants_welcome(&std::env::args().collect::<Vec<_>>()) {
                 setup::open_welcome(app.handle())?;
+            } else {
+                reveal_main_window(app.handle());
             }
             Ok(())
         })
@@ -67,8 +79,11 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 daemon::release_terminals(window);
-                if window.label() == setup::WELCOME_WINDOW {
-                    setup::mark_welcome_done();
+                // Closing an unfinished wizard closes the cockpit; it opens
+                // on the wizard again, on the step it was left on.
+                #[cfg(desktop)]
+                if window.label() == setup::WELCOME_WINDOW && setup::welcome_pending() {
+                    window.app_handle().exit(0);
                 }
             }
         })

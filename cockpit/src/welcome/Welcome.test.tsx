@@ -167,7 +167,7 @@ describe("Welcome wizard (mock backend)", () => {
     expect(client.calls).toContain("open-url https://github.com/settings/ssh/new");
   });
 
-  it("finishes: marks the wizard done and opens the cockpit; skipping marks it done too", async () => {
+  it("finishes: marks the wizard done and opens the cockpit; there is no skipping it", async () => {
     const client = new MockSetupClient();
     render(<Welcome client={client} pollMs={500} />);
     await flush();
@@ -177,13 +177,7 @@ describe("Welcome wizard (mock backend)", () => {
     await flush();
     expect(client.calls.slice(-2)).toEqual(["finish", "close open-cockpit"]);
 
-    cleanup();
-    const skipper = new MockSetupClient();
-    render(<Welcome client={skipper} pollMs={500} />);
-    await flush();
-    fireEvent.click(screen.getByRole("button", { name: "Skip setup" }));
-    await flush();
-    expect(skipper.calls.slice(-2)).toEqual(["finish", "close"]);
+    expect(screen.queryByRole("button", { name: "Skip setup" })).toBeNull();
   });
 });
 
@@ -210,7 +204,9 @@ describe("Welcome wizard progress", () => {
     await flush();
     expect(screen.getByRole("heading", { level: 1, name: "Your coding agents" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Skip setup" }));
+    fireEvent.click(screen.getByRole("button", { name: /Done/ }));
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Open the cockpit" }));
     await flush();
     expect(client.calls).toContain("finish");
     cleanup();

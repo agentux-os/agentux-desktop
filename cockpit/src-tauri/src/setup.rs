@@ -118,22 +118,23 @@ pub fn open_welcome<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .inner_size(1120.0, 780.0)
         .min_inner_size(860.0, 600.0)
         .center();
+    // Above the cockpit when it shows; on its own while the cockpit waits
+    // for the wizard.
     if let Some(main) = app.get_webview_window(crate::MAIN_WINDOW) {
-        builder = builder.parent(&main)?;
+        if main.is_visible().unwrap_or(false) {
+            builder = builder.parent(&main)?;
+        }
     }
     builder.build()?;
     Ok(())
 }
 
-/// Records that the wizard was shown and closed, however it closed: Skip,
-/// Done, its title bar, the cockpit quitting. It does not open by itself on
-/// the next login; the app menu and the cockpit still reopen it. Waits for
-/// the script (it only writes a marker), so the record is made before the
-/// process can exit.
-pub fn mark_welcome_done() {
-    if let Err(e) = run_setup(setup_script(), vec!["finish".into()], None) {
-        eprintln!("agentux-cockpit: cannot record the welcome wizard as done: {e}");
-    }
+/// Whether this user still has to go through the wizard: `agentux-setup
+/// should-run` says yes (a user account, not the live session, no
+/// `welcome.done`). Until it is finished the cockpit shows only the wizard.
+/// Without the script (development), never.
+pub fn welcome_pending() -> bool {
+    run_setup(setup_script(), vec!["should-run".into()], None).is_ok_and(|out| out.code == 0)
 }
 
 /// Opens the wizard from the UI (the cockpit's menu).
