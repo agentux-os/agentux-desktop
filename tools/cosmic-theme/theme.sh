@@ -9,7 +9,7 @@
 # directory, at the revision of Fedora's COSMIC release) from Fedora 44's
 # cosmic-settings defaults with this overlay on top, as in the image, and the
 # overlay ships the whole theme it builds: what COSMIC Settings would write
-# for the AgentUX accent. (Fedora's own COSMIC 1.10 theme defaults do not
+# for the AgentUX accent. (Fedora's own COSMIC theme defaults, 1.10 and 1.11, do not
 # match its code: keys are missing and its builder palette does not parse, so
 # COSMIC falls back key by key. A whole built theme loads cleanly.)
 # --write updates usr/ to that.
@@ -29,7 +29,7 @@ dnf -q download --destdir "$work/rpm" cosmic-settings
 # The generator is pinned to the libcosmic revision of one COSMIC release
 # (Cargo.toml); a newer Fedora COSMIC may change the theme (COSMIC 1.10 moved
 # it to a v2 schema), so the two must move together.
-epoch=1.10.0
+epoch=1.11.0
 version=$(rpm -qp --qf '%{VERSION}' "$work"/rpm/cosmic-settings-*.rpm)
 [[ "$version" == "$epoch" ]] || {
     echo "::error::Fedora's cosmic-settings is $version, the theme generator is pinned to COSMIC $epoch: update its libcosmic revision (Cargo.toml) and epoch here, then run theme.sh --write"
