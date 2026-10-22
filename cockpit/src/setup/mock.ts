@@ -10,6 +10,7 @@ import {
   type SetupClient,
   type SetupStatus,
   type SignInTarget,
+  type UpdateStatus,
 } from "./client";
 
 export interface MockSetupOptions {
@@ -22,6 +23,8 @@ export interface MockSetupOptions {
   /** Catalog items installed from the start. */
   installed?: string[];
   arch?: string;
+  /** The update agentux-os staged, as stage-update would report it. */
+  update?: UpdateStatus | null;
 }
 
 const STEP_MS = 2500;
@@ -51,12 +54,14 @@ export class MockSetupClient implements SetupClient {
   private key: string | null = null;
   private finished = false;
   private profile = "workstation";
+  private update: UpdateStatus | null;
 
   constructor(options: MockSetupOptions = {}) {
     this.speed = Math.max(0.1, options.speed ?? 1);
     this.fail = new Set(options.fail ?? []);
     this.arch = options.arch ?? "x86_64";
     this.installed = new Set(options.installed ?? []);
+    this.update = options.update ?? null;
     const done = Math.min(options.firstLoginDone ?? 2, FIRST_LOGIN_STEPS.length);
     this.steps = FIRST_LOGIN_STEPS.slice(0, done).map((name, i) => ({ name, result: "ok", seconds: 20 + i * 7 }));
     this.scheduleFirstLogin();
@@ -270,6 +275,18 @@ export class MockSetupClient implements SetupClient {
     this.calls.push(`ssh-key ${comment}${passphrase ? " (with passphrase)" : ""}`);
     this.key ??= `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK3m9pZq0rX2c7vYh5wT1sLq8fJ4nB6dE0aG2uV9yQxM ${comment || "you@agentux"}`;
     return this.key;
+  }
+
+  async updateStatus(): Promise<UpdateStatus | null> {
+    return this.update;
+  }
+
+  async restart(): Promise<void> {
+    this.calls.push("restart");
+  }
+
+  async notify(title: string, body: string): Promise<void> {
+    this.calls.push(`notify ${title} | ${body}`);
   }
 
   async finish(): Promise<void> {

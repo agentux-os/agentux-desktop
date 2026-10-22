@@ -116,10 +116,34 @@ export interface SetupClient {
   sshKey(): Promise<string | null>;
   /** Creates ~/.ssh/id_ed25519 if missing; returns its public key. */
   generateSshKey(comment: string, passphrase: string): Promise<string>;
+  /** The AgentUX image update agentux-os staged, if any (null: no status yet). */
+  updateStatus(): Promise<UpdateStatus | null>;
+  /** Restarts the machine (into the staged image). */
+  restart(): Promise<void>;
+  /** A desktop notification. */
+  notify(title: string, body: string): Promise<void>;
   /** Marks the wizard done for this user (it stops opening at login). */
   finish(): Promise<void>;
   /** Closes the wizard window; `openCockpit` brings the cockpit forward. */
   close(openCockpit: boolean): Promise<void>;
+}
+
+/** An AgentUX image: the booted one or the one staged for the next boot. */
+export interface UpdateImage {
+  image: string | null;
+  digest: string | null;
+  version: string | null;
+  /** The release it was published as (v0.6.6), when known. */
+  release: string | null;
+}
+
+/** /var/lib/agentux/update-status.json (agentux-os stage-update). */
+export interface UpdateStatus {
+  checkedAt: string;
+  result: "staged" | "current" | "skipped" | "failed";
+  detail: string | null;
+  booted: UpdateImage | null;
+  staged: UpdateImage | null;
 }
 
 /** The order first-login runs its steps in (files/usr/libexec/agentux/first-login in agentux-os). */
@@ -145,5 +169,16 @@ export async function createSetupClient(): Promise<SetupClient> {
   return new MockSetupClient({
     speed: Number(params.get("speed")) || 1,
     fail: (params.get("fail") ?? "").split(",").filter(Boolean),
+    // ?update=staged: a staged image, to see the cockpit's update notice.
+    update:
+      params.get("update") === "staged"
+        ? {
+            checkedAt: new Date().toISOString(),
+            result: "staged",
+            detail: null,
+            booted: { image: "ghcr.io/agentux-os/agentux:stable", digest: "sha256:aaa", version: "44.20261015", release: "v0.6.5" },
+            staged: { image: "ghcr.io/agentux-os/agentux:stable", digest: "sha256:bbb", version: "44.20261022", release: "v0.6.6" },
+          }
+        : null,
   });
 }

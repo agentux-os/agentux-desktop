@@ -1,4 +1,4 @@
-import type { AgentId, GitConfig, HeldCommand, NodeStatus, SetupClient, SetupStatus, SignInTarget } from "./client";
+import type { AgentId, GitConfig, HeldCommand, NodeStatus, SetupClient, SetupStatus, SignInTarget, UpdateStatus } from "./client";
 
 interface SetupOutput {
   code: number;
@@ -108,6 +108,19 @@ export class TauriSetupClient implements SetupClient {
 
   async generateSshKey(comment: string, passphrase: string): Promise<string> {
     return (await this.exec(comment ? ["ssh-key", comment] : ["ssh-key"], passphrase)).trim();
+  }
+
+  async updateStatus(): Promise<UpdateStatus | null> {
+    const status = JSON.parse(await this.exec(["update-status"])) as Partial<UpdateStatus>;
+    return status.checkedAt ? (status as UpdateStatus) : null;
+  }
+
+  async restart(): Promise<void> {
+    await this.exec(["restart"]);
+  }
+
+  async notify(title: string, body: string): Promise<void> {
+    await this.exec(["notify", title, body]);
   }
 
   async finish(): Promise<void> {

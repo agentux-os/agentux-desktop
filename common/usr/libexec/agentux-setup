@@ -595,6 +595,31 @@ cmd_launch() {
     esac
 }
 
+# The update agentux-os staged in the background (agentux-update.service,
+# /var/lib/agentux/update-status.json), as JSON; {} where there is none.
+cmd_update_status() {
+    local file="${AGENTUX_UPDATE_STATUS:-/var/lib/agentux/update-status.json}"
+    if [[ -r "$file" ]] && jq -e 'type == "object"' "$file" >/dev/null 2>&1; then
+        jq -c . "$file"
+    else
+        echo '{}'
+    fi
+}
+
+# Restarts into the staged image (logind lets the active session's user do it).
+cmd_restart() {
+    [[ "${1:-}" == --dry-run ]] && { echo "systemctl reboot"; return 0; }
+    systemctl reboot
+}
+
+# A desktop notification (Plasma and COSMIC both serve org.freedesktop.Notifications).
+cmd_notify() {
+    local title="${1:-}" body="${2:-}"
+    [[ -n "$title" ]] || die "notify: a title is required"
+    gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+        --method org.freedesktop.Notifications.Notify "AgentUX" 0 "agentux" "$title" "$body" '[]' '{}' 10000 >/dev/null
+}
+
 cmd_open_url() {
     [[ "${1:-}" =~ ^https://[A-Za-z0-9._~:/?#@!\$\&\'()*+,\;=%-]+$ ]] || die "open-url: not an https URL: ${1:-}"
     run_detached xdg-open "$1"
@@ -806,6 +831,9 @@ main() {
         signin) cmd_signin "$@" ;;
         launch) cmd_launch "$@" ;;
         open-url) cmd_open_url "$@" ;;
+        update-status) cmd_update_status ;;
+        restart) cmd_restart "$@" ;;
+        notify) cmd_notify "$@" ;;
         git) cmd_git "$@" ;;
         ssh-key) cmd_ssh_key "$@" ;;
         should-run) cmd_should_run ;;

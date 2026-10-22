@@ -1861,6 +1861,10 @@ kbd {
   flex: 1;
   min-width: 0;
 }
+/* Good news (an update is ready), not a problem. */
+.banner-info > svg {
+  color: var(--accent);
+}
 .banner-detail {
   margin-top: 3px;
   font: 11px var(--font-mono);
