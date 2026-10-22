@@ -1,0 +1,14 @@
+# cargo-deny for the Tauri shell (CI: advisories and sources).
+
+[advisories]
+# Vulnerabilities and yanked crates fail. "Unmaintained" fails only for the
+# shell's own dependencies: Tauri's GTK and D-Bus stack carries a few
+# (proc-macro-error, zbus_names, zvariant) that only Tauri can replace.
+yanked = "deny"
+unmaintained = "workspace"
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
