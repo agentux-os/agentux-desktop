@@ -625,11 +625,6 @@
       "Click to see the tools"
     ]
   },
-  "wz.skip": {
-    "title": "Skip setup",
-    "what": "Closes the wizard and marks it done, so it does not open at your next login.",
-    "how": "Nothing is undone. /usr/libexec/agentux-setup reset makes it open again at the next login."
-  },
   "wz.agents.firstLogin": {
     "title": "Agent CLIs",
     "what": "The agent CLIs and dev tools that install for you on your first login: Claude Code, OpenCode, Antigravity CLI, Codex, mise dev tools and the ACP adapters.",

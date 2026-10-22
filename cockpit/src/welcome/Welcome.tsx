@@ -351,11 +351,10 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
 
         <Mascot />
         <div className="wz-rail-foot">
-          <button className="btn btn-quiet" onClick={() => void finish(false)} {...help("wz.skip")}>
-            Skip setup
-          </button>
           <span className="muted wz-small">
-            {client.mode === "mock" ? "Demo data" : "Reopen: app menu › Welcome to AgentUX"}
+            {client.mode === "mock"
+              ? "Demo data"
+              : "The cockpit opens once you finish. Every step can be passed with Next."}
           </span>
         </div>
       </aside>
