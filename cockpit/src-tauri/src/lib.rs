@@ -67,6 +67,9 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 daemon::release_terminals(window);
+                if window.label() == setup::WELCOME_WINDOW {
+                    setup::mark_welcome_done();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![

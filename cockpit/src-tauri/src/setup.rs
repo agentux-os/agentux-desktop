@@ -125,6 +125,17 @@ pub fn open_welcome<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Records that the wizard was shown and closed, however it closed: Skip,
+/// Done, its title bar, the cockpit quitting. It does not open by itself on
+/// the next login; the app menu and the cockpit still reopen it. Waits for
+/// the script (it only writes a marker), so the record is made before the
+/// process can exit.
+pub fn mark_welcome_done() {
+    if let Err(e) = run_setup(setup_script(), vec!["finish".into()], None) {
+        eprintln!("agentux-cockpit: cannot record the welcome wizard as done: {e}");
+    }
+}
+
 /// Opens the wizard from the UI (the cockpit's menu).
 #[tauri::command]
 pub async fn welcome_open<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
