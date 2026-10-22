@@ -5,7 +5,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/getting-started.md",
     "repo": "agentux",
     "path": "docs/getting-started.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "cockpit",
@@ -13,7 +13,7 @@
     "url": "https://github.com/agentux-os/agentux-desktop/blob/main/README.md",
     "repo": "agentux-desktop",
     "path": "README.md",
-    "commit": "07c5999"
+    "commit": "05934f8"
   },
   {
     "id": "core",
@@ -21,7 +21,7 @@
     "url": "https://github.com/agentux-os/agentux-core/blob/main/README.md",
     "repo": "agentux-core",
     "path": "README.md",
-    "commit": "2879f15"
+    "commit": "82cc460"
   },
   {
     "id": "api",
@@ -29,7 +29,7 @@
     "url": "https://github.com/agentux-os/agentux-core/blob/main/docs/api.md",
     "repo": "agentux-core",
     "path": "docs/api.md",
-    "commit": "2879f15"
+    "commit": "82cc460"
   },
   {
     "id": "os",
@@ -37,55 +37,63 @@
     "url": "https://github.com/agentux-os/agentux-os/blob/main/README.md",
     "repo": "agentux-os",
     "path": "README.md",
-    "commit": "7808d41"
+    "commit": "e54ef07"
   },
   {
     "id": "adr-0001",
-    "title": "ADR 0001: AgentUX is a Linux distribution on Fedora Atomic",
+    "title": "ADR 0001: AgentUX is a Linux distribution, built as a bootc image on Fedora Atomic",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0001-linux-distribution-on-fedora-atomic.md",
     "repo": "agentux",
     "path": "docs/adr/0001-linux-distribution-on-fedora-atomic.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0002",
-    "title": "ADR 0002: Harness integration via ACP",
+    "title": "ADR 0002: Integrate harnesses through ACP, with headless CLIs as fallback",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0002-harness-integration-via-acp.md",
     "repo": "agentux",
     "path": "docs/adr/0002-harness-integration-via-acp.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0003",
-    "title": "ADR 0003: Workflow engine",
+    "title": "ADR 0003: Start with an embedded state machine, not Temporal",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0003-workflow-engine.md",
     "repo": "agentux",
     "path": "docs/adr/0003-workflow-engine.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0004",
-    "title": "ADR 0004: Unified interface and agent bus",
+    "title": "ADR 0004: Unified interface over existing CLIs, and an agent bus so they talk to each other",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0004-unified-interface-and-agent-bus.md",
     "repo": "agentux",
     "path": "docs/adr/0004-unified-interface-and-agent-bus.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0005",
-    "title": "ADR 0005: Pipelines in agentux.yaml",
+    "title": "ADR 0005: Pipelines are declared in `agentux.yaml`",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0005-agentux-yaml.md",
     "repo": "agentux",
     "path": "docs/adr/0005-agentux-yaml.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
+  },
+  {
+    "id": "adr-0006",
+    "title": "ADR 0006: Rust for agentuxd and aux; Tauri 2 with React and TypeScript for the cockpit",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0006-rust-and-tauri.md",
+    "repo": "agentux",
+    "path": "docs/adr/0006-rust-and-tauri.md",
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0007",
-    "title": "ADR 0007: Terminal mode is a session handoff",
+    "title": "ADR 0007: Terminal mode is a handoff of the vendor session, not a second driver",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0007-terminal-mode-is-a-session-handoff.md",
     "repo": "agentux",
     "path": "docs/adr/0007-terminal-mode-is-a-session-handoff.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0008",
@@ -93,15 +101,15 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0008-releases-and-image-pinning.md",
     "repo": "agentux",
     "path": "docs/adr/0008-releases-and-image-pinning.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0009",
-    "title": "ADR 0009: Container isolation for checks",
+    "title": "ADR 0009: Optional container isolation for check commands",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0009-container-isolation-for-checks.md",
     "repo": "agentux",
     "path": "docs/adr/0009-container-isolation-for-checks.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0010",
@@ -109,39 +117,39 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0010-image-variants-and-system-identity.md",
     "repo": "agentux",
     "path": "docs/adr/0010-image-variants-and-system-identity.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0011",
-    "title": "ADR 0011: Release channels and ISO distribution",
+    "title": "ADR 0011: Release channels, ISO distribution and the release gate",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0011-release-channels-and-iso-distribution.md",
     "repo": "agentux",
     "path": "docs/adr/0011-release-channels-and-iso-distribution.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0012",
-    "title": "ADR 0012: System version and release identity",
+    "title": "ADR 0012: System version, release identity and the branded installer",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0012-system-version-and-release-identity.md",
     "repo": "agentux",
     "path": "docs/adr/0012-system-version-and-release-identity.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0013",
-    "title": "ADR 0013: First-run wizard",
+    "title": "ADR 0013: A first-run wizard, and how developer tools install",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0013-first-run-wizard.md",
     "repo": "agentux",
     "path": "docs/adr/0013-first-run-wizard.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0014",
-    "title": "ADR 0014: Installation profiles and platform services",
+    "title": "ADR 0014: Installation profiles and optional platform services",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0014-installation-profiles-and-platform-services.md",
     "repo": "agentux",
     "path": "docs/adr/0014-installation-profiles-and-platform-services.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0015",
@@ -149,7 +157,7 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0015-organization-command-office-contract.md",
     "repo": "agentux",
     "path": "docs/adr/0015-organization-command-office-contract.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0017",
@@ -157,14 +165,30 @@
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0017-help-mascot.md",
     "repo": "agentux",
     "path": "docs/adr/0017-help-mascot.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
+  },
+  {
+    "id": "adr-0018",
+    "title": "ADR 0018: Retire the Hyprland variant",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0018-retire-the-hyprland-variant.md",
+    "repo": "agentux",
+    "path": "docs/adr/0018-retire-the-hyprland-variant.md",
+    "commit": "37d74cf"
   },
   {
     "id": "adr-0019",
-    "title": "ADR 0019: Updates without reinstalling",
+    "title": "ADR 0019: Updates without reinstalling: small, automatic image patches, and Flatpak for new apps",
     "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0019-updates-without-reinstalling.md",
     "repo": "agentux",
     "path": "docs/adr/0019-updates-without-reinstalling.md",
-    "commit": "713c051"
+    "commit": "37d74cf"
+  },
+  {
+    "id": "adr-0020",
+    "title": "ADR 0020: AgentUX Command runs its workflows on PostgreSQL, with NATS for delivery, and is written in Rust",
+    "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0020-command-workflows-without-temporal.md",
+    "repo": "agentux",
+    "path": "docs/adr/0020-command-workflows-without-temporal.md",
+    "commit": "37d74cf"
   }
 ]

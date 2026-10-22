@@ -1,6 +1,6 @@
 # 0014. Installation profiles and optional platform services
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0020](0020-command-workflows-without-temporal.md) (no Temporal in the Command stack)
 - **Date:** 2026-10-15
 
 ## Context
