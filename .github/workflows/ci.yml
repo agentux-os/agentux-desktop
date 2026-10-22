@@ -63,7 +63,11 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the pinned toolchain (src-tauri/rust-toolchain.toml)
+        working-directory: cockpit/src-tauri
+        run: |
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -76,6 +80,21 @@ jobs:
       - name: Cargo test (daemon socket client)
         working-directory: cockpit/src-tauri
         run: cargo test --locked
+
+      # Known vulnerabilities in what the cockpit ships: npm packages that
+      # reach the bundle (not dev tools), and the Tauri shell's crates.
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  deny:
+    name: dependencies (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: cockpit/src-tauri/Cargo.toml
+          command: check advisories sources
 
   plasma:
     name: plasma overlay

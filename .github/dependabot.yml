@@ -1,0 +1,29 @@
+# Weekly dependency updates: the cockpit's npm packages, the Tauri shell's
+# crates and the GitHub Actions CI uses.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /cockpit
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: cargo
+    directory: /cockpit/src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
