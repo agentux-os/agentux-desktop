@@ -140,6 +140,14 @@ jobs:
         working-directory: cockpit
         run: npx tauri build --ci --bundles rpm -- --locked
 
+      # Signed with the AgentUX RPM key when the secret exists
+      # (agentux-core docs/releasing.md); the public key travels with it.
+      - name: Sign RPM
+        env:
+          AGENTUX_RPM_SIGNING_KEY: ${{ secrets.AGENTUX_RPM_SIGNING_KEY }}
+          AGENTUX_RPM_SIGNING_PASSPHRASE: ${{ secrets.AGENTUX_RPM_SIGNING_PASSPHRASE }}
+        run: sh .github/scripts/sign-rpms.sh cockpit/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm
+
       - name: Inspect RPM
         id: rpm
         run: |
@@ -167,7 +175,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: agentux-cockpit-rpm-${{ matrix.arch }}
-          path: ${{ steps.rpm.outputs.path }}
+          path: |
+            ${{ steps.rpm.outputs.path }}
+            cockpit/src-tauri/target/release/bundle/rpm/RPM-GPG-KEY-agentux
           if-no-files-found: error
 
       - name: Upload desktop bundle artifacts
@@ -198,6 +208,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: agentux-cockpit-rpm-${{ matrix.arch }}
+
+      - name: Check the signature
+        run: |
+          rpm_file=$(ls agentux-cockpit-*.${{ matrix.arch }}.rpm)
+          if [ -f RPM-GPG-KEY-agentux ]; then
+            rpm --import RPM-GPG-KEY-agentux
+            rpm -K "$rpm_file" | tee /dev/stderr | grep -q 'signatures OK'
+          else
+            echo "::warning::$rpm_file is not signed"
+          fi
 
       - name: Install with dnf
         run: |
@@ -252,3 +272,9 @@ jobs:
             agentux-desktop-cosmic-*.tar.gz.sha256
           prerelease: ${{ contains(github.ref_name, '-') && 'true' || '' }}
           fail_on_unmatched_files: true
+
+      # The public key, once the RPMs are signed.
+      - if: hashFiles('RPM-GPG-KEY-agentux') != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          files: RPM-GPG-KEY-agentux
