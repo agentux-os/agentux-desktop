@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentUX Office</title>
+    <link rel="stylesheet" href="setup.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1 data-t="title">AgentUX Office</h1>
+      <p class="lead" data-t="lead">Office shows your organization's agents at work. It runs on your AgentUX Command server.</p>
+      <form id="connect" novalidate>
+        <label for="address" data-t="label">Command server address</label>
+        <input id="address" name="address" type="text" inputmode="url" autocomplete="url"
+          spellcheck="false" placeholder="command.example.com" required />
+        <p class="hint" data-t="hint">HTTPS only. Your administrator can give you this address.</p>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <div class="actions">
+          <button type="button" id="back" class="secondary" hidden data-t="back">Back to Office</button>
+          <button type="submit" id="submit" data-t="connect">Connect</button>
+        </div>
+      </form>
+    </main>
+    <script src="setup.js"></script>
+  </body>
+</html>
