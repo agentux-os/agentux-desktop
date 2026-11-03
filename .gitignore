@@ -8,6 +8,7 @@ dist-ssr/
 # Rust / Tauri
 target/
 cockpit/src-tauri/gen/schemas/
+office/src-tauri/gen/schemas/
 
 # Editors and OS
 .idea/

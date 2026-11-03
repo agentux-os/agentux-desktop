@@ -52,6 +52,7 @@ Every `v*` release builds and verifies the cockpit RPMs for `x86_64` and `aarch6
 This repository holds two things, and the [AgentUX image](https://github.com/agentux-os/agentux-os) ships both:
 
 - **The cockpit** (`agentux-cockpit`, in [`cockpit/`](cockpit)): one desktop window over every coding agent CLI. Runs move across a board, sessions from Claude Code, Codex, OpenCode and Antigravity look the same, every approval lands in one inbox, and the agent bus shows agents talking to each other. Any session opens in its vendor's own TUI with one key. It talks only to `agentuxd` from [agentux-core](https://github.com/agentux-os/agentux-core). On AgentUX it starts at login; **Super+C** (Meta+C) brings it up, on Plasma and COSMIC.
+- **AgentUX Office** (`agentux-office`, in [`office/`](office)): a desktop window on the Office of an AgentUX Command server, for the Executive profile. See [AgentUX Office](#agentux-office).
 - **The Plasma overlay** (in [`plasma/`](plasma)): the AgentUX look for KDE Plasma 6, as system-wide defaults: global theme, wallpaper, login and lock screens, login splash, panel, shortcuts and cockpit autostart. Every user can override all of it in System Settings.
 
 See the cockpit in a minute, no Rust and no daemon needed (it plays scripted runs from a mock daemon):
@@ -67,6 +68,7 @@ The native window and a real daemon: [Developing the cockpit](#developing-the-co
 ## Contents
 
 - **Cockpit:** [Features](#cockpit) · [Help mascot](#help-mascot) · [Welcome wizard](#welcome-wizard) · [Developing the cockpit](#developing-the-cockpit) · [Running against a real daemon](#running-against-a-real-daemon) · [Layout of the code](#layout-of-the-code) · [Keyboard](#keyboard) · [Packaging](#packaging) · [Single instance and window identity](#single-instance-and-window-identity) · [WebKitGTK caveats](#webkitgtk-caveats) · [Not there yet](#not-there-yet)
+- **Office:** [AgentUX Office](#agentux-office)
 - **Desktop:** [Desktop configuration](#desktop-configuration) · [Image bundle contract](#image-bundle-contract) · [Not verified on a running Plasma session](#not-verified-on-a-running-plasma-session)
 - [Relevant ADRs](#relevant-adrs) · [License](#license)
 
@@ -225,6 +227,20 @@ The desktop entry sets neither, since both cost performance on GPUs that work; t
 - Terminal mode needs agentux-core with `terminals.*` (#11); with older daemons the toggle stays disabled. A terminal does not survive a reload of the window.
 - The daemon is reached over a Unix socket only, so on Windows the Tauri build always shows mock data.
 - Prices in the mock are illustrative.
+
+## AgentUX Office
+
+`agentux-office` (in [`office/`](office), RPM `agentux-office`, built and released with the cockpit) is a window on the Office of an AgentUX Command server: the floor, missions and approvals of an organization, served by Command at `<server>/office/` ([agentux-apps](https://github.com/agentux-os/agentux-apps)). Operators sign in with Command's own sign-in, in the window.
+
+- **Which server.** On first start a local page asks for the server's address. Office checks that it is a Command server (`GET /v1/instance`) before keeping it. HTTPS only; plain HTTP only on this machine. **Office → Change server…** brings the page back.
+- **Provisioning.** A machine can be given a default in `/etc/agentux/office.conf` (`server = https://command.example.com`). A choice made in the app wins over it, and `AGENTUX_OFFICE_SERVER` wins over both.
+- **Isolation.** The server's pages get no access to the app: the only capability is for Office's own local page. The window goes only to HTTPS pages (the server and its sign-in provider), and nowhere else (no `file:`, `data:` or plain HTTP).
+
+```sh
+cd office/src-tauri
+cargo test            # the address, instance and navigation rules
+cd .. && npm install && npx tauri dev
+```
 
 ## Desktop configuration
 

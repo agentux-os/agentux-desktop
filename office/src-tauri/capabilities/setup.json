@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "setup",
+  "description": "Office's own setup page (local). No capability names a remote origin: the server's pages get no access to the app.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

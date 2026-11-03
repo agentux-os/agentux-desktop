@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AgentUX Office
+GenericName=Agent Office
+Comment=Your organization's agents at work
+Exec={{exec}}
+Icon={{icon}}
+StartupWMClass=agentux-office
+Terminal=false
+Categories=Office;
+Keywords=agent;ai;office;missions;approvals;

@@ -14,6 +14,9 @@ name: release
 # container of its arch. The desktop bundles are architecture-independent, so
 # only the x86_64 leg builds them.
 #
+# The same jobs build AgentUX Office for the desktop (office/, RPM
+# agentux-office, its own version in office/src-tauri/tauri.conf.json).
+#
 # - push of a `v*` tag: build and attach both .rpm files and all three bundles
 #   (+ .sha256 sidecars) to a GitHub release for that tag
 # - workflow_dispatch: build and upload them as workflow artifacts only
@@ -140,13 +143,22 @@ jobs:
         working-directory: cockpit
         run: npx tauri build --ci --bundles rpm -- --locked
 
+      - name: Build the Office RPM
+        working-directory: office
+        run: |
+          npm ci
+          npx tauri build --ci --bundles rpm -- --locked
+
       # Signed with the AgentUX RPM key when the secret exists
       # (agentux-core docs/releasing.md); the public key travels with it.
       - name: Sign RPM
         env:
           AGENTUX_RPM_SIGNING_KEY: ${{ secrets.AGENTUX_RPM_SIGNING_KEY }}
           AGENTUX_RPM_SIGNING_PASSPHRASE: ${{ secrets.AGENTUX_RPM_SIGNING_PASSPHRASE }}
-        run: sh .github/scripts/sign-rpms.sh cockpit/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm
+        run: >-
+          sh .github/scripts/sign-rpms.sh
+          cockpit/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm
+          office/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm
 
       - name: Inspect RPM
         id: rpm
@@ -170,6 +182,32 @@ jobs:
             rpm -qlp "${rpm_path}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Inspect the Office RPM
+        id: office
+        run: |
+          rpm_path=$(ls office/src-tauri/target/release/bundle/rpm/*.${{ matrix.arch }}.rpm)
+          echo "path=${rpm_path}" >> "$GITHUB_OUTPUT"
+          test "$(rpm -qp --qf '%{NAME}' "${rpm_path}")" = agentux-office
+          rpm -qip "${rpm_path}"
+          rpm -qlp "${rpm_path}"
+          mkdir -p /tmp/office-root
+          (cd /tmp/office-root && rpm2cpio "${GITHUB_WORKSPACE}/${rpm_path}" | cpio -idm --quiet)
+          desktop-file-validate /tmp/office-root/usr/share/applications/agentux-office.desktop
+          {
+            echo '### Office RPM'
+            echo '```'
+            ls -lh "${rpm_path}"
+            rpm -qlp "${rpm_path}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the Office artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: agentux-office-rpm-${{ matrix.arch }}
+          path: ${{ steps.office.outputs.path }}
+          if-no-files-found: error
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -209,28 +247,37 @@ jobs:
         with:
           name: agentux-cockpit-rpm-${{ matrix.arch }}
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: agentux-office-rpm-${{ matrix.arch }}
+
       - name: Check the signature
         run: |
-          rpm_file=$(ls agentux-cockpit-*.${{ matrix.arch }}.rpm)
-          if [ -f RPM-GPG-KEY-agentux ]; then
-            rpm --import RPM-GPG-KEY-agentux
-            rpm -K "$rpm_file" | tee /dev/stderr | grep -q 'signatures OK'
-          else
-            echo "::warning::$rpm_file is not signed"
-          fi
+          for rpm_file in agentux-cockpit-*.${{ matrix.arch }}.rpm agentux-office-*.${{ matrix.arch }}.rpm; do
+            if [ -f RPM-GPG-KEY-agentux ]; then
+              rpm --import RPM-GPG-KEY-agentux
+              rpm -K "$rpm_file" | tee /dev/stderr | grep -q 'signatures OK'
+            else
+              echo "::warning::$rpm_file is not signed"
+            fi
+          done
 
       - name: Install with dnf
         run: |
           rpm_file=$(ls agentux-cockpit-*.${{ matrix.arch }}.rpm)
-          dnf -y install --setopt=install_weak_deps=False "./${rpm_file}"
+          office_file=$(ls agentux-office-*.${{ matrix.arch }}.rpm)
+          dnf -y install --setopt=install_weak_deps=False "./${rpm_file}" "./${office_file}"
           test "$(rpm -q --qf '%{ARCH}' agentux-cockpit)" = "${{ matrix.arch }}"
+          test "$(rpm -q --qf '%{ARCH}' agentux-office)" = "${{ matrix.arch }}"
           test "$(uname -m)" = "${{ matrix.arch }}"
 
       - name: Check installed files
         run: |
           test -x /usr/bin/agentux-cockpit
           test -f /usr/share/applications/agentux-cockpit.desktop
-          if ldd /usr/bin/agentux-cockpit | grep 'not found'; then
+          test -x /usr/bin/agentux-office
+          test -f /usr/share/applications/agentux-office.desktop
+          if ldd /usr/bin/agentux-cockpit /usr/bin/agentux-office | grep 'not found'; then
             echo "::error::unresolved shared libraries"
             exit 1
           fi
@@ -264,6 +311,8 @@ jobs:
           files: |
             agentux-cockpit-*.x86_64.rpm
             agentux-cockpit-*.aarch64.rpm
+            agentux-office-*.x86_64.rpm
+            agentux-office-*.aarch64.rpm
             agentux-desktop-common-*.tar.gz
             agentux-desktop-common-*.tar.gz.sha256
             agentux-desktop-plasma-*.tar.gz
