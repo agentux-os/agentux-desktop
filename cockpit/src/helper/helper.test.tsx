@@ -118,6 +118,18 @@ describe("tour", () => {
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
   });
 
+  it("makes no offer in the screenshot window", async () => {
+    window.history.replaceState(null, "", "/?showcase");
+    try {
+      render(<Page />);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.queryByRole("button", { name: "Show me around" })).toBeNull();
+      expect(screen.getByRole("button", { name: "AgentUX helper" })).toBeTruthy();
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
   it("is marked done when finished, and Not now stops the offer", async () => {
     render(<Page />);
     fireEvent.click(await screen.findByRole("button", { name: "Not now" }));

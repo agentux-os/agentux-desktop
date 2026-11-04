@@ -3,7 +3,7 @@ import { Icon } from "../components/Icon";
 import { help } from "./content";
 import { useHelper } from "./context";
 import { Penguin } from "./Penguin";
-import { takeTourRequest, TOUR_REQUEST_KEY, WELCOME_OPEN_KEY, welcomeOpen } from "./settings";
+import { takeTourRequest, TOUR_REQUEST_KEY, WELCOME_OPEN_KEY, welcomeOpen, showcase } from "./settings";
 import { focusables, useBox } from "./util";
 
 /**
@@ -34,7 +34,7 @@ export function Mascot({ compact = false }: { compact?: boolean }) {
         startTour();
         return;
       }
-      setOffer(tour === "new" && !welcomeOpen());
+      setOffer(tour === "new" && !welcomeOpen() && !showcase());
     };
     check();
     const onStorage = (e: StorageEvent) => {

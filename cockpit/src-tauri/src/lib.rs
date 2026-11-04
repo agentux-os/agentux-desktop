@@ -45,7 +45,9 @@ pub fn run() {
     // AgentUX" menu entry) opens the setup wizard instead.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-        if setup::wants_welcome(&argv) {
+        if setup::wants_showcase(&argv) {
+            setup::show_showcase(app);
+        } else if setup::wants_welcome(&argv) {
             if let Err(e) = setup::open_welcome(app) {
                 eprintln!("agentux-cockpit: cannot open the welcome window: {e}");
             }
@@ -60,7 +62,9 @@ pub fn run() {
             // The cockpit window starts hidden: it shows unless the wizard
             // still has to be finished, which then opens alone.
             #[cfg(desktop)]
-            if setup::wants_welcome(&std::env::args().collect::<Vec<_>>()) {
+            if setup::wants_showcase(&std::env::args().collect::<Vec<_>>()) {
+                setup::show_showcase(app.handle());
+            } else if setup::wants_welcome(&std::env::args().collect::<Vec<_>>()) {
                 setup::open_welcome(app.handle())?;
             } else {
                 reveal_main_window(app.handle());
