@@ -4,6 +4,7 @@ import type {
   HelperReply,
   AgentPrefs,
   HarnessInfo,
+  ToolsListing,
   HarnessTestResult,
   StartRunInput,
   TerminalHandle,
@@ -249,6 +250,10 @@ export class TauriDaemonClient implements DaemonClient {
 
   async harnesses(): Promise<HarnessInfo[] | null> {
     return this.transport.invoke<HarnessInfo[] | null>("daemon_harnesses");
+  }
+
+  async tools(): Promise<ToolsListing | null> {
+    return this.transport.invoke<ToolsListing | null>("daemon_tools");
   }
 
   async clearLimit(harness: string): Promise<void> {

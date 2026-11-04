@@ -58,6 +58,9 @@ pub mod method {
     /// #34). Older daemons answer -32601, and ignore `roles` in
     /// `runs.start`.
     pub const HARNESSES_LIST: &str = "harnesses.list";
+    /// The tool catalog sessions get (agentux-core 0.5.3). Older daemons
+    /// answer -32601.
+    pub const TOOLS_LIST: &str = "tools.list";
     /// The human lifted a harness's usage limit (agentux-core 0.4.7).
     pub const LIMITS_CLEAR: &str = "limits.clear";
     /// A short test prompt to a harness (agentux-core 0.4.8).

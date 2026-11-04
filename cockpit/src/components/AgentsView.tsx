@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import type { AgentPrefs, DaemonClient, HarnessInfo, HarnessTestResult } from "../daemon/client";
+import type { AgentPrefs, DaemonClient, HarnessInfo, HarnessTestResult, ToolInfo, ToolsListing } from "../daemon/client";
 import { VENDORS, type Vendor } from "../daemon/types";
 import { VENDOR_INFO } from "../daemon/vendors";
 import type { AgentId, SetupClient } from "../setup/client";
@@ -31,7 +31,7 @@ export function orderedIds(prefs: AgentPrefs | null, ids: string[]): string[] {
 }
 
 interface Props {
-  client: Pick<DaemonClient, "harnesses" | "clearLimit" | "testHarness" | "getPrefs">;
+  client: Pick<DaemonClient, "harnesses" | "clearLimit" | "testHarness" | "getPrefs" | "tools">;
   /** The wizard's backend, for sign-in and update terminals; null where there is none. */
   setup: () => Promise<SetupClient | null>;
   /** Opens Settings, where the agent preferences are. */
@@ -46,15 +46,21 @@ interface Props {
 export function AgentsView({ client, setup, onSettings }: Props) {
   const [agents, setAgents] = useState<HarnessInfo[] | null>(null);
   const [prefs, setPrefs] = useState<AgentPrefs | null>(null);
+  const [tools, setTools] = useState<ToolsListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, HarnessTestResult | "running">>({});
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [list, p] = await Promise.all([client.harnesses(), client.getPrefs().catch(() => null)]);
+      const [list, p, t] = await Promise.all([
+        client.harnesses(),
+        client.getPrefs().catch(() => null),
+        client.tools().catch(() => null),
+      ]);
       setAgents(list);
       setPrefs(p);
+      setTools(t);
     } catch (err) {
       setError(errorText(err));
     }
@@ -150,7 +156,57 @@ export function AgentsView({ client, setup, onSettings }: Props) {
             />
           ))}
       </div>
+      {tools && <ToolsSection tools={tools} />}
     </div>
+  );
+}
+
+/**
+ * The tool catalog (agentux-core#68): the MCP servers every agent's sessions
+ * get, declared once in tools.yaml or agentux.yaml.
+ */
+function ToolsSection({ tools }: { tools: ToolsListing }) {
+  return (
+    <section className="agent-tools" aria-label="Tools" {...help("agents.tools")}>
+      <h3>Tools</h3>
+      {tools.mcp.length === 0 ? (
+        <p className="muted">
+          No MCP servers yet. <code>aux tools add NAME --command CMD</code> gives one to every agent.
+        </p>
+      ) : (
+        <ul className="tool-list">
+          {tools.mcp.map((t) => (
+            <ToolRow key={t.name} tool={t} />
+          ))}
+        </ul>
+      )}
+      {tools.notes.map((n) => (
+        <p key={n} className="form-error">
+          {n}
+        </p>
+      ))}
+    </section>
+  );
+}
+
+function ToolRow({ tool: t }: { tool: ToolInfo }) {
+  const missing = t.secrets.filter((s) => !s.set);
+  return (
+    <li className="tool-row">
+      <div className="tool-name">
+        <strong>{t.name}</strong>
+        <span className="muted">{t.source} catalog</span>
+      </div>
+      <span className="mono muted tool-target">{t.url ?? t.command}</span>
+      <span>{t.harnesses ? t.harnesses.map(agentName).join(", ") : "Every agent"}</span>
+      {missing.length > 0 ? (
+        <span className="wz-pill is-failed" title="Sessions go without this server until the secret is set">
+          {missing.map((s) => s.name).join(", ")} not set
+        </span>
+      ) : (
+        <span className="wz-pill is-installed">Ready</span>
+      )}
+    </li>
   );
 }
 
