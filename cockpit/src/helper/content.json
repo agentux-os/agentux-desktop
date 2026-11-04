@@ -451,6 +451,15 @@
     "what": "What the run has cost so far, and its budget when agentux.yaml sets one.",
     "how": "The sum of what the run's sessions reported. Harnesses that do not report cost count as $0. Over budget, the run pauses with a budget request before its next agent step."
   },
+  "panel.isolation": {
+    "title": "Agent sandbox",
+    "what": "Where the run's agents ran: in the Bubblewrap sandbox, or on the host with your user's rights.",
+    "how": "A sandboxed agent sees only the run's worktree, the repository and its own login, with an outbound network or none. A machine's node policy can require the sandbox; otherwise agentux.yaml decides, and runs from AgentUX Command get it when the project doesn't say. If any session ran on the host, the run shows it.",
+    "docs": {
+      "label": "ADR 0023: agent session sandbox",
+      "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0023-agent-session-sandbox.md"
+    }
+  },
   "panel.pipeline": {
     "title": "Pipeline",
     "what": "The run's steps, as agentux.yaml declared them when the run started; editing the file later does not change a run in progress.",

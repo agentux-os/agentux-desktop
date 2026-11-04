@@ -168,6 +168,18 @@ describe("mapRun", () => {
     expect(run.costUsd).toBe(0);
     expect(run.sessions).toEqual({});
     expect(run.prompt).toBe("Add a health endpoint");
+    expect(run.isolation).toBeUndefined();
+  });
+
+  it("maps where the agents ran", () => {
+    expect(
+      mapRun(apiRun({ agentIsolation: { mode: "bubblewrap", network: "none", source: "node-policy" } })).isolation,
+    ).toEqual({ sandboxed: true, network: "none", source: "node-policy" });
+    expect(mapRun(apiRun({ agentIsolation: { mode: "none", source: "default" } })).isolation).toEqual({
+      sandboxed: false,
+      network: undefined,
+      source: "default",
+    });
   });
 
   it("keeps values that are present", () => {

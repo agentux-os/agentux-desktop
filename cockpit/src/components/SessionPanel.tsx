@@ -130,6 +130,11 @@ export function SessionPanel(props: Props) {
             <Icon name="coins" size={13} /> {formatUsd(run.costUsd)}
             {run.budgetUsd != null && <span className="muted"> / {formatUsd(run.budgetUsd)} budget</span>}
           </span>
+          {run.isolation && (
+            <span {...help("panel.isolation")} className={run.isolation.sandboxed ? undefined : "muted"}>
+              <Icon name="shield" size={13} /> {isolationLabel(run.isolation)}
+            </span>
+          )}
           {run.pullRequest && (
             <a className="pr-link" href={run.pullRequest.url} target="_blank" rel="noreferrer">
               <Icon name="pr" size={13} /> PR #{run.pullRequest.number}
@@ -455,4 +460,17 @@ function Composer({
       </button>
     </form>
   );
+}
+
+/** "Sandboxed", with its network, or "On the host", and what decided it. */
+function isolationLabel(isolation: NonNullable<Run["isolation"]>): string {
+  const by = {
+    project: "agentux.yaml",
+    "node-policy": "node policy",
+    command: "run from Command",
+    default: "nothing asked for a sandbox",
+  }[isolation.source];
+  if (!isolation.sandboxed) return `On the host (${by})`;
+  const network = isolation.network === "none" ? ", no network" : "";
+  return `Sandboxed${network} (${by})`;
 }
