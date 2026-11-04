@@ -42,6 +42,10 @@ export interface ProfileStatus {
   applied: string[];
   pending: string[];
   failed: string[];
+  /** The selection waiting for first boot; `components` only for custom. */
+  intent?: { profile: string; components: string[] | null };
+  /** The catalog's components, the custom profile's choices. */
+  catalogComponents?: { id: string; label: string }[];
 }
 
 export interface SetupStatus {
@@ -84,8 +88,11 @@ export interface SetupClient {
   readonly mode: "mock" | "system";
   /** `scan` also looks for what is installed already (slower). */
   status(scan?: boolean): Promise<SetupStatus>;
-  /** Persist the selected OS profile for the system first-boot applier. */
-  selectProfile(profile: string): Promise<void>;
+  /**
+   * Persist the selected OS profile for the system first-boot applier; the
+   * custom profile with its components.
+   */
+  selectProfile(profile: string, components?: string[]): Promise<void>;
   /** Queue `ITEM[@VERSION]` specs; they install in the background. */
   start(specs: string[]): Promise<void>;
   retryFirstLogin(): Promise<void>;

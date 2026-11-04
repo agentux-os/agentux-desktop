@@ -17,11 +17,19 @@ export function ProfileStep({
   selected,
   saved,
   onSelect,
+  components = [],
+  catalog = [],
+  onComponents = () => {},
 }: {
   selected: ProfileId;
   /** The profile the system recorded, if any. */
   saved: string | null | undefined;
   onSelect: (id: ProfileId) => void;
+  /** The custom profile's chosen components. */
+  components?: string[];
+  /** The components the OS catalog offers. */
+  catalog?: { id: string; label: string }[];
+  onComponents?: (ids: string[]) => void;
 }) {
   const p = profileById(selected);
   const next = stepsFor(p).filter((s) => s in STEP_NAME).map((s) => STEP_NAME[s]);
@@ -65,6 +73,29 @@ export function ProfileStep({
           <dt>Next in this wizard</dt>
           <dd>{next.length ? next.join(", then ") : "a summary"}.</dd>
         </dl>
+        {selected === "custom" && (
+          <fieldset className="wz-capabilities" {...help("wz.profile.custom")}>
+            <legend>Capabilities</legend>
+            {catalog.length === 0 ? (
+              <p className="muted">This system's profile catalog is not available, so there is nothing to choose from.</p>
+            ) : (
+              catalog.map((c) => (
+                <label key={c.id}>
+                  <input
+                    type="checkbox"
+                    checked={components.includes(c.id)}
+                    onChange={(e) =>
+                      onComponents(
+                        e.target.checked ? [...components, c.id].sort() : components.filter((id) => id !== c.id),
+                      )
+                    }
+                  />
+                  {c.label} <code>{c.id}</code>
+                </label>
+              ))
+            )}
+          </fieldset>
+        )}
         <p className="muted wz-small">
           The choice is saved when you continue and applied by the system; nothing is downloaded for it. You can come back
           and change it.

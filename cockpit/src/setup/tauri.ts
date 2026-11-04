@@ -32,8 +32,8 @@ export class TauriSetupClient implements SetupClient {
     return JSON.parse(await this.exec(scan ? ["status", "--scan"] : ["status"])) as SetupStatus;
   }
 
-  async selectProfile(profile: string): Promise<void> {
-    await this.exec(["profile", profile]);
+  async selectProfile(profile: string, components?: string[]): Promise<void> {
+    await this.exec(components?.length ? ["profile", profile, components.join(",")] : ["profile", profile]);
   }
 
   async start(specs: string[]): Promise<void> {

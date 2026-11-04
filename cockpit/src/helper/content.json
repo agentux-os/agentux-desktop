@@ -760,6 +760,12 @@
     "what": "Connects this machine's agent node to an AgentUX Command server, so a team sees its runs and can send it work.",
     "how": "Runs aux node enroll with the token on stdin (kept in ~/.config/agentux/node.json, readable by you only) and starts agentux-gateway. Starting runs and changing preferences from Command wait for you in Settings → Remote control."
   },
+  "wz.profile.custom": {
+    "title": "Custom capabilities",
+    "what": "The capabilities this machine gets with the custom profile, from the system's profile catalog.",
+    "how": "Setup records them (agentux profile seed custom --components ...), which checks each against the catalog; the system applies exactly these on first boot. A Command server stays off until it is configured. agentux profile changes them later.",
+    "do": ["Tick at least one, then continue"]
+  },
   "wz.profile.choose": {
     "title": "Choose this machine's role",
     "what": "Picks how this computer takes part in AgentUX: Workstation (the local node and the cockpit), Node, Command Server, Executive, Complete or Custom.",

@@ -73,6 +73,41 @@ describe("Welcome wizard (mock backend)", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Follow a Command server" })).toBeTruthy();
   });
 
+  it("seeds a custom profile with the capabilities ticked, and needs at least one", async () => {
+    const client = new MockSetupClient();
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    fireEvent.click(screen.getByText("Custom"));
+    const capabilities = screen.getByRole("group", { name: "Capabilities" });
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await flush();
+    expect(client.calls.some((c) => c.startsWith("profile custom"))).toBe(false);
+    expect(screen.getByText(/Choose at least one capability/)).toBeTruthy();
+
+    fireEvent.click(within(capabilities).getByRole("checkbox", { name: /AgentUX Office/ }));
+    fireEvent.click(within(capabilities).getByRole("checkbox", { name: /Local AgentUX node/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await flush();
+    expect(client.calls).toContain("profile custom node,office-client");
+  });
+
+  it("shows a seeded custom selection again when setup reopens", async () => {
+    const client = new MockSetupClient();
+    client.intent = { profile: "custom", components: ["desktop", "node"] };
+    render(<Welcome client={client} pollMs={500} />);
+    await flush();
+    const capabilities = screen.getByRole("group", { name: "Capabilities" });
+    const checked = within(capabilities)
+      .getAllByRole("checkbox")
+      .filter((b) => (b as HTMLInputElement).checked)
+      .map((b) => b.parentElement?.textContent);
+    expect(checked).toEqual(["Local AgentUX node node", "Desktop cockpit desktop"]);
+    // Unchanged: moving on does not seed it again.
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await flush();
+    expect(client.calls.some((c) => c.startsWith("profile "))).toBe(false);
+  });
+
   it("connects a node to Command with its token", async () => {
     const client = new MockSetupClient();
     client.node = { enrolled: false, gateway: "inactive" };

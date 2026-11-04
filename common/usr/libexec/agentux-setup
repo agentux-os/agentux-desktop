@@ -496,11 +496,20 @@ installed_json() {
     if (( ${#ids[@]} )); then printf '%s\n' "${ids[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique'; else echo '[]'; fi
 }
 
+# The profile manager's state, with the catalog's components (id and label)
+# for the custom profile's choices.
 profile_json() {
+    local shown catalog=/usr/share/agentux/profiles/catalog.json
     if [[ -x /usr/bin/agentux ]]; then
-        /usr/bin/agentux profile show 2>/dev/null || echo '{"catalogVersion":1,"requested":null,"applied":[],"pending":[],"failed":[]}'
+        shown="$(/usr/bin/agentux profile show 2>/dev/null)" || shown=''
+    fi
+    [[ -n "${shown:-}" ]] || shown='{"catalogVersion":1,"requested":null,"applied":[],"pending":[],"failed":[]}'
+    if [[ -r "$catalog" ]]; then
+        jq -c --slurpfile catalog "$catalog" \
+            '. + {catalogComponents: ($catalog[0].components // {} | to_entries | map({id: .key, label: .value.label}))}' \
+            <<<"$shown" 2>/dev/null || printf '%s\n' "$shown"
     else
-        echo '{"catalogVersion":1,"requested":null,"applied":[],"pending":[],"failed":[]}'
+        printf '%s\n' "$shown"
     fi
 }
 
@@ -520,15 +529,29 @@ cmd_status() {
 }
 
 cmd_profile() {
-    local profile="${1:-}"
+    local profile="${1:-}" components="${2:-}"
     case "$profile" in
         workstation|node|command|executive|complete|custom) ;;
         *) die "profile: choose workstation, node, command, executive, complete or custom" ;;
     esac
+    (( $# <= 2 )) || die "profile: too many arguments"
+    if [[ "$profile" == custom ]]; then
+        # Component ids only; the profile manager checks them against its
+        # catalog.
+        [[ "$components" =~ ^[a-z][a-z0-9-]*(,[a-z][a-z0-9-]*)*$ ]] \
+            || die "profile: custom needs its capabilities, as id,id,..."
+    else
+        [[ -z "$components" ]] || die "profile: only custom takes capabilities"
+    fi
     [[ -x /usr/bin/agentux ]] || die "profile: AgentUX OS profile manager is unavailable"
-    # The wizard may only seed a named profile; it cannot apply services or
-    # pass arbitrary arguments to the system profile manager.
-    pkexec /usr/bin/agentux profile seed "$profile"
+    # The wizard may only seed a profile (and a custom one's components); it
+    # cannot apply services or pass arbitrary arguments to the system profile
+    # manager.
+    if [[ "$profile" == custom ]]; then
+        pkexec /usr/bin/agentux profile seed custom --components "$components"
+    else
+        pkexec /usr/bin/agentux profile seed "$profile"
+    fi
 }
 
 # ---- desktop helpers -------------------------------------------------------------
