@@ -138,8 +138,19 @@ export default function App() {
       ? "This agentuxd has no terminal mode yet (terminals.*)"
       : undefined;
 
-  const sendPrompt = (sid: string, text: string) => {
-    client.sendPrompt(sid, text).catch((e: unknown) => showToast(`Could not send: ${errorText(e)}`));
+  const sendPrompt = (sid: string, text: string, interrupt?: boolean) => {
+    client
+      .sendPrompt(sid, text, { interrupt })
+      .then((r) => {
+        if (interrupt && !r.interrupted) {
+          showToast(
+            r.queued
+              ? "Could not interrupt this agent: your message goes after its current turn"
+              : "Nothing to interrupt: your message was sent",
+          );
+        }
+      })
+      .catch((e: unknown) => showToast(`Could not send: ${errorText(e)}`));
   };
 
   /** Posts on a run's bus; the entry itself arrives on the event stream. */

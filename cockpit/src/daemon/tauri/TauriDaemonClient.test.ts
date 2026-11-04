@@ -260,6 +260,12 @@ describe("TauriDaemonClient", () => {
     expect(t.calls.filter((c) => c.command === "daemon_bus_list")).toHaveLength(2);
     await client.sendPrompt("s1", "hi");
     expect(t.calls[t.calls.length - 1]).toEqual({ command: "daemon_send_prompt", args: { sessionId: "s1", text: "hi" } });
+    t.results.daemon_send_prompt = { queued: false, interrupted: true };
+    await expect(client.sendPrompt("s1", "stop that", { interrupt: true })).resolves.toEqual({ queued: false, interrupted: true });
+    expect(t.calls[t.calls.length - 1]).toEqual({
+      command: "daemon_send_prompt",
+      args: { sessionId: "s1", text: "stop that", interrupt: true },
+    });
   });
 
   it("keeps prompting disabled on daemons without sessions.prompt", async () => {

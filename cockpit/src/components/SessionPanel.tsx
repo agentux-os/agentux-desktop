@@ -48,7 +48,7 @@ interface Props {
   onClose: () => void;
   onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
-  onSend: (sessionId: string, text: string) => void;
+  onSend: (sessionId: string, text: string, interrupt?: boolean) => void;
   /** Why the human cannot prompt sessions (the daemon has no `sessions.prompt`); absent when they can. */
   sendDisabled?: string;
   /** Cancels the run; absent when the client cannot (mock data). */
@@ -409,21 +409,27 @@ function Pipeline({ run }: { run: Run }) {
   );
 }
 
-function Composer({
+/**
+ * The human's message box. While the agent is in a turn, **Interrupt**
+ * (Ctrl+Enter) stops the turn and the agent continues from the message, in
+ * the same session; Enter queues it for after the turn.
+ */
+export function Composer({
   session,
   onSend,
   disabledReason,
 }: {
   session: Session;
-  onSend: (sessionId: string, text: string) => void;
+  onSend: (sessionId: string, text: string, interrupt?: boolean) => void;
   disabledReason?: string;
 }) {
   const [text, setText] = useState("");
   const ended = session.state === "ended" || !!disabledReason;
-  const send = () => {
+  const inTurn = session.state === "active" || session.state === "waiting";
+  const send = (interrupt = false) => {
     const t = text.trim();
     if (!t) return;
-    onSend(session.id, t);
+    onSend(session.id, t, interrupt && inTurn);
     setText("");
   };
   return (
@@ -432,7 +438,7 @@ function Composer({
       className="composer"
       onSubmit={(e) => {
         e.preventDefault();
-        send();
+        send(false);
       }}
     >
       <textarea
@@ -450,12 +456,30 @@ function Composer({
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            send();
+            send(e.ctrlKey || e.metaKey);
           }
           if (e.key === "Escape") e.currentTarget.blur();
         }}
       />
-      <button className="btn btn-primary" type="submit" disabled={ended || !text.trim()} title="Send (Enter)">
+      {inTurn && (
+        <button
+          className="btn"
+          type="button"
+          disabled={ended || !text.trim()}
+          onClick={() => send(true)}
+          title="Interrupt and redirect (Ctrl+Enter): stop the current turn; the agent continues from your message"
+          aria-label="Interrupt and redirect"
+        >
+          <Icon name="interrupt" size={14} />
+        </button>
+      )}
+      <button
+        className="btn btn-primary"
+        type="submit"
+        disabled={ended || !text.trim()}
+        title={inTurn ? "Send after the current turn (Enter)" : "Send (Enter)"}
+        aria-label="Send"
+      >
         <Icon name="send" size={14} />
       </button>
     </form>

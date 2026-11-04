@@ -4,6 +4,7 @@ import type {
   HelperReply,
   AgentPrefs,
   HarnessInfo,
+  Prompted,
   ToolsListing,
   HarnessTestResult,
   StartRunInput,
@@ -274,11 +275,20 @@ export class MockDaemonClient implements DaemonClient {
     // The mock bus log is complete already.
   }
 
-  async sendPrompt(sessionId: string, text: string): Promise<void> {
+  async sendPrompt(sessionId: string, text: string, options?: { interrupt?: boolean }): Promise<Prompted> {
     this.now = Date.now();
     const session = this.state.sessions[sessionId];
-    if (!session) return;
+    if (!session) return { queued: false, interrupted: false };
+    const inTurn = session.state === "active" || session.state === "waiting";
+    const interrupted = !!options?.interrupt && inTurn;
     this.pushEvent(sessionId, { kind: "message", from: "human", text });
+    if (interrupted) {
+      this.pushEvent(sessionId, {
+        kind: "message",
+        from: "system",
+        text: "You interrupted the agent; it continues from your message.",
+      });
+    }
     this.emit();
     this.timers.push({
       at: Date.now() + 1400 / this.speed,
@@ -286,11 +296,14 @@ export class MockDaemonClient implements DaemonClient {
         this.pushEvent(sessionId, {
           kind: "message",
           from: "agent",
-          text: "Noted. I'll take that into account for the rest of this step.",
+          text: interrupted
+            ? "Stopped. Picking up from your correction."
+            : "Noted. I'll take that into account for the rest of this step.",
         });
         this.addUsage(session.runId, sessionId, 4_000, 60);
       },
     });
+    return { queued: inTurn && !interrupted, interrupted };
   }
 
   /**

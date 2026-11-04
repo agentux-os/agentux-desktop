@@ -80,6 +80,15 @@ describe("MockDaemonClient", () => {
     const events = client.getState().sessions[sid].events;
     const said = events[events.length - 1];
     expect(said).toMatchObject({ kind: "message", from: "human", text: "Also log every request" });
+    const sessionNow = client.getState().sessions[sid];
+    if (sessionNow.state === "active" || sessionNow.state === "waiting") {
+      await expect(client.sendPrompt(sid, "Skip the cache", { interrupt: true })).resolves.toEqual({ queued: false, interrupted: true });
+      const last = client.getState().sessions[sid].events.slice(-2);
+      expect(last).toMatchObject([
+        { kind: "message", from: "human", text: "Skip the cache" },
+        { kind: "message", from: "system" },
+      ]);
+    }
 
     const posted = await client.postBus({ runId: live.id, to: { kind: "session", sessionId: sid }, body: "Ping", subject: "Hi" });
     let s = client.getState();
