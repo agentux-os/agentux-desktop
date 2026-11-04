@@ -523,6 +523,16 @@
       "url": "https://github.com/agentux-os/agentux/blob/main/docs/adr/0007-terminal-mode-is-a-session-handoff.md"
     }
   },
+  "session.status": {
+    "title": "What the session is doing",
+    "what": "One line on the session: working (with the tool it is running), waiting for you (with the request, and Show to jump to it), open in its terminal, idle, done, failed, or agentuxd unreachable.",
+    "how": "It comes from agentuxd on this computer: the session's state, the run's status and the requests waiting for you. When agentuxd cannot be reached, the panel keeps the last state it saw and says so; nothing is inferred from Command or other machines."
+  },
+  "session.filter": {
+    "title": "Show activity",
+    "what": "Narrows the session's activity to one kind: the tools the agent ran, what waited for you, what went wrong (failed tools, turns that stalled or were not handled), or its results (file changes and its plan).",
+    "how": "The number is how many of each the session has. All shows everything in order, as it happened."
+  },
   "session.bar": {
     "title": "Session",
     "what": "The session's harness, model and working directory, which is the run's worktree.",

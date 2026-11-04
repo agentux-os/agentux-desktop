@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import type { BusMessage, CockpitState, PermissionRequest, Session, SessionEvent, ToolKind } from "../daemon/types";
 import { harnessInfo } from "../daemon/vendors";
+import { activityOf, matches, type ActivityFilter } from "../lib/activity";
 import { diffTexts } from "../lib/diff";
 import { BUS_KIND_LABEL, roleLabel } from "../lib/labels";
 import { formatClock } from "../lib/format";
@@ -28,20 +29,26 @@ interface Props {
   now: number;
   onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
+  /** Only this kind of activity; all of it by default. */
+  filter?: ActivityFilter;
 }
 
 /**
  * Renders a session's events. The same components are used for every vendor:
  * only the badge colour tells Claude Code from Codex.
  */
-export function SessionEvents({ session, state, now, onApprove, onDeny }: Props) {
+export function SessionEvents({ session, state, now, onApprove, onDeny, filter = "all" }: Props) {
+  let shown = 0;
   return (
-    <ol className="events">
+    <ol className="events" aria-label="Session activity">
       {session.events.map((ev) => {
         const bus = ev.kind === "bus" ? state.bus.find((m) => m.id === ev.messageId) : undefined;
         const requestId = ev.kind === "permission" ? ev.requestId : bus?.kind === "question" ? bus.requestId : undefined;
+        const activity = activityOf(ev, bus);
+        if (!matches(filter, activity)) return null;
+        shown += 1;
         return (
-          <li key={ev.id} className={`ev ev--${ev.kind}`}>
+          <li key={ev.id} id={`ev-${ev.id}`} className={`ev ev--${ev.kind}`} data-activity={activity} data-request={requestId}>
             <EventView
               ev={ev}
               session={session}
@@ -54,7 +61,13 @@ export function SessionEvents({ session, state, now, onApprove, onDeny }: Props)
           </li>
         );
       })}
-      {session.state === "active" && (
+      {filter !== "all" && shown === 0 && (
+        <li className="ev ev--none muted">Nothing of this kind in this session yet.</li>
+      )}
+      {filter === "all" && session.events.length === 0 && (
+        <li className="ev ev--none muted">No activity yet: the agent's messages, tools, approvals and changes appear here as they happen.</li>
+      )}
+      {filter === "all" && session.state === "active" && (
         <li className="ev ev--typing" aria-label="Agent is working">
           <span className="typing" style={vendorStyle(session.vendor)}>
             <i />
