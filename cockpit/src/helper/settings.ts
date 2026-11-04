@@ -115,6 +115,14 @@ export function markWelcomeOpen(open: boolean): void {
   write(WELCOME_OPEN_KEY, open ? String(Date.now()) : null);
 }
 
+/**
+ * The cockpit was opened for screenshots (`agentux-cockpit --showcase`,
+ * agentux-os#73): the helper makes no offer of its own.
+ */
+export function showcase(search = typeof location === "undefined" ? "" : location.search): boolean {
+  return new URLSearchParams(search).has("showcase");
+}
+
 /** Whether a Welcome window is open now. */
 export function welcomeOpen(now = Date.now()): boolean {
   const at = Number(read(WELCOME_OPEN_KEY));
