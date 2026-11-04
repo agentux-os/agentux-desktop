@@ -58,6 +58,20 @@ export interface ApiRun {
   pullRequest: { number: number; url: string } | null;
   activity: string;
   error: string | null;
+  /**
+   * Where the run's agent sessions ran, the weakest any of them had; absent
+   * before a session opens and from daemons before agentux-core 0.5.3.
+   */
+  agentIsolation?: ApiAgentIsolation | null;
+}
+
+export interface ApiAgentIsolation {
+  /** `none` (on the host) or `bubblewrap` */
+  mode: string;
+  /** A sandbox's network: `outbound` or `none`. */
+  network?: string | null;
+  /** `project | node-policy | command | default` */
+  source: string;
 }
 
 export interface ApiRequest {

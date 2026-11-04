@@ -19,6 +19,9 @@
  *                                is a known vendor (see `harnessToVendor`)
  *   sessions (role -> id)     -> same, every role (absent from old daemons: {})
  *   costUsd                   -> same (absent from old daemons: 0)
+ *   agentIsolation            -> isolation: mode `none` is not sandboxed,
+ *                                any other mode is; unknown networks and
+ *                                sources become absent and `default`
  *   check status              -> unknown values become `pending`
  *
  * PermissionRequest
@@ -97,6 +100,7 @@
  */
 
 import type {
+  AgentIsolation,
   BusEndpoint,
   BusMessage,
   BusMessageKind,
@@ -124,6 +128,7 @@ import type {
 } from "../types";
 import { BUS_KINDS, BUS_SYSTEM_KINDS, BUS_WARNING_KINDS, MESSAGE_FROM, VENDORS } from "../types";
 import type {
+  ApiAgentIsolation,
   ApiBusEndpoint,
   ApiBusMessage,
   ApiEvent,
@@ -221,6 +226,16 @@ export function mapRun(r: ApiRun): Run {
     pullRequest: opt(r.pullRequest),
     activity: r.activity,
     error: opt(r.error),
+    isolation: r.agentIsolation ? mapIsolation(r.agentIsolation) : undefined,
+  };
+}
+
+function mapIsolation(i: ApiAgentIsolation): AgentIsolation {
+  const sandboxed = i.mode !== "none";
+  return {
+    sandboxed,
+    network: sandboxed ? oneOf(["outbound", "none"] as const, i.network ?? "") : undefined,
+    source: oneOf(["project", "node-policy", "command", "default"] as const, i.source) ?? "default",
   };
 }
 

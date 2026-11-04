@@ -92,6 +92,18 @@ export interface Run {
   activity: string;
   /** Why the run failed, if it did. */
   error?: string;
+  /** Where its agent sessions ran; absent until one opens (or from old daemons). */
+  isolation?: AgentIsolation;
+}
+
+/** The isolation a run's agents ran with (ADR 0023). */
+export interface AgentIsolation {
+  /** In the Bubblewrap sandbox, or on the host as the user. */
+  sandboxed: boolean;
+  /** A sandbox's network. */
+  network?: "outbound" | "none";
+  /** What decided it. */
+  source: "project" | "node-policy" | "command" | "default";
 }
 
 /**
