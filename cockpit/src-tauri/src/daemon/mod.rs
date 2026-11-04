@@ -413,6 +413,21 @@ pub async fn daemon_harnesses(state: State<'_, DaemonState>) -> Result<Value, Co
     .await
 }
 
+/// What a run of the project would do (`projects.describe`), or `null`
+/// from a daemon that does not say.
+#[tauri::command]
+pub async fn daemon_describe_project(state: State<'_, DaemonState>, project_id: String) -> Result<Value, CommandError> {
+    let socket = state.socket()?;
+    timed(CALL_TIMEOUT, async {
+        let mut c = Client::connect(socket).await?;
+        match c.call(method::PROJECTS_DESCRIBE, json!({ "projectId": project_id })).await {
+            Err(ClientError::Rpc { code, .. }) if code == client::METHOD_NOT_FOUND => Ok(Value::Null),
+            other => other,
+        }
+    })
+    .await
+}
+
 /// The tool catalog every session gets (`tools.list`), or `null` from a
 /// daemon that does not serve it.
 #[tauri::command]

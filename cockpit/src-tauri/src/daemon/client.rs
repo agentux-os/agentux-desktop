@@ -61,6 +61,9 @@ pub mod method {
     /// The tool catalog sessions get (agentux-core 0.5.3). Older daemons
     /// answer -32601.
     pub const TOOLS_LIST: &str = "tools.list";
+    /// What a run of a project would do (agentux-core 0.5.5). Older
+    /// daemons answer -32601.
+    pub const PROJECTS_DESCRIBE: &str = "projects.describe";
     /// The human lifted a harness's usage limit (agentux-core 0.4.7).
     pub const LIMITS_CLEAR: &str = "limits.clear";
     /// A short test prompt to a harness (agentux-core 0.4.8).

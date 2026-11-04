@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
-import type { HarnessInfo, HarnessLimit, StartRunInput } from "../daemon/client";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import type { HarnessInfo, HarnessLimit, ProjectPlan, StartRunInput } from "../daemon/client";
 import { VENDORS, type Project, type Vendor } from "../daemon/types";
 import { VENDOR_INFO } from "../daemon/vendors";
 import { Icon } from "./Icon";
+import { GuidedRun, type GuideAgent } from "./GuidedRun";
 import { help } from "../helper/content";
 
 interface Props {
@@ -18,6 +19,20 @@ interface Props {
   onClone?: (source: string) => Promise<string>;
   /** The human lifted a harness's usage limit. */
   onClearLimit?: (harness: string) => Promise<void>;
+  /** What a run of a project would do; with it, the dialog offers the guided path. */
+  describeProject?: (projectId: string) => Promise<ProjectPlan | null>;
+  /** The agent that writes the guided path's instructions, if the user lets the helper ask one. */
+  guide?: GuideAgent | null;
+}
+
+const MODE_KEY = "agentux.newRun.mode";
+
+function savedMode(): "guided" | "advanced" {
+  try {
+    return localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "guided";
+  } catch {
+    return "guided";
+  }
 }
 
 /** The roles of the built-in pipeline, in the order they act. */
@@ -79,7 +94,74 @@ function errorText(err: unknown): string {
  * repository; registered on first use, or cloned here first), the prompt for
  * the agents, and optionally which agent plays each role.
  */
-export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHarnesses, onClone, onClearLimit }: Props) {
+export function NewRunDialog(props: Props) {
+  const { projects, initialPath, onClose, onSubmit, loadHarnesses, describeProject, guide } = props;
+  const [mode, setMode] = useState<"guided" | "advanced">(() => (describeProject ? savedMode() : "advanced"));
+  const choose = (m: "guided" | "advanced") => {
+    setMode(m);
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      // Only a convenience.
+    }
+  };
+  const switcher = describeProject && (
+    <div className="seg new-run-mode" role="tablist" aria-label="How to start">
+      <button type="button" role="tab" aria-selected={mode === "guided"} className={mode === "guided" ? "is-on" : undefined} onClick={() => choose("guided")} {...help("newRun.guided")}>
+        Guided
+      </button>
+      <button type="button" role="tab" aria-selected={mode === "advanced"} className={mode === "advanced" ? "is-on" : undefined} onClick={() => choose("advanced")}>
+        Advanced
+      </button>
+    </div>
+  );
+  if (mode === "guided" && describeProject) {
+    const initial = projects.find((p) => p.path === initialPath)?.id;
+    return (
+      <div className="overlay" onClick={onClose}>
+        <div
+          className="dialog form-dialog"
+          role="dialog"
+          aria-label="New run"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+          }}
+        >
+          <header className="dialog-head">
+            <Icon name="plus" /> New run
+            {switcher}
+            <button type="button" className="icon-btn" onClick={onClose} title="Close">
+              <Icon name="x" />
+            </button>
+          </header>
+          <GuidedRun
+            projects={projects}
+            initialProjectId={initial}
+            describeProject={describeProject}
+            loadHarnesses={loadHarnesses}
+            guide={guide}
+            onSubmit={onSubmit}
+            onCancel={onClose}
+          />
+        </div>
+      </div>
+    );
+  }
+  return <AdvancedRun {...props} switcher={switcher} />;
+}
+
+/** The form for people who know their project's roles and agents. */
+function AdvancedRun({
+  projects,
+  initialPath,
+  onClose,
+  onSubmit,
+  loadHarnesses,
+  onClone,
+  onClearLimit,
+  switcher,
+}: Props & { switcher?: ReactNode }) {
   const [path, setPath] = useState(initialPath);
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
@@ -176,6 +258,7 @@ export function NewRunDialog({ projects, initialPath, onClose, onSubmit, loadHar
       >
         <header className="dialog-head">
           <Icon name="plus" /> New run
+          {switcher}
           <button type="button" className="icon-btn" onClick={onClose} title="Close">
             <Icon name="x" />
           </button>

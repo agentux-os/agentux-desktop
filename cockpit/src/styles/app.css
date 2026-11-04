@@ -2480,4 +2480,35 @@ kbd {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+/* Guided New run (agentux-desktop#85). */
+.new-run-mode {
+  margin-left: auto;
+  margin-right: 8px;
+}
+.guided h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.proposal {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.proposal dt {
+  color: var(--muted);
+}
+.proposal dd {
+  margin: 0;
+}
+.proposal-steps {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.proposal-steps li {
+  margin: 2px 0;
+}
+.proposal-steps .chip {
+  margin-left: 6px;
 }
