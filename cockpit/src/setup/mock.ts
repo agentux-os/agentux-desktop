@@ -54,6 +54,8 @@ export class MockSetupClient implements SetupClient {
   private key: string | null = null;
   private finished = false;
   private profile = "workstation";
+  /** A seeded selection not yet applied (the system applies it at first boot). */
+  intent: { profile: string; components: string[] | null } | null = null;
   private update: UpdateStatus | null;
 
   constructor(options: MockSetupOptions = {}) {
@@ -120,14 +122,22 @@ export class MockSetupClient implements SetupClient {
         applied: this.profile === "workstation" ? ["node", "desktop"] : [],
         pending: [],
         failed: [],
+        ...(this.intent ? { intent: this.intent } : {}),
+        catalogComponents: [
+          { id: "node", label: "Local AgentUX node" },
+          { id: "desktop", label: "Desktop cockpit" },
+          { id: "node-gateway", label: "Remote node gateway" },
+          { id: "command-server", label: "AgentUX Command server" },
+          { id: "office-client", label: "AgentUX Office" },
+        ],
       },
       ...(scan ? { installed: [...this.installed].sort() } : {}),
     };
   }
 
-  async selectProfile(profile: string): Promise<void> {
-    this.calls.push(`profile ${profile}`);
-    this.profile = profile;
+  async selectProfile(profile: string, components?: string[]): Promise<void> {
+    this.calls.push(components?.length ? `profile ${profile} ${components.join(",")}` : `profile ${profile}`);
+    this.intent = { profile, components: profile === "custom" ? [...(components ?? [])].sort() : null };
   }
 
   async start(specs: string[]): Promise<void> {

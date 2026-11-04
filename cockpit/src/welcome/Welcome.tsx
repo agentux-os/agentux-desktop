@@ -128,6 +128,8 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
   const [profile, setProfile] = useState<ProfileId>(resumed?.profile ?? "workstation");
+  /** The custom profile's components. */
+  const [components, setComponents] = useState<string[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -138,17 +140,35 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
     document.title = "Welcome to AgentUX";
   }, []);
 
+  // The selection waiting for first boot comes first, then what is applied.
+  const savedProfile = status?.profile.intent?.profile ?? status?.profile.requested;
+  const savedComponents = useMemo(() => {
+    const p = status?.profile;
+    if (p?.intent) return p.intent.profile === "custom" ? [...(p.intent.components ?? [])].sort() : [];
+    return p?.requested === "custom" ? [...p.applied].sort() : [];
+  }, [status?.profile]);
   useEffect(() => {
-    if (status?.profile.requested) setProfile(profileById(status.profile.requested).id);
-  }, [status?.profile.requested]);
+    if (savedProfile) setProfile(profileById(savedProfile).id);
+  }, [savedProfile]);
+  const savedKey = savedComponents.join(",");
+  useEffect(() => {
+    setComponents(savedKey ? savedKey.split(",") : []);
+  }, [savedKey]);
 
-  const saveProfile = async () => {
+  /** Seeds the selection; false when it could not be (nothing to move on to). */
+  const saveProfile = async (): Promise<boolean> => {
+    if (profile === "custom" && components.length === 0) {
+      fail("Choose at least one capability for the custom profile.");
+      return false;
+    }
     setProfileSaving(true);
     try {
-      await client.selectProfile(profile);
+      await client.selectProfile(profile, profile === "custom" ? components : undefined);
       await refresh();
+      return true;
     } catch (e) {
       fail(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setProfileSaving(false);
     }
@@ -180,8 +200,12 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
   }, [step, profile, STEPS]);
   // Leaving the profile step saves the choice (it only records an intent).
   const next = async () => {
-    if (STEPS[step].id === "profile" && status?.profile.requested !== profile) {
-      await saveProfile();
+    if (
+      STEPS[step].id === "profile" &&
+      (savedProfile !== profile || (profile === "custom" && components.join(",") !== savedKey)) &&
+      !(await saveProfile())
+    ) {
+      return;
     }
     go(step + 1);
   };
@@ -336,7 +360,7 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
 
         <section className="wz-profile" aria-label="AgentUX OS profile" role="region" {...help("wz.profile")}>
           <div className="wz-profile-kicker">AgentUX OS profile</div>
-          <strong>{profileLabel(status?.profile.requested)}</strong>
+          <strong>{profileLabel(savedProfile)}</strong>
           <span className="muted">
             {status?.profile.applied.length ? status.profile.applied.join(" · ") : "No capabilities applied"}
           </span>
@@ -384,7 +408,14 @@ export function Welcome({ client, pollMs }: { client: SetupClient; pollMs?: numb
 
         <div className={`wz-body ${s.id === "tools" ? "is-tools" : ""}`}>
           {s.id === "profile" && (
-            <ProfileStep selected={profile} saved={status?.profile.requested} onSelect={setProfile} />
+            <ProfileStep
+              selected={profile}
+              saved={savedProfile}
+              onSelect={setProfile}
+              components={components}
+              catalog={status?.profile.catalogComponents ?? []}
+              onComponents={setComponents}
+            />
           )}
           {s.id === "role" && <RoleStep profile={current} client={client} onError={fail} />}
           {s.id === "agents" && <AgentsStep client={client} status={status} onError={fail} />}

@@ -918,3 +918,17 @@ button.wz-method:hover {
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+
+.wz-capabilities {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.wz-capabilities label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
