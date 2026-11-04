@@ -11,7 +11,8 @@ interface Props {
   onSelect: (id: string) => void;
   onApprove: (requestId: string, answer?: string) => void;
   onDeny: (requestId: string) => void;
-  onOpenRun: (runId: string) => void;
+  /** Opens the request's run, at its session with the request shown. */
+  onOpenRun: (runId: string, sessionId?: string, requestId?: string) => void;
 }
 
 /** Every approval from every run in one queue: plans, steps, agents' tool calls and questions, budget overruns. */
@@ -52,7 +53,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
                 showShortcuts={r.id === selectedId}
                 onApprove={(answer) => onApprove(r.id, answer)}
                 onDeny={() => onDeny(r.id)}
-                onOpen={() => onOpenRun(r.runId)}
+                onOpen={() => onOpenRun(r.runId, r.sessionId, r.id)}
               />
             </div>
           ))}
@@ -73,7 +74,7 @@ export function Inbox({ state, now, pending, selectedId, onSelect, onApprove, on
                 now={now}
                 onApprove={() => undefined}
                 onDeny={() => undefined}
-                onOpen={() => onOpenRun(r.runId)}
+                onOpen={() => onOpenRun(r.runId, r.sessionId, r.id)}
               />
             ))}
           </div>

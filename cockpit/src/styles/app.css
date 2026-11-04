@@ -2418,3 +2418,66 @@ kbd {
   width: 24px;
   height: 24px;
 }
+
+/* Session activity (agentux-desktop#84): what the session is doing, and a filter. */
+.activity-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.session-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.session-status.is-waiting strong,
+.session-status.is-blocked strong,
+.session-status.is-offline strong {
+  color: var(--warn, #c98a00);
+}
+.session-status.is-blocked strong {
+  color: var(--danger, #d14343);
+}
+.state-dot.state-offline,
+.state-dot.state-blocked {
+  background: var(--danger, #d14343);
+}
+.state-dot.state-working {
+  background: var(--accent);
+}
+.state-dot.state-done {
+  background: var(--ok, #3fa34d);
+}
+.btn-small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.activity-filter button {
+  font-size: 12px;
+}
+.ev--none {
+  padding: 16px 0;
+  text-align: center;
+}
+.ev.is-focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

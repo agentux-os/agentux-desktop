@@ -2,6 +2,13 @@ import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import type { BusMessage, BusPostInput, CockpitState, Run, Session } from "../daemon/types";
 import { STEPS } from "../daemon/types";
 import { harnessInfo } from "../daemon/vendors";
+import {
+  ACTIVITY_FILTERS,
+  ACTIVITY_LABEL,
+  activityCounts,
+  sessionStatus,
+  type ActivityFilter,
+} from "../lib/activity";
 import { groupBus } from "../lib/bus";
 import { formatDuration, formatTokens, formatUsd } from "../lib/format";
 import { STEP_LABEL, roleLabel, runRef } from "../lib/labels";
@@ -58,6 +65,8 @@ interface Props {
   onPost: (input: BusPostInput) => Promise<boolean>;
   /** Why terminal mode is unavailable (the daemon has no `terminals.*`); absent when it is. */
   terminalDisabled?: string;
+  /** A request to show when the panel opens (from the Inbox). */
+  focusRequest?: string | null;
 }
 
 type PanelView = "session" | "bus" | "shell";
@@ -348,32 +357,110 @@ function SessionUsageView({ session }: { session: Session }) {
   );
 }
 
-function EventScroller({ session, state, now, onApprove, onDeny }: Props & { session: Session }) {
+/** Scrolls a request's card into view and marks it for a moment. */
+function showRequest(container: HTMLElement | null, requestId: string): boolean {
+  const el = container?.querySelector<HTMLElement>(`[data-request="${CSS.escape(requestId)}"]`);
+  if (!el) return false;
+  el.scrollIntoView?.({ block: "center" });
+  el.classList.add("is-focused");
+  setTimeout(() => el.classList.remove("is-focused"), 1600);
+  return true;
+}
+
+/**
+ * What the session is doing, in one line, and which of its activity to see.
+ */
+export function ActivityBar({
+  session,
+  run,
+  state,
+  filter,
+  onFilter,
+  onShowRequest,
+}: {
+  session: Session;
+  run: Run;
+  state: CockpitState;
+  filter: ActivityFilter;
+  onFilter: (f: ActivityFilter) => void;
+  onShowRequest: (requestId: string) => void;
+}) {
+  const status = sessionStatus(session, run, state);
+  const counts = activityCounts(session, state);
+  return (
+    <div className="activity-bar">
+      <div className={`session-status is-${status.kind}`} role="status" aria-live="polite" {...help("session.status")}>
+        <span className={`state-dot state-${status.kind}`} aria-hidden />
+        <strong>{status.label}</strong>
+        {status.detail && <span className="muted ellipsis">{status.detail}</span>}
+        {status.requestId && (
+          <button className="btn btn-quiet btn-small" onClick={() => onShowRequest(status.requestId!)}>
+            Show
+          </button>
+        )}
+      </div>
+      <div className="seg activity-filter" role="group" aria-label="Show activity" {...help("session.filter")}>
+        {ACTIVITY_FILTERS.map((f) => (
+          <button
+            key={f}
+            className={filter === f ? "is-on" : ""}
+            aria-pressed={filter === f}
+            aria-label={f !== "all" && counts[f] > 0 ? `${ACTIVITY_LABEL[f]}, ${counts[f]}` : ACTIVITY_LABEL[f]}
+            onClick={() => onFilter(f)}
+          >
+            {ACTIVITY_LABEL[f]}
+            {f !== "all" && counts[f] > 0 && <span className="muted"> {counts[f]}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EventScroller({ session, state, now, onApprove, onDeny, run, focusRequest }: Props & { session: Session }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const count = session.events.length;
+  const [filter, setFilter] = useState<ActivityFilter>("all");
 
   useLayoutEffect(() => {
     stick.current = true;
+    setFilter("all");
   }, [session.id]);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [count, session.id, session.events]);
+  }, [count, session.id, session.events, filter]);
+
+  // A request opened from the Inbox: show it once it is rendered.
+  useEffect(() => {
+    if (!focusRequest) return;
+    stick.current = false;
+    if (!showRequest(ref.current, focusRequest)) stick.current = true;
+  }, [focusRequest, session.id]);
+
+  const show = (requestId: string) => {
+    setFilter("all");
+    stick.current = false;
+    requestAnimationFrame(() => showRequest(ref.current, requestId));
+  };
 
   return (
-    <div
-      {...help("session.events")}
-      className="scroller"
-      ref={ref}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-      }}
-    >
-      <SessionEvents session={session} state={state} now={now} onApprove={onApprove} onDeny={onDeny} />
-    </div>
+    <>
+      <ActivityBar session={session} run={run} state={state} filter={filter} onFilter={setFilter} onShowRequest={show} />
+      <div
+        {...help("session.events")}
+        className="scroller"
+        ref={ref}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+        }}
+      >
+        <SessionEvents session={session} state={state} now={now} onApprove={onApprove} onDeny={onDeny} filter={filter} />
+      </div>
+    </>
   );
 }
 

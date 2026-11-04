@@ -97,10 +97,13 @@ export default function App() {
     if (connected && busRuns) client.watchBus(busRuns.split(","));
   }, [client, busRuns, connected]);
 
-  const openRun = useCallback((id: string) => {
+  /** Opens a run; from a request, at the request's session with the request shown. */
+  const [focusRequest, setFocusRequest] = useState<string | null>(null);
+  const openRun = useCallback((id: string, sessionId?: string, requestId?: string) => {
     setRunId(id);
-    setSessionId(null);
+    setSessionId(sessionId ?? null);
     setTerminal(false);
+    setFocusRequest(requestId ?? null);
   }, []);
 
   /** Approves a request; a question needs `answer` (agentuxd refuses an empty one). */
@@ -129,9 +132,11 @@ export default function App() {
 
   const canStartRuns = client.mode === "daemon" && state.connection.status === "connected";
   const sendDisabled =
-    client.mode === "daemon" && !state.capabilities?.sessionsPrompt
-      ? "This agentuxd does not take prompts into sessions yet"
-      : undefined;
+    client.mode === "daemon" && state.connection.status !== "connected"
+      ? "agentuxd is unreachable: messages can be sent once the cockpit reconnects"
+      : client.mode === "daemon" && !state.capabilities?.sessionsPrompt
+        ? "This agentuxd does not take prompts into sessions yet"
+        : undefined;
 
   const terminalDisabled =
     client.mode === "daemon" && !state.capabilities?.terminals
@@ -496,6 +501,7 @@ export default function App() {
               mode={client.mode}
               onPost={postBus}
               terminalDisabled={terminalDisabled}
+              focusRequest={focusRequest}
             />
           )}
         </div>

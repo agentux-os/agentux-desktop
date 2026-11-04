@@ -101,4 +101,14 @@ describe("Inbox", () => {
     rerender(<Inbox state={state([])} pending={[]} {...props} />);
     expect(screen.getByText("Inbox zero")).toBeTruthy();
   });
+  it("opens a request in its own session, where it shows in context", () => {
+    const onOpenRun = vi.fn();
+    const pending = [{ ...request("q1", "r1"), kind: "permission" as const, sessionId: "s1" }];
+    const inbox = state([run("r1", { status: "running" })], pending);
+    render(
+      <Inbox state={inbox} pending={pending} now={NOW} selectedId="q1" onSelect={() => {}} onApprove={vi.fn()} onDeny={vi.fn()} onOpenRun={onOpenRun} />,
+    );
+    fireEvent.click(screen.getByTitle("Open run"));
+    expect(onOpenRun).toHaveBeenCalledWith("r1", "s1", "q1");
+  });
 });

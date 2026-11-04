@@ -77,12 +77,21 @@ The native window and a real daemon: [Developing the cockpit](#developing-the-co
 One interface on top of every coding agent CLI (Tauri app, talks only to `agentuxd`):
 
 - **Session view.** Messages, tool calls, diffs, plans and permission requests rendered the same way whatever the vendor. The harness's own TUI opens in an embedded terminal on the same session, without restarting it.
+  - **What it is doing.** A status line says, in one sentence, whether the session is working (and on which tool), waiting for you (with the request, and **Show** to jump to it), open in its terminal, idle, done or failed. It also says when agentuxd can't be reached: the panel then keeps the last state it saw and says so, and the composer waits for the connection.
+  - **Which activity.** A filter narrows the log to the **Tools** the agent ran, the **Approvals** that waited for you, the **Problems** (failed tools, turns that stalled or weren't handled) or its **Results** (file changes and the plan), each with a count. Approvals are answered where they appear, with their action and target. Opening one from the inbox goes to the session that asked and shows it there.
+  - **Interrupt and redirect.** While the agent works, **Ctrl+Enter** (or the interrupt button) stops its turn and it continues from your message, in the same session and step. **Enter** queues the message for after the turn.
 - **Run board.** Per project: planned, implementing, testing, in review, waiting for you, done.
 - **Approvals inbox.** Every permission request and escalation from every agent in one queue, with one shortcut to approve.
 - **Agent bus feed.** Messages, review requests and handoffs between agents, grouped by exchange with their turn count; questions to you and your answers; turn limits and denied tools as warnings; wakes and sessions joining or leaving as quiet system lines.
 - **Spend.** Tokens and cost per run, project and vendor.
 - **Welcome to AgentUX.** A first-run wizard in its own window (see below).
 - **The penguin helper.** A help mascot in the sidebar's corner: a guided tour on first use, **What's this?** for any element, and **Ask the penguin** for questions about AgentUX (see [Help mascot](#help-mascot)).
+
+### The cockpit and AgentUX Command
+
+The cockpit is the workspace for **one computer**. It talks only to that machine's `agentuxd`, over its local socket. Runs, sessions, approvals and policy are this machine's, and the node policy and `agentux.yaml` stay authoritative: approving in the cockpit answers agentuxd's request, it doesn't bypass it. It shows no other machines, and when agentuxd is down it shows that, not a remote state.
+
+[AgentUX Command](https://github.com/agentux-os/agentux-command) is the workspace for **many machines**: missions across nodes, fleet health, tenants, and approvals for people who aren't at the node. A Workstation can report to Command too (the welcome wizard's **Command** step). The local view stays the same, and runs that Command started appear in it like any other. Both use the same words for activity (tools, approvals, problems, results), but neither is a window onto the other.
 
 ## Help mascot
 
