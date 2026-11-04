@@ -4,6 +4,7 @@ import type {
   HelperReply,
   AgentPrefs,
   HarnessInfo,
+  Prompted,
   ToolsListing,
   HarnessTestResult,
   StartRunInput,
@@ -283,11 +284,14 @@ export class TauriDaemonClient implements DaemonClient {
     void this.loadHistory(runId);
   }
 
-  async sendPrompt(sessionId: string, text: string): Promise<void> {
+  async sendPrompt(sessionId: string, text: string, options?: { interrupt?: boolean }): Promise<Prompted> {
     if (!this.state.capabilities?.sessionsPrompt) {
       throw new Error("this agentuxd does not accept prompts into sessions (no sessions.prompt)");
     }
-    await this.transport.invoke("daemon_send_prompt", { sessionId, text });
+    const args: Record<string, unknown> = { sessionId, text };
+    if (options?.interrupt) args.interrupt = true;
+    const r = await this.transport.invoke<{ queued?: boolean; interrupted?: boolean } | null>("daemon_send_prompt", args);
+    return { queued: !!r?.queued, interrupted: !!r?.interrupted };
   }
 
   async askHelper(input: HelperQuestion): Promise<HelperReply> {

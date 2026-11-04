@@ -67,9 +67,10 @@ export interface DaemonClient {
 
   /**
    * Send a prompt from the human into a running session. Needs
-   * `capabilities.sessionsPrompt` on the real daemon.
+   * `capabilities.sessionsPrompt` on the real daemon. With `interrupt`, the
+   * turn in progress stops and the agent continues from the message.
    */
-  sendPrompt(sessionId: string, text: string): Promise<void>;
+  sendPrompt(sessionId: string, text: string, options?: { interrupt?: boolean }): Promise<Prompted>;
 
   /**
    * Post a message from the human on a run's bus: to a session, a role or the
@@ -151,6 +152,14 @@ export interface HarnessInfo {
   usage?: { todayUsd: number; weekUsd: number; weekSessions: number };
   /** Its plan's usage windows, where the CLI's own files say (Codex). */
   quota?: QuotaWindow[];
+}
+
+/** How `sessions.prompt` took the message. */
+export interface Prompted {
+  /** It waits for the turn in progress to end. */
+  queued: boolean;
+  /** The turn in progress was stopped; the agent continues from it. */
+  interrupted: boolean;
 }
 
 /** agentuxd's `tools.list`: names, never secret or variable values. */

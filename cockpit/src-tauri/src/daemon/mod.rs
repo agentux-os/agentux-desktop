@@ -476,19 +476,21 @@ pub async fn daemon_set_prefs(state: State<'_, DaemonState>, prefs: Value) -> Re
 }
 
 /// Sends the human's prompt into a session (`sessions.prompt`), on daemons
-/// that serve it (see `daemon_capabilities`).
+/// that serve it (see `daemon_capabilities`). With `interrupt`, the turn in
+/// progress stops and the agent continues from the message (agentux-core
+/// 0.5.4); older daemons queue it, and the result's `interrupted` says which.
 #[tauri::command]
 pub async fn daemon_send_prompt(
     state: State<'_, DaemonState>,
     session_id: String,
     text: String,
+    interrupt: Option<bool>,
 ) -> Result<Value, CommandError> {
-    call(
-        &state,
-        method::SESSIONS_PROMPT,
-        json!({ "sessionId": session_id, "text": text }),
-    )
-    .await
+    let mut params = json!({ "sessionId": session_id, "text": text });
+    if interrupt == Some(true) {
+        params["interrupt"] = json!(true);
+    }
+    call(&state, method::SESSIONS_PROMPT, params).await
 }
 
 /// Posts the human's message on a run's bus (`bus.post`), on daemons that

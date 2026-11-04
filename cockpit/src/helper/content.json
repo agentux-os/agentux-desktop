@@ -541,9 +541,10 @@
   "session.composer": {
     "title": "Message the agent",
     "what": "Sends your message into this live session.",
-    "how": "It runs as an extra turn after the turn in progress and shows as your message. While the session is attached to its TUI, it waits until the terminal closes. aux say <session-id> <text> does the same.",
+    "how": "It runs as an extra turn after the turn in progress and shows as your message. Interrupt stops the turn in progress instead: the agent continues from your message in the same session and step, nothing is cancelled. An agent that cannot be interrupted gets it after its turn, and the cockpit says so. While the session is attached to its TUI, it waits until the terminal closes. aux say [--interrupt] <session-id> <text> does the same.",
     "do": [
-      "Type and press Enter; Shift+Enter for a new line"
+      "Type and press Enter; Shift+Enter for a new line",
+      "While the agent works, Ctrl+Enter (or the interrupt button) stops its turn and redirects it"
     ]
   },
   "terminal.view": {
