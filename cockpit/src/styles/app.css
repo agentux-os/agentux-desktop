@@ -2029,6 +2029,41 @@ kbd {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
 }
+.agent-tools h3 {
+  margin: 20px 0 8px;
+  font-size: 14px;
+}
+.tool-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.tool-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.tool-name {
+  display: flex;
+  flex-direction: column;
+}
+.tool-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .tool-row {
+    grid-template-columns: 1fr auto;
+  }
+}
 .agent-usage {
   display: flex;
   justify-content: space-between;

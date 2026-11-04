@@ -129,6 +129,15 @@
     "what": "What agentuxd knows of one agent: installed, signed in, its --version, what its sessions cost today and over 7 days, its plan windows (Codex) and its usage limits.",
     "how": "Sign-in is read from where each CLI keeps it; when it cannot be told, Test asks the agent for a short answer."
   },
+  "agents.tools": {
+    "title": "Tools",
+    "what": "The MCP servers every agent's sessions get: declared once, used by Claude Code, Codex and OpenCode alike, and kept when a run falls back to another agent.",
+    "how": "They come from /etc/agentux/tools.yaml, ~/.config/agentux/tools.yaml and a project's agentux.yaml. Secrets are references to the secret service or systemd credentials; a server whose secret isn't set is left out of sessions. aux tools add, remove and test manage them.",
+    "docs": {
+      "label": "agentux-core: Tool catalog",
+      "url": "https://github.com/agentux-os/agentux-core#tool-catalog-mcp-servers"
+    }
+  },
   "agents.prefs": {
     "title": "Agent preferences",
     "what": "Your choices for every project, in ~/.config/agentux/agents.yaml: the order agents are picked and fall back in, an agent and model per role, what happens at a usage limit, when a stopped agent is given up on, and desktop notifications.",

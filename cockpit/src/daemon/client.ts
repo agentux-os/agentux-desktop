@@ -54,6 +54,8 @@ export interface DaemonClient {
    * a daemon too old to say (which also ignores `StartRunInput.roles`).
    */
   harnesses(): Promise<HarnessInfo[] | null>;
+  /** The tool catalog every session gets; `null` from a daemon too old to say. */
+  tools(): Promise<ToolsListing | null>;
   /** The human lifted a harness's usage limit (credits added, reset on the vendor's site). */
   clearLimit(harness: string): Promise<void>;
   /** One short prompt to an agent, to see that it is set up and answers. */
@@ -149,6 +151,30 @@ export interface HarnessInfo {
   usage?: { todayUsd: number; weekUsd: number; weekSessions: number };
   /** Its plan's usage windows, where the CLI's own files say (Codex). */
   quota?: QuotaWindow[];
+}
+
+/** agentuxd's `tools.list`: names, never secret or variable values. */
+export interface ToolsListing {
+  mcp: ToolInfo[];
+  /** Catalog files that could not be used, and why. */
+  notes: string[];
+}
+
+/** One MCP server of the tool catalog. */
+export interface ToolInfo {
+  name: string;
+  /** `machine`, `user` or `project`. */
+  source: string;
+  /** A started server's command line. */
+  command?: string;
+  /** An HTTP server's URL. */
+  url?: string;
+  /** The agents it is for; absent: every agent. */
+  harnesses?: string[];
+  env: string[];
+  headers: string[];
+  /** Sessions go without the server while one isn't set. */
+  secrets: { name: string; set: boolean }[];
 }
 
 export interface QuotaWindow {

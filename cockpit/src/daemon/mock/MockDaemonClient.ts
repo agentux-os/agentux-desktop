@@ -4,6 +4,7 @@ import type {
   HelperReply,
   AgentPrefs,
   HarnessInfo,
+  ToolsListing,
   HarnessTestResult,
   StartRunInput,
   TerminalHandle,
@@ -187,6 +188,31 @@ export class MockDaemonClient implements DaemonClient {
 
   async startRun(_input: StartRunInput): Promise<Run> {
     throw new Error("Starting runs needs agentuxd; the cockpit is showing mock data");
+  }
+
+  async tools(): Promise<ToolsListing | null> {
+    return {
+      mcp: [
+        {
+          name: "github",
+          source: "user",
+          command: "github-mcp-server stdio",
+          env: ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+          headers: [],
+          secrets: [{ name: "GH_TOKEN", set: true }],
+        },
+        {
+          name: "docs",
+          source: "machine",
+          url: "https://mcp.example.com/docs",
+          harnesses: ["claude-code", "codex"],
+          env: [],
+          headers: ["Authorization"],
+          secrets: [{ name: "DOCS_TOKEN", set: false }],
+        },
+      ],
+      notes: [],
+    };
   }
 
   async harnesses(): Promise<HarnessInfo[] | null> {

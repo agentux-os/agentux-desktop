@@ -53,6 +53,21 @@ function fakeClient() {
     clearLimit: vi.fn(async () => {}),
     testHarness: vi.fn(async (harness: string) => ({ harness, ok: true, detail: "OK", seconds: 2.5, limit: null })),
     getPrefs: vi.fn(async () => structuredClone(PREFS)),
+    tools: vi.fn(async () => ({
+      mcp: [
+        { name: "github", source: "user", command: "github-mcp-server stdio", env: [], headers: [], secrets: [{ name: "GH_TOKEN", set: true }] },
+        {
+          name: "docs",
+          source: "machine",
+          url: "https://mcp.example.com",
+          harnesses: ["codex"],
+          env: [],
+          headers: ["Authorization"],
+          secrets: [{ name: "DOCS_TOKEN", set: false }],
+        },
+      ],
+      notes: [],
+    })),
     setPrefs: vi.fn(async (p: AgentPrefs) => p),
   };
 }
@@ -80,6 +95,11 @@ describe("AgentsView", () => {
     expect(screen.getByRole("article", { name: "Codex" }).textContent).toContain("81%");
     expect(screen.getByRole("article", { name: "Codex" }).textContent).toContain("Not signed in");
     expect(screen.getByRole("article", { name: "Antigravity" }).textContent).toContain("Not installed");
+
+    const tools = screen.getByRole("region", { name: "Tools" });
+    expect(tools.textContent).toContain("github-mcp-server stdio");
+    expect(tools.textContent).toContain("Every agent");
+    expect(tools.textContent).toContain("DOCS_TOKEN not set");
 
     fireEvent.click(within(claude).getByRole("button", { name: "Test" }));
     await settle();
