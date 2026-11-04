@@ -56,6 +56,8 @@ export interface DaemonClient {
   harnesses(): Promise<HarnessInfo[] | null>;
   /** The tool catalog every session gets; `null` from a daemon too old to say. */
   tools(): Promise<ToolsListing | null>;
+  /** What a run of the project would do if started now; `null` from a daemon too old to say. */
+  describeProject(projectId: string): Promise<ProjectPlan | null>;
   /** The human lifted a harness's usage limit (credits added, reset on the vendor's site). */
   clearLimit(harness: string): Promise<void>;
   /** One short prompt to an agent, to see that it is set up and answers. */
@@ -152,6 +154,35 @@ export interface HarnessInfo {
   usage?: { todayUsd: number; weekUsd: number; weekSessions: number };
   /** Its plan's usage windows, where the CLI's own files say (Codex). */
   quota?: QuotaWindow[];
+}
+
+/**
+ * agentuxd's `projects.describe`: a project's workflow resolved as
+ * `runs.start` would resolve it now.
+ */
+export interface ProjectPlan {
+  projectId: string;
+  /** `agentux.yaml`, or `default` (AgentUX's built-in workflow). */
+  source: string;
+  steps: PlanStep[];
+  /** Role to the agent (and model) a run would give it. */
+  roles: Record<string, { harness: string; model?: string }>;
+  checks: { name: string; run: string }[];
+  budgetUsd?: number;
+  /** Role to its tool categories by access (`allow`, `ask`, `deny`). */
+  permissions: Record<string, Partial<Record<"allow" | "ask" | "deny", string[]>>>;
+}
+
+export interface PlanStep {
+  kind: string;
+  role?: string;
+  /** The run waits for your approval after the step. */
+  approve: boolean;
+  checks?: string[];
+  /** A failed gate or a review asking for changes goes back to this step, at most `loopLimit` times. */
+  loopTo?: number;
+  loopLimit?: number;
+  draft?: boolean;
 }
 
 /** How `sessions.prompt` took the message. */

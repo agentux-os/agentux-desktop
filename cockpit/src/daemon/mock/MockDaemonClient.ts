@@ -4,6 +4,7 @@ import type {
   HelperReply,
   AgentPrefs,
   HarnessInfo,
+  ProjectPlan,
   Prompted,
   ToolsListing,
   HarnessTestResult,
@@ -189,6 +190,36 @@ export class MockDaemonClient implements DaemonClient {
 
   async startRun(_input: StartRunInput): Promise<Run> {
     throw new Error("Starting runs needs agentuxd; the cockpit is showing mock data");
+  }
+
+  async describeProject(projectId: string): Promise<ProjectPlan | null> {
+    if (!this.state.projects.some((p) => p.id === projectId)) throw new Error(`no project ${projectId}`);
+    return {
+      projectId,
+      source: "agentux.yaml",
+      steps: [
+        { kind: "plan", role: "planner", approve: true },
+        { kind: "implement", role: "implementer", approve: false },
+        { kind: "gate", approve: false, checks: ["test", "lint"], loopTo: 1, loopLimit: 3 },
+        { kind: "review", role: "reviewer", approve: false, loopTo: 1, loopLimit: 2 },
+        { kind: "pull_request", approve: false, draft: true },
+      ],
+      roles: {
+        planner: { harness: "claude-code", model: "opus" },
+        implementer: { harness: "codex" },
+        reviewer: { harness: "claude-code" },
+      },
+      checks: [
+        { name: "test", run: "npm test" },
+        { name: "lint", run: "npm run lint" },
+      ],
+      budgetUsd: 5,
+      permissions: {
+        planner: { allow: ["read", "search", "think"], ask: ["execute", "fetch", "other"], deny: ["edit", "delete", "move"] },
+        implementer: { allow: ["read", "search", "think", "edit"], ask: ["execute", "fetch", "delete", "move", "other"] },
+        reviewer: { allow: ["read", "search", "think"], ask: ["execute", "fetch", "other"], deny: ["edit", "delete", "move"] },
+      },
+    };
   }
 
   async tools(): Promise<ToolsListing | null> {

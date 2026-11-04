@@ -23,6 +23,7 @@ import { Sidebar, type View } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { help } from "./helper/content";
 import { HelperProvider, type HelperHost } from "./helper/HelperProvider";
+import { useHelperSettings } from "./helper/settings";
 import { COCKPIT_TOUR } from "./helper/Tour";
 
 type Theme = "dark" | "light";
@@ -170,6 +171,21 @@ export default function App() {
   };
 
   const loadHarnesses = useCallback(() => client.harnesses(), [client]);
+  const describeProject = useCallback((projectId: string) => client.describeProject(projectId), [client]);
+  // The guided New run writes its instructions with the agent the helper
+  // uses, only if the person let the helper ask one (agentux-desktop#85).
+  const helperSettings = useHelperSettings();
+  const guide = useMemo(
+    () =>
+      client.mode === "daemon" && state.capabilities?.helperAsk === true && helperSettings.ai
+        ? {
+            harness: helperSettings.aiHarness,
+            ask: async (question: string) =>
+              (await client.askHelper({ harness: helperSettings.aiHarness, question, context: "" })).answer,
+          }
+        : null,
+    [client, state.capabilities?.helperAsk, helperSettings.ai, helperSettings.aiHarness],
+  );
   const setupClient = useCallback(async () => {
     const { createSetupClient } = await import("./setup/client");
     return createSetupClient();
@@ -522,6 +538,8 @@ export default function App() {
           loadHarnesses={loadHarnesses}
           onClone={cloneRepo}
           onClearLimit={clearLimit}
+          describeProject={client.mode === "daemon" ? describeProject : undefined}
+          guide={guide}
         />
       )}
     </div>

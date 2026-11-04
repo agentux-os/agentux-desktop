@@ -616,6 +616,16 @@
     "what": "What the agents should do.",
     "how": "Every step's prompt includes it, with the plan and any feedback from gates or reviews."
   },
+  "newRun.guided": {
+    "title": "Guided run",
+    "what": "Start a run from an everyday goal: say what you want, what done looks like and what must not change, then review a proposal before anything starts.",
+    "how": "The proposal comes from the project's own workflow on this computer (agentuxd's projects.describe): its steps, the agent for each role, the checks that gate it, where it waits for your approval and what agents must ask before doing. If an agent it needs is not installed, signed in or is at a limit, it says so and does not start. Advanced is the full form."
+  },
+  "newRun.guidedPrivacy": {
+    "title": "Who sees your goal",
+    "what": "With the helper allowed to ask your agent (the penguin's settings), your answers go to that one agent, on your own account, to write the run's instructions. Otherwise they are turned into instructions here, and no agent sees them before the run starts.",
+    "how": "Nothing is sent to Command or anywhere else. You review and can rewrite the instructions before starting."
+  },
   "newRun.clone": {
     "title": "Clone a repository",
     "what": "Clones a repository into ~/src and uses it as the run's project.",
