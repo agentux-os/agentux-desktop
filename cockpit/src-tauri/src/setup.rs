@@ -163,27 +163,24 @@ pub fn wants_welcome<S: AsRef<str>>(argv: &[S]) -> bool {
     argv.iter().skip(1).any(|a| a.as_ref() == WELCOME_FLAG)
 }
 
-/// Command line flag for screenshots (agentux-os#73): the cockpit window at
-/// [`SHOWCASE_SIZE`], centred, without the penguin's first-run offer.
+/// Command line flag for screenshots (agentux-os#73): the cockpit window
+/// maximized, without the penguin's first-run offer.
 pub const SHOWCASE_FLAG: &str = "--showcase";
-/// The showcase window's inner size, logical pixels: fits a 1920x1080
-/// screen with room for a panel or dock.
-pub const SHOWCASE_SIZE: (f64, f64) = (1600.0, 940.0);
 
 /// Whether a command line asks for the showcase window.
 pub fn wants_showcase<S: AsRef<str>>(argv: &[S]) -> bool {
     argv.iter().skip(1).any(|a| a.as_ref() == SHOWCASE_FLAG)
 }
 
-/// Shows the cockpit window for screenshots: [`SHOWCASE_SIZE`], centred,
-/// and the page reloaded with `?showcase` (the helper makes no offer).
+/// Shows the cockpit window for screenshots: maximized, which covers the
+/// desktop's widgets the same way on Plasma and COSMIC and leaves their
+/// panel or dock alone (a Wayland client cannot place a window itself), and
+/// the page reloaded with `?showcase` (the helper makes no offer).
 pub fn show_showcase<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window(crate::MAIN_WINDOW) else {
         return;
     };
-    let _ = window.unmaximize();
-    let _ = window.set_size(tauri::LogicalSize::new(SHOWCASE_SIZE.0, SHOWCASE_SIZE.1));
-    let _ = window.center();
+    let _ = window.maximize();
     if let Ok(mut url) = window.url() {
         url.set_query(Some("showcase"));
         let _ = window.navigate(url);
