@@ -35,7 +35,7 @@
 The desktop experience of [AgentUX](https://github.com/agentux-os/agentux): the cockpit app and the desktop configuration shipped with the distribution.
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/agentux-os/agentux/main/docs/screenshots/cockpit-plan-approval.png"><img alt="The AgentUX cockpit on the live ISO: two demo runs, one waiting for plan approval" src="https://raw.githubusercontent.com/agentux-os/agentux/main/docs/screenshots/cockpit-plan-approval.png" width="760"></a>
+  <a href="https://download.agentuxos.org/screenshots/stable/plasma-board.webp"><img alt="The AgentUX cockpit on the live ISO: two demo runs, one waiting for plan approval" src="https://download.agentuxos.org/screenshots/stable/plasma-board.webp" width="760"></a>
 </p>
 
 > **Status:** the cockpit connects to `agentuxd` ([agentux-core](https://github.com/agentux-os/agentux-core)) when it is running and falls back to mock data otherwise. Runs, sessions, approvals (questions from agents included), the agent bus and terminal mode (a session's harness TUI, or a shell in a run's worktree) come from the daemon. Design decisions live in [agentux/docs/adr](https://github.com/agentux-os/agentux/tree/main/docs/adr).
